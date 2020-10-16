@@ -1,4 +1,4 @@
-EXTENSION    		:= cuneiform_search
+EXTENSION    		:= cuneiform_search_extra
 
 version      		:= $(shell grep default_version $(EXTENSION).control | sed -e "s/default_version[[:space:]]*=[[:space:]]*'\\([^']*\\)'/\\1/")
 modules      		:= $(patsubst %.c,%,$(wildcard src/*.c))
@@ -25,5 +25,5 @@ include $(PGXS)
 
 all: build/$(EXTENSION)--$(version).sql
 
-build/$(EXTENSION)--$(version).sql: python/$(EXTENSION).py 
-	@py2plpy python/$(EXTENSION).py build/$(EXTENSION)--$(version).sql
+build/$(EXTENSION)--$(version).sql: sql/$(EXTENSION).sql
+	@cp sql/$(EXTENSION).sql build/$(EXTENSION)--$(version).sql
