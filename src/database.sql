@@ -1,8 +1,4 @@
 DROP TABLE public.corpus;
-DROP TYPE public.sign_properties;
-DROP TYPE public.sign_type;
-DROP TYPE public.alignment;
-DROP TYPE public.language;
 
 DROP TABLE public.compounds;
 DROP TABLE public.words;
@@ -85,9 +81,6 @@ CREATE TABLE public.compounds (
     PRIMARY KEY (text_id, compound_no)
 );
 
-
-CREATE TYPE language AS ENUM ('sumerian', 'akkadian', 'other');
-
 CREATE TABLE public.words (
     text_id INTEGER REFERENCES public.texts,
     word_no INTEGER,
@@ -96,18 +89,6 @@ CREATE TABLE public.words (
     language LANGUAGE,
     PRIMARY KEY (text_id, word_no),
     FOREIGN KEY (text_id, compound_no) REFERENCES public.compounds(text_id, compound_no)
-);
-
-
-CREATE TYPE sign_type AS ENUM ('value', 'sign', 'number', 'punctuation', 'desc', 'damage');
-CREATE TYPE alignment AS ENUM ('left', 'right', 'center');
-CREATE TYPE sign_condition AS ENUM ('intact', 'damaged', 'lost', 'inserted', 'deleted');
-
-CREATE TYPE sign_properties AS (
-    type SIGN_TYPE,
-    indicator BOOLEAN,
-    alignment ALIGNMENT,
-    phonographic BOOLEAN
 );
 
 CREATE TABLE public.corpus (
