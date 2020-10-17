@@ -26,4 +26,5 @@ include $(PGXS)
 all: build/$(EXTENSION)--$(version).sql
 
 build/$(EXTENSION)--$(version).sql: sql/$(EXTENSION).sql
+	@mkdir -p build
 	@cp sql/$(EXTENSION).sql build/$(EXTENSION)--$(version).sql
