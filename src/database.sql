@@ -32,6 +32,9 @@ CREATE TABLE public.value_variants (
     main BOOLEAN
 );
 
+CREATE UNIQUE INDEX value_constraint ON public.value_variants (value)
+    WHERE value NOT LIKE '%x';
+
 
 -- Texts
 
@@ -59,7 +62,6 @@ CREATE TABLE public.texts (
     cdli_no TEXT,
     bdtns_no INTEGER,
     citation TEXT,
-    core_corpus BOOLEAN,
     source TEXT,
     provenience_id INTEGER REFERENCES public.proveniences(provenience_id),
     provenience_comment TEXT,
@@ -70,6 +72,12 @@ CREATE TABLE public.texts (
     genre TEXT,
     seal TEXT
 );
+
+CREATE TABLE public.transliterations (
+    transliteration_id SERIAL PRIMARY KEY,
+    text_id INTEGER REFERENCES public.texts(text_id),
+    source TEXT
+)
 
 
 -- Corpus
@@ -91,6 +99,16 @@ CREATE TABLE public.words (
     FOREIGN KEY (text_id, compound_no) REFERENCES public.compounds(text_id, compound_no)
 );
 
+CREATE TABLE public.lines (
+    text_id INTEGER REFERENCES public.texts,
+    line_no INTEGER,
+    part TEXT,
+    col TEXT,
+    line TEXT,
+    comment TEXT,
+    PRIMARY KEY (text_id, line_no)
+);
+
 CREATE TABLE public.corpus (
     text_id INTEGER REFERENCES texts,
     sign_no INTEGER NOT NULL,
@@ -107,7 +125,8 @@ CREATE TABLE public.corpus (
     newline boolean NOT NULL,
     inverted boolean NOT NULL,
     PRIMARY KEY (text_id, sign_no),
-    FOREIGN KEY (text_id, word_no) REFERENCES public.words(text_id, word_no)
+    FOREIGN KEY (text_id, word_no) REFERENCES public.words(text_id, word_no),
+    FOREIGN KEY (text_id, line_no) REFERENCES public.lines(text_id, line_no)
 );
 
 CREATE INDEX corpus_sign_id_idx ON corpus (sign_id);
