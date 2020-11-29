@@ -119,14 +119,14 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             ctes.append("cte{i} AS (SELECT sign_id FROM value_variants JOIN values USING (value_id) WHERE value = '{sign}')".format(i = str(i), sign = token.lower()))
             cte_joins.append("cte{i} ON c{i}.sign_id = cte{i}.sign_id".format(i = str(i)))
         else:
-            ctes.append("cte{i} AS (SELECT value_id FROM value_variants WHERE value = ~ '^{sign}$')".format(i = str(i), sign = token))
+            ctes.append("cte{i} AS (SELECT value_id FROM value_variants WHERE value ~ '^{sign}$')".format(i = str(i), sign = token))
             cte_joins.append("cte{i} ON c{i}.value_id = cte{i}.value_id".format(i = str(i)))
 
         # Types
         if state.part:    
-            conditions.append("c{i}.stem = '{part}'".format(i = str(i), part = state.part == 'STEM'))
+            conditions.append("c{i}.stem = {stem}".format(i = str(i), stem = state.part == 'STEM'))
         if state.type:    
-            conditions.append("c{i}.sign_type = '{type}'".format(i = str(i), type = state.type))
+            conditions.append("(c{i}.properties).type = '{type}'".format(i = str(i), type = state.type))
 
         i += 1
 
