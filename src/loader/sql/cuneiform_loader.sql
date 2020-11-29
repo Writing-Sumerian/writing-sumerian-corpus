@@ -13,6 +13,8 @@ DELETE FROM words;
 
 DELETE FROM compounds;
 
+DELETE FROM lines;
+
 DELETE FROM texts;
 
 
@@ -29,7 +31,6 @@ CREATE TEMPORARY TABLE texts_tmp_ (
     bdtns_no integer,
     citation text,
     source text,
-    core_corpus boolean,
     provenience text,
     provenience_comment text,
     period text,
@@ -39,8 +40,7 @@ CREATE TEMPORARY TABLE texts_tmp_ (
     m text,
     d text,
     archive text,
-    genre text,
-    seal text
+    genre text
 );
 
 COPY texts_tmp_
@@ -53,22 +53,20 @@ SELECT
     identifier
 FROM texts_tmp_;
 
-INSERT INTO texts (text_id, cdli_no, bdtns_no, citation, source, core_corpus, provenience_id, provenience_comment, period_id, period_comment, date, archive, genre, seal)
+INSERT INTO texts (text_id, cdli_no, bdtns_no, citation, source, provenience_id, provenience_comment, period_id, period_comment, date, archive, genre)
 SELECT
     text_id,
     cdli_no,
     bdtns_no,
     citation,
     source,
-    core_corpus,
     provenience_id,
     provenience_comment,
     period_id,
     period_comment,
     null, --TABLEDATE (king, y, m, d),
     archive,
-    genre,
-    seal
+    genre
 FROM
     texts_tmp_
     JOIN textids_tmp_ USING (identifier)
@@ -130,6 +128,36 @@ FROM
 DROP TABLE words_tmp_;
 
 
+-- lines
+
+CREATE TEMPORARY TABLE lines_tmp_ (
+    identifier text,
+    line_no integer,
+    part text,
+    col text,
+    line text,
+    comment text
+);
+
+COPY lines_tmp_
+FROM
+    '{{path}}/lines';
+
+INSERT INTO public.lines 
+SELECT
+    text_id,
+    line_no,
+    part,
+    col,
+    line,
+    comment
+FROM
+    lines_tmp_
+    JOIN textids_tmp_ USING (identifier);
+
+DROP TABLE lines_tmp_;
+
+
 -- corpus
 
 CREATE TEMPORARY TABLE corpus_tmp_ (
@@ -158,7 +186,36 @@ DROP INDEX corpus_sign_id_idx;
 
 DROP INDEX corpus_value_id_idx;
 
+CREATE OR REPLACE FUNCTION cleanComment (comment text)
+    RETURNS text[]
+    LANGUAGE 'plpgsql'
+    COST 10 IMMUTABLE STRICT
+    AS $BODY2$
+
+DECLARE
+    comments text[];
+    res text[];
+
+BEGIN
+
+comments := regexp_split_to_array(comment, '[$;]');
+FOR i IN array_lower(comments, 1)..array_upper(comments, 1) LOOP
+    res[i] := trim(from replace(replace(regexp_replace(comments[i], '[\|?!\[\]⌈⌉<>/\\\*]|^=|^:', '', 'g'), 'x', '×'), '@s', '@š'));
+END LOOP;
+RETURN res;
+
+END;
+
+$BODY2$;
+
 INSERT INTO corpus
+WITH signlist AS (
+    SELECT * 
+    FROM
+        value_variants
+        JOIN values USING (value_id)
+        JOIN signs USING (sign_id)   
+)
 SELECT
     text_id,
     sign_no,
@@ -167,18 +224,20 @@ SELECT
     corpus_tmp_.value,
     value_id,
     sign_id,
-    (type, indicator,  alignment, phonographic)::sign_properties,
+    (type, indicator,  alignment, corpus_tmp_.phonographic)::sign_properties,
     TRUE,
     condition,
     crits,
-    comment,
+    corpus_tmp_.comment,
     newline,
     inverted
 FROM
     corpus_tmp_
     JOIN textids_tmp_ USING (identifier)
-    LEFT JOIN value_variants ON (value_variants.value = lower(corpus_tmp_.value))
-    LEFT JOIN values USING (value_id);
+    JOIN lines using (text_id, line_no)
+    LEFT JOIN signlist ON ((signlist.value = lower(corpus_tmp_.value) AND NOT signlist.value ~ 'x') 
+                       OR  (signlist.value = lower(corpus_tmp_.value) AND signlist.value ~ 'x' AND signlist.name = ANY(cleanComment(corpus_tmp_.comment)))
+                       OR  (signlist.value = lower(corpus_tmp_.value) AND signlist.value ~ 'x' AND signlist.name = ANY(cleanComment(lines.comment))));
 
 CREATE INDEX corpus_sign_id_idx ON corpus (sign_id);
 
