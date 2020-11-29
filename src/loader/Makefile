@@ -25,7 +25,7 @@ include $(PGXS)
 
 all: build/$(EXTENSION)--$(version).sql
 
-DATA_PATH ?= /home/marc/Arbeit/Datenbank/Dateien/BDTNS
+DATA_PATH ?= /home/marc/Arbeit/Datenbank/Dateien
 
 build/$(EXTENSION)--$(version).sql: sql/$(EXTENSION).sql
 	@mkdir -p build
