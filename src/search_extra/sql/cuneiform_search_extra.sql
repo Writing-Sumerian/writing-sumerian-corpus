@@ -25,7 +25,7 @@ CREATE OR REPLACE FUNCTION public.search_signs(
 AS $BODY$
 SELECT 
     corpus.text_id,  
-    cun_agg (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment ORDER BY corpus.sign_no),
+    cun_agg (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no),
     signs
   FROM 
     (SELECT row_number() OVER (), text_id, signs, UNNEST(signs) AS sign_no FROM search(search_term)) a
@@ -48,7 +48,7 @@ CREATE OR REPLACE FUNCTION public.search_signs_html(
 AS $BODY$
 SELECT 
     corpus.text_id,  
-    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment ORDER BY corpus.sign_no),
+    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no),
     signs
   FROM 
     (SELECT row_number() OVER (), text_id, signs, UNNEST(signs) AS sign_no FROM search(search_term)) a
@@ -80,7 +80,7 @@ WITH found_words AS
     JOIN corpus USING (text_id, sign_no))
 SELECT 
     corpus.text_id,
-    cun_agg (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment ORDER BY corpus.sign_no),
+    cun_agg (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no),
     corpus.word_no
   FROM found_words 
     JOIN corpus USING (text_id, word_no)
@@ -110,7 +110,7 @@ WITH found_words AS
     JOIN corpus USING (text_id, sign_no))
 SELECT 
     corpus.text_id,
-    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment ORDER BY corpus.sign_no),
+    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no),
     corpus.word_no
   FROM found_words 
     JOIN corpus USING (text_id, word_no)
@@ -140,7 +140,7 @@ WITH found_lines AS
     JOIN corpus USING (text_id, sign_no))
 SELECT 
     corpus.text_id,  
-    cun_agg (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment ORDER BY corpus.sign_no),
+    cun_agg (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no),
     line_no
   FROM found_lines 
     JOIN corpus USING (text_id, line_no) 
@@ -170,7 +170,7 @@ WITH found_lines AS
     JOIN corpus USING (text_id, sign_no))
 SELECT 
     corpus.text_id,  
-    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment ORDER BY corpus.sign_no),
+    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no),
     line_no
   FROM found_lines 
     JOIN corpus USING (text_id, line_no) 
