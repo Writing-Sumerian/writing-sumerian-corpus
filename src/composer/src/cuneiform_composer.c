@@ -79,7 +79,7 @@ struct States
 int get_changes(struct States s1, struct States s2, bool newline)
 {
     int changes = 0;
-    if(s1.indicator != s2.indicator)
+    if(s1.indicator != s2.indicator || s1.alignment != s2.alignment)
         changes += INDICATOR;
     if(s1.type != s2.type)
         changes += TYPE;
@@ -220,11 +220,8 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
         if(inverted)
             connector = ':';
-        else if(states_old.indicator && states.indicator)
-        {
-            if(states_old.alignment == states.alignment)
-                connector = states_old.phonographic && states.phonographic ? '-' : '.';
-        }
+        else if(states_old.indicator && states.indicator && states_old.alignment == states.alignment)
+            connector = states_old.phonographic && states.phonographic ? '-' : '.';
         else if(!(states_old.indicator && states_old.alignment == ALIGNMENT_RIGHT) && !(states.indicator && states.alignment == ALIGNMENT_LEFT))
         {       
             if(compound_no_old == compound_no)
@@ -364,7 +361,6 @@ char* close_code(char* s, int changes, struct States states)
             s = cun_strcpy(s, "»");
     }
     
-    
     return s;
 }
 
@@ -463,11 +459,8 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
 
         if(inverted)
             connector = ':';
-        else if(states_old.indicator && states.indicator)
-        {
-            if(states_old.alignment == states.alignment)
-                connector = states_old.phonographic && states.phonographic ? '-' : '.';
-        }
+        else if(states_old.indicator && states.indicator && states_old.alignment == states.alignment)
+            connector = states_old.phonographic && states.phonographic ? '-' : '.';
         else if(!(states_old.indicator && states_old.alignment == ALIGNMENT_RIGHT) && !(states.indicator && states.alignment == ALIGNMENT_LEFT))
         {       
             if(compound_no_old == compound_no)
