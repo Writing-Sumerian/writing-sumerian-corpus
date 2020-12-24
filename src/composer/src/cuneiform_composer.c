@@ -47,14 +47,6 @@
 #define MAX_EXTRA_SIZE_HTML 200
 
 
-char* cun_index(char* s, size_t n)
-{
-    char* end = s+n;
-    while(s < end && (*s < '0' || *s > '9') && *s != 'x')
-        s++;
-    return s;
-}
-
 char* cun_memcpy(char* s1, const char* s2, size_t n)
 {
     while(n-- != 0)
@@ -351,18 +343,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     s = open_html(s, changes, state);
 
     if(value)
-    {
-        const char* ix = cun_index(VARDATA_ANY(value), value_size);
-        if(state->type == TYPE_NUMBER || state->type == TYPE_DESCRIPTION || state->type == TYPE_DAMAGE || ix == VARDATA_ANY(value)+value_size) // value is a number or does not have a index
-            s = cun_memcpy(s, VARDATA_ANY(value), value_size);
-        else
-        {
-            s = cun_memcpy(s, VARDATA_ANY(value), ix-VARDATA_ANY(value));
-            s = cun_strcpy(s, "<span class='cun_index'>");
-            s = cun_memcpy(s, ix, VARDATA_ANY(value)+value_size-ix);
-            s = cun_strcpy(s, "</span>");
-        }
-    }
+        s = cun_memcpy(s, VARDATA_ANY(value), value_size);
 
     if(critics_size)
     {

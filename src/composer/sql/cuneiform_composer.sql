@@ -105,13 +105,13 @@ CREATE AGGREGATE cun_agg_html (
 );
 
 
-CREATE OR REPLACE FUNCTION value_html (value text)
+CREATE OR REPLACE FUNCTION mark_index_html (value text)
     RETURNS text
     STRICT
     IMMUTABLE
     LANGUAGE SQL
 AS $BODY$
-    SELECT regexp_replace(value, '([^0-9x×+*&%\.])([0-9x]+)', '\1<span class="cun_index">\2</span>', 'g')
+    SELECT regexp_replace(value, '([^0-9x×+*&%\.])([0-9x]+)', '\1<span class=''index''>\2</span>', 'g')
 $BODY$;
 
 
@@ -141,7 +141,7 @@ CREATE VIEW corpus_html AS
 SELECT
     a.text_id,
     RANGE,
-    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no)  AS content
+    cun_agg_html (COALESCE(mark_index_html(value), mark_index_html(signs.name), orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no)  AS content
 FROM (
     SELECT
         a.text_id,
@@ -185,7 +185,7 @@ CREATE VIEW corpus_lines_html AS
 SELECT
     a.text_id,
     RANGE,
-    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no) AS content
+    cun_agg_html (COALESCE(mark_index_html(value), mark_index_html(signs.name), orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no) AS content
 FROM (
     SELECT DISTINCT
         a.text_id,
@@ -217,7 +217,7 @@ GROUP BY
 CREATE VIEW corpus_texts_html AS
 SELECT
     corpus.text_id,
-    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no) AS content
+    cun_agg_html (COALESCE(mark_index_html(value), mark_index_html(signs.name), orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no) AS content
 FROM corpus
 LEFT JOIN value_variants ON corpus.value_id = value_variants.value_id AND main
 LEFT JOIN signs USING (sign_id)
