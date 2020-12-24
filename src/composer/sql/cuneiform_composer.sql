@@ -1,21 +1,5 @@
-CREATE TYPE cun_agg_stype AS (
-    string text,
-    sign_no integer,
-    word_no integer,
-    compound_no integer,
-    line_no integer,
-    TYPE sign_type,
-    phonographic boolean,
-    indicator boolean,
-    alignment alignment,
-    stem boolean,
-    condition sign_condition,
-    language language,
-    unknown_reading boolean
-);
-
 CREATE OR REPLACE FUNCTION cun_agg_sfunc (
-    cun_agg_stype, 
+    internal, 
     text, 
     boolean, 
     integer, 
@@ -31,15 +15,15 @@ CREATE OR REPLACE FUNCTION cun_agg_sfunc (
     text, 
     text
     )
-    RETURNS cun_agg_stype
+    RETURNS internal
     AS 'cuneiform_composer'
 ,
     'cuneiform_cun_agg_sfunc'
     LANGUAGE C
     IMMUTABLE;
 
-CREATE OR REPLACE FUNCTION cun_agg_finalfunc (state cun_agg_stype)
-    RETURNS text
+CREATE OR REPLACE FUNCTION cun_agg_finalfunc (internal)
+    RETURNS text[]
     AS 'cuneiform_composer'
 ,
     'cuneiform_cun_agg_finalfunc'
@@ -63,13 +47,12 @@ CREATE AGGREGATE cun_agg (
     text
     ) (
     SFUNC = cun_agg_sfunc,
-    STYPE = cun_agg_stype,
-    FINALFUNC = cun_agg_finalfunc,
-    INITCOND = '("",0,0,0,0,value,false,false,center,false,intact,sumerian,FALSE)'
+    STYPE = internal,
+    FINALFUNC = cun_agg_finalfunc
 );
 
 CREATE OR REPLACE FUNCTION cun_agg_html_sfunc (
-    cun_agg_stype, 
+    internal, 
     text, 
     boolean, 
     integer, 
@@ -85,15 +68,15 @@ CREATE OR REPLACE FUNCTION cun_agg_html_sfunc (
     text, 
     text
     )
-    RETURNS cun_agg_stype
+    RETURNS internal
     AS 'cuneiform_composer'
 ,
     'cuneiform_cun_agg_html_sfunc'
     LANGUAGE C
     IMMUTABLE;
 
-CREATE OR REPLACE FUNCTION cun_agg_html_finalfunc (state cun_agg_stype)
-    RETURNS text
+CREATE OR REPLACE FUNCTION cun_agg_html_finalfunc (internal)
+    RETURNS text[]
     AS 'cuneiform_composer'
 ,
     'cuneiform_cun_agg_html_finalfunc'
@@ -117,16 +100,26 @@ CREATE AGGREGATE cun_agg_html (
     text
     ) (
     SFUNC = cun_agg_html_sfunc,
-    STYPE = cun_agg_stype,
-    FINALFUNC = cun_agg_html_finalfunc,
-    INITCOND = '("",0,0,0,0,value,false,false,center,false,intact,sumerian,FALSE)'
+    STYPE = internal,
+    FINALFUNC = cun_agg_html_finalfunc
 );
+
+
+CREATE OR REPLACE FUNCTION value_html (value text)
+    RETURNS text
+    STRICT
+    IMMUTABLE
+    LANGUAGE SQL
+AS $BODY$
+    SELECT regexp_replace(value, '([^0-9x×+*&%\.])([0-9x]+)', '\1<span class="cun_index">\2</span>', 'g')
+$BODY$;
+
 
 CREATE VIEW corpus_code AS
 SELECT
     a.text_id,
     RANGE,
-    cun_agg (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment ORDER BY corpus.sign_no) AS content
+    cun_agg (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no) AS content
 FROM (
     SELECT
         a.text_id,
@@ -148,7 +141,7 @@ CREATE VIEW corpus_html AS
 SELECT
     a.text_id,
     RANGE,
-    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment ORDER BY corpus.sign_no)  AS content
+    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no)  AS content
 FROM (
     SELECT
         a.text_id,
@@ -170,7 +163,7 @@ CREATE VIEW corpus_lines_code AS
 SELECT
     a.text_id,
     RANGE,
-    cun_agg (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment ORDER BY corpus.sign_no) AS content
+    cun_agg (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no) AS content
 FROM (
     SELECT DISTINCT
         a.text_id,
@@ -192,7 +185,7 @@ CREATE VIEW corpus_lines_html AS
 SELECT
     a.text_id,
     RANGE,
-    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment ORDER BY corpus.sign_no) AS content
+    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no) AS content
 FROM (
     SELECT DISTINCT
         a.text_id,
@@ -213,7 +206,7 @@ GROUP BY
 CREATE VIEW corpus_texts_code AS
 SELECT
     corpus.text_id,
-    cun_agg (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment ORDER BY corpus.sign_no) AS content
+    cun_agg (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no) AS content
 FROM corpus
 LEFT JOIN value_variants ON corpus.value_id = value_variants.value_id AND main
 LEFT JOIN signs USING (sign_id)
@@ -224,7 +217,7 @@ GROUP BY
 CREATE VIEW corpus_texts_html AS
 SELECT
     corpus.text_id,
-    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment ORDER BY corpus.sign_no) AS content
+    cun_agg_html (COALESCE(value, signs.name, orig_value), value IS NULL, corpus.sign_no, corpus.word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, corpus.comment ORDER BY corpus.sign_no) AS content
 FROM corpus
 LEFT JOIN value_variants ON corpus.value_id = value_variants.value_id AND main
 LEFT JOIN signs USING (sign_id)

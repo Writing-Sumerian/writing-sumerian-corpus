@@ -41,6 +41,12 @@
 #define  INDICATOR           1
 
 
+#define EXP_LINE_SIZE_CODE 100
+#define MAX_EXTRA_SIZE_CODE 20
+#define EXP_LINE_SIZE_HTML 1000
+#define MAX_EXTRA_SIZE_HTML 200
+
+
 char* cun_index(char* s, size_t n)
 {
     char* end = s+n;
@@ -63,91 +69,195 @@ char* cun_strcpy(char* s1, const char* s2)
     return s1;
 }
 
-struct States
+typedef struct State
 {
-    Oid alignment;
-    bool indicator;
+    Datum* lines;
+    int32 line_count;
+    text* string;
+    size_t string_capacity;
+
+    int32 sign_no;
+    int32 word_no;
+    int32 compound_no;
+    int32 line_no;
     Oid type;
     bool phonographic;
-    Oid language;
-    Oid condition;
+    bool indicator;
+    Oid alignment;
     bool stem;
-    bool phonographic_null;
+    Oid condition;
+    Oid language;
+    bool unknown_reading;
     bool stem_null;
-};
+    bool phonographic_null;
+} State;
 
-int get_changes(struct States s1, struct States s2, bool newline)
+State* init_state(FunctionCallInfo fcinfo, MemoryContext memcontext, State* state_old)
+{
+    bool isnull;
+    State* state;
+
+    if(PG_ARGISNULL(0))
+    {
+        state = (State*) MemoryContextAllocZero(memcontext, sizeof(State));
+        state->lines = (Datum*) MemoryContextAllocZero(memcontext, 0);
+        state->line_count = 0;
+        state->string = (text*) MemoryContextAllocZero(memcontext, VARHDRSZ + 1000);
+        state->string_capacity = 1000;
+        SET_VARSIZE(state->string, VARHDRSZ);
+    }
+    else
+        state = (State*) PG_GETARG_POINTER(0);
+    *state_old = *state;
+
+    state->unknown_reading = PG_GETARG_BOOL(2);
+    state->sign_no = PG_GETARG_INT32(3);
+    state->word_no = PG_GETARG_INT32(4);
+    state->compound_no = PG_GETARG_INT32(5);
+    state->line_no = PG_GETARG_INT32(6);
+    const HeapTupleHeader properties = PG_GETARG_HEAPTUPLEHEADER(7);
+    state->type = DatumGetObjectId(GetAttributeByName(properties, "type", &isnull));
+    state->phonographic = DatumGetBool(GetAttributeByName(properties, "phonographic", &state->phonographic_null));
+    state->alignment = DatumGetObjectId(GetAttributeByName(properties, "alignment", &isnull));
+    state->indicator = DatumGetBool(GetAttributeByName(properties, "indicator", &isnull));
+    state->stem = PG_GETARG_BOOL(8);
+    state->stem_null = PG_ARGISNULL(8);
+    state->condition = PG_GETARG_OID(9);
+    state->language = PG_GETARG_OID(10);
+
+    return state;
+}
+
+
+int get_changes(const State* s1, const State* s2, const bool newline)
 {
     int changes = 0;
-    if(s1.indicator != s2.indicator || s1.alignment != s2.alignment)
+    if(s1->indicator != s2->indicator || s1->alignment != s2->alignment)
         changes += INDICATOR;
-    if(s1.type != s2.type)
+    if(s1->type != s2->type)
         changes += TYPE;
-    if(s1.phonographic != s2.phonographic || s1.phonographic_null != s2.phonographic_null)
+    if(s1->phonographic != s2->phonographic || s1->phonographic_null != s2->phonographic_null)
         changes += PHONOGRAPHIC;
-    if(s1.stem != s2.stem || s1.stem_null != s2.stem_null)
+    if(s1->stem != s2->stem || s1->stem_null != s2->stem_null)
         changes += STEM;
-    if(s1.language != s2.language)
+    if(s1->language != s2->language)
         changes += LANGUAGE;
-    if(s1.condition != s2.condition || newline)
+    if(s1->condition != s2->condition || newline)
         changes += CONDITION;
     return changes;
 }
 
-char* close_html(char* s, int changes, struct States states)
+
+char* close_html(char* s, int changes, const State* state)
 {
-    if(changes >= INDICATOR && states.indicator)
+    if(changes >= INDICATOR && state->indicator)
         s = cun_strcpy(s, "</span>");
-    if(changes >= TYPE && states.type != TYPE_VALUE)
+    if(changes >= TYPE && state->type != TYPE_VALUE)
         s = cun_strcpy(s, "</span>");
-    if(changes >= PHONOGRAPHIC && states.phonographic && !states.phonographic_null)
+    if(changes >= PHONOGRAPHIC && state->phonographic && !state->phonographic_null)
         s = cun_strcpy(s, "</span>");
-    if(changes >= STEM && states.stem && !states.stem_null)
+    if(changes >= STEM && state->stem && !state->stem_null)
         s = cun_strcpy(s, "</span>");
-    if(changes >= LANGUAGE && states.language != LANGUAGE_SUMERIAN)
+    if(changes >= LANGUAGE && state->language != LANGUAGE_SUMERIAN)
         s = cun_strcpy(s, "</span>");
-    if(changes >= CONDITION && states.condition != CONDITION_INTACT)
+    if(changes >= CONDITION && state->condition != CONDITION_INTACT)
         s = cun_strcpy(s, "</span>");
     return s;
 }
 
-char* open_html(char* s, int changes, struct States states)
+char* open_html(char* s, int changes, const State* state)
 {
-    if(changes >= CONDITION && states.condition != CONDITION_INTACT)
+    if(changes >= CONDITION && state->condition != CONDITION_INTACT)
     {
-        if(states.condition == CONDITION_LOST)
+        if(state->condition == CONDITION_LOST)
             s = cun_strcpy(s, "<span class='lost'>");
-        else if(states.condition == CONDITION_DAMAGED)
+        else if(state->condition == CONDITION_DAMAGED)
             s = cun_strcpy(s, "<span class='damaged'>");
-        else if(states.condition == CONDITION_INSERTED)
+        else if(state->condition == CONDITION_INSERTED)
             s = cun_strcpy(s, "<span class='inserted'>");
-        else if(states.condition == CONDITION_DELETED)
+        else if(state->condition == CONDITION_DELETED)
             s = cun_strcpy(s, "<span class='deleted'>");
     }
-    if(changes >= LANGUAGE && states.language != LANGUAGE_SUMERIAN)
+    if(changes >= LANGUAGE && state->language != LANGUAGE_SUMERIAN)
     {
-        if(states.language == LANGUAGE_AKKADIAN)
+        if(state->language == LANGUAGE_AKKADIAN)
             s = cun_strcpy(s, "<span class='akkadian'>");
         else
             s = cun_strcpy(s, "<span class='otherlanguage'>");
     }
-    if(changes >= STEM && states.stem && !states.stem_null)
+    if(changes >= STEM && state->stem && !state->stem_null)
         s = cun_strcpy(s, "<span class='stem'>");
-    if(changes >= PHONOGRAPHIC && states.phonographic && !states.phonographic_null)
+    if(changes >= PHONOGRAPHIC && state->phonographic && !state->phonographic_null)
         s = cun_strcpy(s, "<span class='phonographic'>");
-    if(changes >= TYPE && states.type != TYPE_VALUE)
+    if(changes >= TYPE && state->type != TYPE_VALUE)
     {
-        if(states.type == TYPE_NUMBER)
+        if(state->type == TYPE_NUMBER)
             s = cun_strcpy(s, "<span class='number'>");
-        else if(states.type == TYPE_PUNCTUATION)
+        else if(state->type == TYPE_PUNCTUATION)
             s = cun_strcpy(s, "<span class='punctuation'>");
-        else if(states.type == TYPE_DESCRIPTION)
+        else if(state->type == TYPE_DESCRIPTION)
             s = cun_strcpy(s, "<span class='description'>");
-        else if(states.type == TYPE_DAMAGE)
+        else if(state->type == TYPE_DAMAGE)
             s = cun_strcpy(s, "<span class='damage'>");
     }
-    if(changes >= INDICATOR && states.indicator)
+    if(changes >= INDICATOR && state->indicator)
         s = cun_strcpy(s, "<span class='indicator'>");
+
+    return s;
+}
+
+char* close_code(char* s, int changes, const State* state)
+{
+    if(state->indicator && (changes & INDICATOR || changes & PHONOGRAPHIC))
+    {
+        if(state->phonographic & !state->phonographic_null)
+            *s++ = '>';
+        else 
+            *s++ = '}';
+    }
+    if(changes & TYPE && state->type == TYPE_DESCRIPTION)
+        *s++ = '"';
+    if(changes & STEM && state->stem && !state->stem_null)
+        s = cun_strcpy(s, "⟩");
+    if(changes & CONDITION)
+    {
+        if(state->condition == CONDITION_LOST)
+            s = cun_strcpy(s, "]");
+        else if(state->condition == CONDITION_DAMAGED)
+            s = cun_strcpy(s, "⸣");
+        else if(state->condition == CONDITION_INSERTED)
+            s = cun_strcpy(s, "›");
+        else if(state->condition == CONDITION_DELETED)
+            s = cun_strcpy(s, "»");
+    }
+    
+    return s;
+}
+
+char* open_code(char* s, int changes, const State* state)
+{
+    if(changes & CONDITION)
+    {
+        if(state->condition == CONDITION_LOST)
+            s = cun_strcpy(s, "[");
+        else if(state->condition == CONDITION_DAMAGED)
+            s = cun_strcpy(s, "⸢");
+        else if(state->condition == CONDITION_INSERTED)
+            s = cun_strcpy(s, "‹");
+        else if(state->condition == CONDITION_DELETED)
+            s = cun_strcpy(s, "«");
+    }
+    if(changes & STEM && state->stem && !state->stem_null)
+        s = cun_strcpy(s, "⟨");
+    if(changes & TYPE && state->type == TYPE_DESCRIPTION)
+        *s++ = '"';
+    if(state->indicator && (changes & INDICATOR || changes & PHONOGRAPHIC))
+    {
+        if(state->phonographic && !state->phonographic_null)
+            *s++ = '<';
+        else 
+            *s++ = '{';
+    }
 
     return s;
 }
@@ -155,26 +265,20 @@ char* open_html(char* s, int changes, struct States states)
 
 Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 {
+    MemoryContext aggcontext;
+    State* state;
+    State state_old;
     bool isnull;
 
-    const HeapTupleHeader state = PG_GETARG_HEAPTUPLEHEADER(0);
-    const text* value = PG_ARGISNULL(1) ? NULL : PG_GETARG_TEXT_PP(1);
-    const bool unknown_reading = PG_GETARG_BOOL(2);
-    const int32 sign_no = PG_GETARG_INT32(3);
-    const int32 word_no = PG_GETARG_INT32(4);
-    const int32 compound_no = PG_GETARG_INT32(5);
-    const int32 line_no = PG_GETARG_INT32(6);
+    if (!AggCheckCallContext(fcinfo, &aggcontext))
+    {
+        /* cannot be called directly because of internal-type argument */
+        elog(ERROR, "array_agg_transfn called in non-aggregate context");
+    }
 
-    struct States states;
-    const HeapTupleHeader properties = PG_GETARG_HEAPTUPLEHEADER(7);
-    states.type = DatumGetObjectId(GetAttributeByName(properties, "type", &isnull));
-    states.phonographic = DatumGetBool(GetAttributeByName(properties, "phonographic", &states.phonographic_null));
-    states.alignment = DatumGetObjectId(GetAttributeByName(properties, "alignment", &isnull));
-    states.indicator = DatumGetBool(GetAttributeByName(properties, "indicator", &isnull));
-    states.stem = PG_GETARG_BOOL(8);
-    states.stem_null = PG_ARGISNULL(8);
-    states.condition = PG_GETARG_OID(9);
-    states.language = PG_GETARG_OID(10);
+    state = init_state(fcinfo, aggcontext, &state_old);
+
+    const text* value = PG_ARGISNULL(1) ? NULL : PG_GETARG_TEXT_PP(1);
 
     const bool inverted = PG_GETARG_BOOL(11);
     const bool newline = PG_GETARG_BOOL(12);
@@ -182,37 +286,25 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     const text* critics = PG_ARGISNULL(13) ? NULL : PG_GETARG_TEXT_PP(13);
     const text* comment = PG_ARGISNULL(14) ? NULL : PG_GETARG_TEXT_PP(14);
 
-    
-    const text* string = (text*)DatumGetPointer(GetAttributeByName(state, "string", &isnull));
-    const int32 string_size = VARSIZE_ANY_EXHDR(string);
+    const int32 string_size = VARSIZE_ANY_EXHDR(state->string);
     const int32 value_size = value ? VARSIZE_ANY_EXHDR(value) : 0;
     const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
     const int32 comment_size = comment ? VARSIZE_ANY_EXHDR(comment) : 0;
-    text* new_string = (text*)palloc0(string_size + value_size + critics_size + comment_size + VARHDRSZ + 500);
-    char* s = cun_memcpy(VARDATA(new_string), VARDATA_ANY(string), string_size);
+    const int32 size = value_size + critics_size + comment_size;
+    if(state->string_capacity < string_size + size + MAX_EXTRA_SIZE_HTML)
+    {
+        state->string = (text*)repalloc(state->string, string_size + size + EXP_LINE_SIZE_HTML + VARHDRSZ);
+        state->string_capacity += size + EXP_LINE_SIZE_HTML;
+    }
 
+    char* s = VARDATA(state->string)+string_size;
 
     int changes = 0;
-    if(string_size)
+    if(!PG_ARGISNULL(0))
     { 
-        const bool unknown_reading_old = DatumGetBool(GetAttributeByName(state, "unknown_reading", &isnull));
-        const int32 sign_no_old = DatumGetInt32(GetAttributeByName(state, "sign_no", &isnull));
-        const int32 word_no_old = DatumGetInt32(GetAttributeByName(state, "word_no", &isnull));
-        const int32 compound_no_old = DatumGetInt32(GetAttributeByName(state, "compound_no", &isnull));
-        const int32 line_no_old = DatumGetInt32(GetAttributeByName(state, "line_no", &isnull));
+        changes = get_changes(&state_old, state, state_old.line_no != state->line_no);
 
-        struct States states_old;
-        states_old.type = DatumGetObjectId(GetAttributeByName(state, "type", &isnull));
-        states_old.phonographic = DatumGetBool(GetAttributeByName(state, "phonographic", &states_old.phonographic_null));
-        states_old.alignment = DatumGetObjectId(GetAttributeByName(state, "alignment", &isnull));
-        states_old.stem = DatumGetBool(GetAttributeByName(state, "stem", &states_old.stem_null));
-        states_old.indicator = DatumGetBool(GetAttributeByName(state, "indicator", &isnull));
-        states_old.condition = DatumGetObjectId(GetAttributeByName(state, "condition", &isnull));
-        states_old.language = DatumGetObjectId(GetAttributeByName(state, "language", &isnull));
-
-        changes = get_changes(states_old, states, line_no_old != line_no);
-
-        s = close_html(s, changes, states_old);
+        s = close_html(s, changes, &state_old);
 
 
         // Connectors
@@ -220,43 +312,48 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
         if(inverted)
             connector = ':';
-        else if(states_old.indicator && states.indicator && states_old.alignment == states.alignment)
-            connector = states_old.phonographic && states.phonographic ? '-' : '.';
-        else if(!(states_old.indicator && states_old.alignment == ALIGNMENT_RIGHT) && !(states.indicator && states.alignment == ALIGNMENT_LEFT))
+        else if(state_old.indicator && state->indicator && state_old.alignment == state->alignment)
+            connector = state_old.phonographic && state->phonographic ? '-' : '.';
+        else if(!(state_old.indicator && state_old.alignment == ALIGNMENT_RIGHT) && !(state->indicator && state->alignment == ALIGNMENT_LEFT))
         {       
-            if(compound_no_old == compound_no)
-                connector = unknown_reading && unknown_reading_old ? '.' : '-';
-            else if(line_no_old == line_no)
+            if(state_old.compound_no == state->compound_no)
+                connector = state->unknown_reading && state_old.unknown_reading ? '.' : '-';
+            else if(state_old.line_no == state->line_no)
                 connector = ' ';
         }
 
         if(connector)
             *s++ = connector;
         
-        if(sign_no != sign_no_old+1)        // Ellipsis
+        if(state_old.sign_no+1 != state->sign_no)        // Ellipsis
         {
             s = cun_strcpy(s, "…");
             if(connector)
                 *s++ = connector;
         }
-        else if (line_no_old != line_no)    // Newline
-            s = cun_strcpy(s, "<br>");
+        else if (state_old.line_no != state->line_no)    // Newline
+        {
+            state->line_count += 1;
+            state->lines = (Datum*) repalloc(state->lines, state->line_count * sizeof(Datum));
+            SET_VARSIZE(state->string, s-VARDATA(state->string)+VARHDRSZ);
+            state->lines[state->line_count-1] = PointerGetDatum(state->string);
+
+            state->string = (text*) MemoryContextAllocZero(aggcontext, size + EXP_LINE_SIZE_HTML + VARHDRSZ);
+            state->string_capacity = size + EXP_LINE_SIZE_HTML;
+            SET_VARSIZE(state->string, VARHDRSZ);
+            s = VARDATA(state->string);
+        }
     }
     else
         changes = INT_MAX;      
 
     
-    s = open_html(s, changes, states);
+    s = open_html(s, changes, state);
 
-
-    // Actual sign
-    //#if(value == "")
-    //    s = cun_strcpy(s, "<hr>");
-    //else
     if(value)
     {
         const char* ix = cun_index(VARDATA_ANY(value), value_size);
-        if(states.type == TYPE_NUMBER || states.type == TYPE_DESCRIPTION || states.type == TYPE_DAMAGE || ix == VARDATA_ANY(value)+value_size) // value is a number or does not have a index
+        if(state->type == TYPE_NUMBER || state->type == TYPE_DESCRIPTION || state->type == TYPE_DAMAGE || ix == VARDATA_ANY(value)+value_size) // value is a number or does not have a index
             s = cun_memcpy(s, VARDATA_ANY(value), value_size);
         else
         {
@@ -281,139 +378,53 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         s = cun_strcpy(s, "</span>");
     }
 
-    SET_VARSIZE(new_string, s-VARDATA(new_string)+VARHDRSZ);
+    SET_VARSIZE(state->string, s-VARDATA(state->string)+VARHDRSZ); 
 
-    bool nulls[13];
-    for(int i = 0; i < 13; ++i)
-        nulls[i] = false;
-
-    Datum values[13];
-    values[0] = PointerGetDatum(new_string);
-    values[1] = Int32GetDatum(sign_no);
-    values[2] = Int32GetDatum(word_no);
-    values[3] = Int32GetDatum(compound_no);
-    values[4] = Int32GetDatum(line_no);
-    values[5] = ObjectIdGetDatum(states.type);
-    values[6] = BoolGetDatum(states.phonographic);
-    values[7] = BoolGetDatum(states.indicator);
-    values[8] = ObjectIdGetDatum(states.alignment);
-    values[9] = BoolGetDatum(states.stem);
-    values[10] = ObjectIdGetDatum(states.condition);
-    values[11] = ObjectIdGetDatum(states.language);
-    values[12] = BoolGetDatum(unknown_reading);
-
-    TupleDesc resultTupleDesc;
-    get_call_result_type(fcinfo, NULL, &resultTupleDesc);
-    resultTupleDesc = BlessTupleDesc(resultTupleDesc);
-    HeapTuple tuple = heap_form_tuple(resultTupleDesc, values, nulls);
-
-    PG_RETURN_DATUM(HeapTupleGetDatum(tuple));
+    PG_RETURN_POINTER(state);
 }
 
 Datum cuneiform_cun_agg_html_finalfunc(PG_FUNCTION_ARGS)
 {
-    HeapTupleHeader state = PG_GETARG_HEAPTUPLEHEADER(0);
-    bool isnull;
-    struct States states;
-    states.type = DatumGetObjectId(GetAttributeByName(state, "type", &isnull));
-    states.phonographic = DatumGetBool(GetAttributeByName(state, "phonographic", &states.phonographic_null));
-    states.alignment = DatumGetObjectId(GetAttributeByName(state, "alignment", &isnull));
-    states.stem = DatumGetBool(GetAttributeByName(state, "stem", &states.stem_null));
-    states.indicator = DatumGetBool(GetAttributeByName(state, "indicator", &isnull));
-    states.condition = DatumGetObjectId(GetAttributeByName(state, "condition", &isnull));
-    states.language = DatumGetObjectId(GetAttributeByName(state, "language", &isnull));
-    const text* string = (text*)DatumGetPointer(GetAttributeByName(state, "string", &isnull));
+    Assert(AggCheckCallContext(fcinfo, NULL));
 
-    text* new_string = (text*)palloc0(VARSIZE_ANY(string)+500);
-    char* s = cun_memcpy(VARDATA(new_string), VARDATA_ANY(string), VARSIZE_ANY_EXHDR(string));
+    const State* state = PG_ARGISNULL(0) ? NULL : (State*) PG_GETARG_POINTER(0);
+    if(state == NULL)
+        PG_RETURN_NULL();
 
-    s = close_html(s, INT_MAX, states);
+    // the finalfunc may not alter state, therefore we need to copy everything
+    text* string = (text*) palloc0(VARSIZE(state->string) + 500);
+    SET_VARSIZE(string, VARSIZE(state->string) + 500);
+    char* s = ((char*)memcpy((void *)VARDATA(string), (void *)VARDATA(state->string), VARSIZE(state->string))) + VARSIZE(state->string);
+    Datum* lines = (Datum*) palloc0((state->line_count+1) * sizeof(Datum));
+    memcpy(lines, state->lines, state->line_count * sizeof(Datum));
+    lines[state->line_count] = PointerGetDatum(string);
 
-    SET_VARSIZE(new_string, s-VARDATA(new_string)+VARHDRSZ);
+    s = close_html(s, INT_MAX, state);
 
-    PG_RETURN_TEXT_P(new_string);
+    SET_VARSIZE(string, s-VARDATA(string)+VARHDRSZ);
+       
+    ArrayType* a = construct_array(lines, state->line_count+1, 25, -1, false, 'i');
+
+    PG_RETURN_ARRAYTYPE_P(a);
 }
 
-
-
-char* close_code(char* s, int changes, struct States states)
-{
-    if(states.indicator && (changes & INDICATOR || changes & PHONOGRAPHIC))
-    {
-        if(states.phonographic & !states.phonographic_null)
-            *s++ = '>';
-        else 
-            *s++ = '}';
-    }
-    if(changes & TYPE && states.type == TYPE_DESCRIPTION)
-        *s++ = '"';
-    if(changes & STEM && states.stem && !states.stem_null)
-        s = cun_strcpy(s, "⟩");
-    if(changes & CONDITION)
-    {
-        if(states.condition == CONDITION_LOST)
-            s = cun_strcpy(s, "]");
-        else if(states.condition == CONDITION_DAMAGED)
-            s = cun_strcpy(s, "⸣");
-        else if(states.condition == CONDITION_INSERTED)
-            s = cun_strcpy(s, "›");
-        else if(states.condition == CONDITION_DELETED)
-            s = cun_strcpy(s, "»");
-    }
-    
-    return s;
-}
-
-char* open_code(char* s, int changes, struct States states)
-{
-    if(changes & CONDITION)
-    {
-        if(states.condition == CONDITION_LOST)
-            s = cun_strcpy(s, "[");
-        else if(states.condition == CONDITION_DAMAGED)
-            s = cun_strcpy(s, "⸢");
-        else if(states.condition == CONDITION_INSERTED)
-            s = cun_strcpy(s, "‹");
-        else if(states.condition == CONDITION_DELETED)
-            s = cun_strcpy(s, "«");
-    }
-    if(changes & STEM && states.stem && !states.stem_null)
-        s = cun_strcpy(s, "⟨");
-    if(changes & TYPE && states.type == TYPE_DESCRIPTION)
-        *s++ = '"';
-    if(states.indicator && (changes & INDICATOR || changes & PHONOGRAPHIC))
-    {
-        if(states.phonographic && !states.phonographic_null)
-            *s++ = '<';
-        else 
-            *s++ = '{';
-    }
-
-    return s;
-}
 
 Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
 {
+    MemoryContext aggcontext;
+    State* state;
+    State state_old;
     bool isnull;
 
-    const HeapTupleHeader state = PG_GETARG_HEAPTUPLEHEADER(0);
-    const text* value = PG_ARGISNULL(1) ? NULL : PG_GETARG_TEXT_PP(1);
-    const bool unknown_reading = PG_GETARG_BOOL(2);
-    const int32 sign_no = PG_GETARG_INT32(3);
-    const int32 word_no = PG_GETARG_INT32(4);
-    const int32 compound_no = PG_GETARG_INT32(5);
-    const int32 line_no = PG_GETARG_INT32(6);
+    if (!AggCheckCallContext(fcinfo, &aggcontext))
+    {
+        /* cannot be called directly because of internal-type argument */
+        elog(ERROR, "array_agg_transfn called in non-aggregate context");
+    }
 
-    struct States states;
-    const HeapTupleHeader properties = PG_GETARG_HEAPTUPLEHEADER(7);
-    states.type = DatumGetObjectId(GetAttributeByName(properties, "type", &isnull));
-    states.phonographic = DatumGetBool(GetAttributeByName(properties, "phonographic", &states.phonographic_null));
-    states.alignment = DatumGetObjectId(GetAttributeByName(properties, "alignment", &isnull));
-    states.indicator = DatumGetBool(GetAttributeByName(properties, "indicator", &isnull));
-    states.stem = PG_GETARG_BOOL(8);
-    states.stem_null = PG_ARGISNULL(8);
-    states.condition = PG_GETARG_OID(9);
-    states.language = PG_GETARG_OID(10);
+    state = init_state(fcinfo, aggcontext, &state_old);
+
+    const text* value = PG_ARGISNULL(1) ? NULL : PG_GETARG_TEXT_PP(1);
 
     const bool inverted = PG_GETARG_BOOL(11);
     const bool newline = PG_GETARG_BOOL(12);
@@ -421,37 +432,25 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     const text* critics = PG_ARGISNULL(13) ? NULL : PG_GETARG_TEXT_PP(13);
     const text* comment = PG_ARGISNULL(14) ? NULL : PG_GETARG_TEXT_PP(14);
 
-    
-    const text* string = (text*)DatumGetPointer(GetAttributeByName(state, "string", &isnull));
-    const int32 string_size = VARSIZE_ANY_EXHDR(string);
+    const int32 string_size = VARSIZE_ANY_EXHDR(state->string);
     const int32 value_size = value ? VARSIZE_ANY_EXHDR(value) : 0;
     const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
     const int32 comment_size = comment ? VARSIZE_ANY_EXHDR(comment) : 0;
-    text* new_string = (text*)palloc0(string_size + value_size + critics_size + comment_size + VARHDRSZ + 500);
-    char* s = cun_memcpy(VARDATA(new_string), VARDATA_ANY(string), string_size);
+    const int32 size = value_size + critics_size + comment_size;
+    if(state->string_capacity < string_size + size + MAX_EXTRA_SIZE_CODE)
+    {
+        state->string = (text*)repalloc(state->string, string_size + size + EXP_LINE_SIZE_CODE + VARHDRSZ);
+        state->string_capacity += size + EXP_LINE_SIZE_CODE;
+    }
 
+    char* s = VARDATA(state->string)+string_size;
 
     int changes = 0;
     if(string_size)
     { 
-        const bool unknown_reading_old = DatumGetBool(GetAttributeByName(state, "unknown_reading", &isnull));
-        const int32 sign_no_old = DatumGetInt32(GetAttributeByName(state, "sign_no", &isnull));
-        const int32 word_no_old = DatumGetInt32(GetAttributeByName(state, "word_no", &isnull));
-        const int32 compound_no_old = DatumGetInt32(GetAttributeByName(state, "compound_no", &isnull));
-        const int32 line_no_old = DatumGetInt32(GetAttributeByName(state, "line_no", &isnull));
+        changes = get_changes(&state_old, state, state_old.line_no != state->line_no);
 
-        struct States states_old;
-        states_old.type = DatumGetObjectId(GetAttributeByName(state, "type", &isnull));
-        states_old.phonographic = DatumGetBool(GetAttributeByName(state, "phonographic", &states_old.phonographic_null));
-        states_old.alignment = DatumGetObjectId(GetAttributeByName(state, "alignment", &isnull));
-        states_old.stem = DatumGetBool(GetAttributeByName(state, "stem", &states_old.stem_null));
-        states_old.indicator = DatumGetBool(GetAttributeByName(state, "indicator", &isnull));
-        states_old.condition = DatumGetObjectId(GetAttributeByName(state, "condition", &isnull));
-        states_old.language = DatumGetObjectId(GetAttributeByName(state, "language", &isnull));
-
-        changes = get_changes(states_old, states, line_no_old != line_no);
-
-        s = close_code(s, changes, states_old);
+        s = close_code(s, changes, &state_old);
 
 
         // Connectors
@@ -459,39 +458,43 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
 
         if(inverted)
             connector = ':';
-        else if(states_old.indicator && states.indicator && states_old.alignment == states.alignment)
-            connector = states_old.phonographic && states.phonographic ? '-' : '.';
-        else if(!(states_old.indicator && states_old.alignment == ALIGNMENT_RIGHT) && !(states.indicator && states.alignment == ALIGNMENT_LEFT))
+        else if(state_old.indicator && state->indicator && state_old.alignment == state->alignment)
+            connector = state_old.phonographic && state->phonographic ? '-' : '.';
+        else if(!(state_old.indicator && state_old.alignment == ALIGNMENT_RIGHT) && !(state->indicator && state->alignment == ALIGNMENT_LEFT))
         {       
-            if(compound_no_old == compound_no)
-                connector = unknown_reading && unknown_reading_old ? '.' : '-';
-            else if(line_no_old == line_no)
+            if(state_old.compound_no == state->compound_no)
+                connector = state_old.unknown_reading && state->unknown_reading ? '.' : '-';
+            else if(state_old.line_no == state->line_no)
                 connector = ' ';
         }
 
         if(connector)
             *s++ = connector;
         
-        if(sign_no != sign_no_old+1)        // Ellipsis
+        if(state_old.sign_no+1 != state->sign_no)        // Ellipsis
         {
             s = cun_strcpy(s, "…");
             if(connector)
                 *s++ = connector;
         }
-        else if (line_no_old != line_no)    // Newline
-            *s++ = '\n';
+        else if (state_old.line_no != state->line_no)    // Newline
+        {
+            state->line_count += 1;
+            state->lines = (Datum*) repalloc(state->lines, state->line_count * sizeof(Datum));
+            SET_VARSIZE(state->string, s-VARDATA(state->string)+VARHDRSZ);
+            state->lines[state->line_count-1] = PointerGetDatum(state->string);
+            state->string = (text*) MemoryContextAllocZero(aggcontext, size + EXP_LINE_SIZE_CODE + VARHDRSZ);
+            state->string_capacity = size + EXP_LINE_SIZE_CODE;
+            SET_VARSIZE(state->string, VARHDRSZ);
+            s = VARDATA(state->string);
+        }
     }
     else
         changes = INT_MAX;      
 
     
-    s = open_code(s, changes, states);
+    s = open_code(s, changes, state);
 
-
-    // Actual sign
-    //#if(value == "")
-    //    s = cun_strcpy(s, "<hr>");
-    //else
     if(value)
         s = cun_memcpy(s, VARDATA_ANY(value), value_size);
 
@@ -505,199 +508,32 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
         *s++ = ')';
     }
 
-    SET_VARSIZE(new_string, s-VARDATA(new_string)+VARHDRSZ);
+    SET_VARSIZE(state->string, s-VARDATA(state->string)+VARHDRSZ); 
 
-    bool nulls[13];
-    for(int i = 0; i < 13; ++i)
-        nulls[i] = false;
-
-    Datum values[13];
-    values[0] = PointerGetDatum(new_string);
-    values[1] = Int32GetDatum(sign_no);
-    values[2] = Int32GetDatum(word_no);
-    values[3] = Int32GetDatum(compound_no);
-    values[4] = Int32GetDatum(line_no);
-    values[5] = ObjectIdGetDatum(states.type);
-    values[6] = BoolGetDatum(states.phonographic);
-    values[7] = BoolGetDatum(states.indicator);
-    values[8] = ObjectIdGetDatum(states.alignment);
-    values[9] = BoolGetDatum(states.stem);
-    values[10] = ObjectIdGetDatum(states.condition);
-    values[11] = ObjectIdGetDatum(states.language);
-    values[12] = BoolGetDatum(unknown_reading);
-
-    TupleDesc resultTupleDesc;
-    get_call_result_type(fcinfo, NULL, &resultTupleDesc);
-    resultTupleDesc = BlessTupleDesc(resultTupleDesc);
-    HeapTuple tuple = heap_form_tuple(resultTupleDesc, values, nulls);
-
-    PG_RETURN_DATUM(HeapTupleGetDatum(tuple));
+    PG_RETURN_POINTER(state);
 }
 
 Datum cuneiform_cun_agg_finalfunc(PG_FUNCTION_ARGS)
 {
-    HeapTupleHeader state = PG_GETARG_HEAPTUPLEHEADER(0);
-    bool isnull;
-    struct States states;
-    states.type = DatumGetObjectId(GetAttributeByName(state, "type", &isnull));
-    states.phonographic = DatumGetBool(GetAttributeByName(state, "phonographic", &states.phonographic_null));
-    states.alignment = DatumGetObjectId(GetAttributeByName(state, "alignment", &isnull));
-    states.stem = DatumGetBool(GetAttributeByName(state, "stem", &states.stem_null));
-    states.indicator = DatumGetBool(GetAttributeByName(state, "indicator", &isnull));
-    states.condition = DatumGetObjectId(GetAttributeByName(state, "condition", &isnull));
-    states.language = DatumGetBool(GetAttributeByName(state, "language", &isnull));
-    const text* string = (text*)DatumGetPointer(GetAttributeByName(state, "string", &isnull));
+    Assert(AggCheckCallContext(fcinfo, NULL));
 
-    text* new_string = (text*)palloc0(VARSIZE_ANY(string)+500);
-    char* s = cun_memcpy(VARDATA(new_string), VARDATA_ANY(string), VARSIZE_ANY_EXHDR(string));
+    const State* state = PG_ARGISNULL(0) ? NULL : (State*) PG_GETARG_POINTER(0);
+    if(state == NULL)
+        PG_RETURN_NULL();
 
-    s = close_code(s, INT_MAX, states);
+    // the finalfunc may not alter state, therefore we need to copy everything
+    text* string = (text*) palloc0(VARSIZE(state->string) + 500);
+    SET_VARSIZE(string, VARSIZE(state->string) + 500);
+    char* s = ((char*)memcpy((void *)VARDATA(string), (void *)VARDATA(state->string), VARSIZE(state->string))) + VARSIZE(state->string);
+    Datum* lines = (Datum*) palloc0((state->line_count+1) * sizeof(Datum));
+    memcpy(lines, state->lines, state->line_count * sizeof(Datum));
+    lines[state->line_count] = PointerGetDatum(string);
 
-    SET_VARSIZE(new_string, s-VARDATA(new_string)+VARHDRSZ);
+    s = close_code(s, INT_MAX, state);
 
-    PG_RETURN_TEXT_P(new_string);
+    SET_VARSIZE(string, s-VARDATA(string)+VARHDRSZ);
+       
+    ArrayType* a = construct_array(lines, state->line_count+1, 25, -1, false, 'i');
+
+    PG_RETURN_ARRAYTYPE_P(a);
 }
-
-/*Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
-{
-    HeapTupleHeader t = PG_GETARG_HEAPTUPLEHEADER(0);
-    bool isnull;
-    const text* string = (text*)DatumGetPointer(GetAttributeByName(t, "string", &isnull));
-    const int32 sign_no_old = DatumGetInt32(GetAttributeByName(t, "sign_no", &isnull));
-    const int32 word_no_old = DatumGetInt32(GetAttributeByName(t, "word_no", &isnull));
-    const int32 line_no_old = DatumGetInt32(GetAttributeByName(t, "line_no", &isnull));
-    const Oid type_old = DatumGetObjectId(GetAttributeByName(t, "sign_type", &isnull));
-    const Oid condition_old = DatumGetObjectId(GetAttributeByName(t, "condition", &isnull));
-
-    const text* value = PG_GETARG_TEXT_PP(1);
-    const int32 sign_no = PG_GETARG_INT32(2);
-    const int32 word_no = PG_GETARG_INT32(3);
-    const int32 line_no = PG_GETARG_INT32(4);
-    const Oid type = PG_GETARG_OID(5);
-    const Oid condition = PG_GETARG_OID(6);
-    const bool inverted = PG_GETARG_BOOL(7);
-    const text* critics = PG_ARGISNULL(8) ? NULL : PG_GETARG_TEXT_PP(8);
-    const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
-    const Oid value_type = PG_GETARG_OID(9);
-    const Oid segment_type = PG_GETARG_OID(10);
-
-    const int32 string_size = VARSIZE_ANY_EXHDR(string);
-    const int32 value_size = VARSIZE_ANY_EXHDR(value);
-
-    text* new_string = (text*)palloc0(string_size + value_size + VARHDRSZ + 500);
-
-    char* s = cun_memcpy(VARDATA(new_string), VARDATA_ANY(string), string_size);
-
-    if(string_size)
-    {   
-        if(condition != condition_old || line_no_old != line_no)
-            s = cun_close(s, condition_old);
-
-        // Connectors
-        if(!(type_old == TYPE_PCP || type_old == TYPE_DETP || type == TYPE_PCS || type == TYPE_DETS))
-        {
-            if(inverted)
-                *s++ = ':';
-            else if(word_no_old != word_no)
-                *s++ = ' ';
-            else
-            {
-                if(type_old == TYPE_SIGN && type == TYPE_SIGN)
-                    *s++ = '.';
-                else
-                    *s++ = '-';
-            }
-        }
-        else if (((type_old == TYPE_PCP || type_old == TYPE_DETP) && (type == TYPE_PCP || type == TYPE_DETP)) ||
-                 ((type_old == TYPE_PCS || type_old == TYPE_DETS) && (type == TYPE_PCS || type == TYPE_DETS)))
-            *s++ = '.';
-
-        // Newline
-        if(line_no_old != line_no)
-            *s++ = '\n';
-    }
-
-    if(condition != CON_INTACT)
-    {
-        if(condition != condition_old || line_no_old != line_no)
-        {
-            if(condition == CON_GONE)
-                *s++ = '[';
-            else if(condition == CON_DAMAGED)
-                s = cun_strcpy(s, "⸢");
-            else if(condition == CON_CORRECTED)
-                s = cun_strcpy(s, "‹");
-            else if(condition == CON_DELETED)
-                s = cun_strcpy(s, "«");
-        }
-    }
-
-    if(type == TYPE_PCP || type == TYPE_PCS)
-        s = cun_strcpy(s, "<");
-    else if(type == TYPE_DETP || type == TYPE_DETS)
-        s = cun_strcpy(s, "{");
-    else if(type == TYPE_DESC)
-        s = cun_strcpy(s, "\"");
-
-    // Actual sign
-    if(type == TYPE_SPACE)
-        s = cun_strcpy(s, "_______");
-    else
-        s = cun_memcpy(s, VARDATA_ANY(value), value_size);
-
-    if(critics_size)
-        s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
-
-    if(type == TYPE_PCP || type == TYPE_PCS)
-        s = cun_strcpy(s, ">");
-    else if(type == TYPE_DETP || type == TYPE_DETS)
-        s = cun_strcpy(s, "}");
-    else if(type == TYPE_DESC)
-        s = cun_strcpy(s, "\"");
-
-    SET_VARSIZE(new_string, s-VARDATA(new_string)+VARHDRSZ);
-
-    bool nulls[8];
-    nulls[0] = false;
-    nulls[1] = false;
-    nulls[2] = false;
-    nulls[3] = false;
-    nulls[4] = false;
-    nulls[5] = false;
-    nulls[6] = false;
-    nulls[7] = false;
-
-    Datum values[8];
-    values[0] = PointerGetDatum(new_string);
-    values[1] = Int32GetDatum(sign_no);
-    values[2] = Int32GetDatum(word_no);
-    values[3] = Int32GetDatum(line_no);
-    values[4] = ObjectIdGetDatum(type);
-    values[5] = ObjectIdGetDatum(condition);
-    values[6] = ObjectIdGetDatum(value_type);
-    values[7] = ObjectIdGetDatum(segment_type);
-
-    TupleDesc resultTupleDesc;
-    get_call_result_type(fcinfo, NULL, &resultTupleDesc);
-    resultTupleDesc = BlessTupleDesc(resultTupleDesc);
-    HeapTuple tuple = heap_form_tuple(resultTupleDesc, values, nulls);
-
-    PG_RETURN_DATUM(HeapTupleGetDatum(tuple));
-}
-
-Datum cuneiform_cun_agg_finalfunc(PG_FUNCTION_ARGS)
-{
-    HeapTupleHeader t = PG_GETARG_HEAPTUPLEHEADER(0);
-    bool isnull;
-    const text* string = (text*)DatumGetPointer(GetAttributeByName(t, "string", &isnull));
-    const Oid condition = DatumGetObjectId(GetAttributeByName(t, "condition", &isnull));
-
-    text* new_string = (text*)palloc0(VARSIZE_ANY(string)+5);
-    char* s = cun_memcpy(VARDATA(new_string), VARDATA_ANY(string), VARSIZE_ANY_EXHDR(string));
-
-    s = cun_close(s, condition);
-
-    SET_VARSIZE(new_string, s-VARDATA(new_string)+VARHDRSZ);
-
-    PG_RETURN_TEXT_P(new_string);
-}*/
