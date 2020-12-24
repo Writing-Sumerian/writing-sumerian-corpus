@@ -225,7 +225,7 @@ SELECT
     value_id,
     sign_id,
     (type, indicator,  alignment, corpus_tmp_.phonographic)::sign_properties,
-    TRUE,
+    NULL,
     condition,
     crits,
     corpus_tmp_.comment,
