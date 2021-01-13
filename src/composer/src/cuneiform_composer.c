@@ -126,7 +126,7 @@ int get_changes(const State* s1, const State* s2, const bool newline)
     int changes = 0;
     if(s1->indicator != s2->indicator || s1->alignment != s2->alignment)
         changes += INDICATOR;
-    if(s1->type != s2->type)
+    if(s1->type != s2->type || s1->unknown_reading != s2->unknown_reading)
         changes += TYPE;
     if(s1->phonographic != s2->phonographic || s1->phonographic_null != s2->phonographic_null)
         changes += PHONOGRAPHIC;
@@ -144,7 +144,7 @@ char* close_html(char* s, int changes, const State* state)
 {
     if(changes >= INDICATOR && state->indicator)
         s = cun_strcpy(s, "</span>");
-    if(changes >= TYPE && state->type != TYPE_VALUE)
+    if(changes >= TYPE && (state->type != TYPE_VALUE || state->unknown_reading))
         s = cun_strcpy(s, "</span>");
     if(changes >= PHONOGRAPHIC && state->phonographic && !state->phonographic_null)
         s = cun_strcpy(s, "</span>");
@@ -181,7 +181,7 @@ char* open_html(char* s, int changes, const State* state)
         s = cun_strcpy(s, "<span class='stem'>");
     if(changes >= PHONOGRAPHIC && state->phonographic && !state->phonographic_null)
         s = cun_strcpy(s, "<span class='phonographic'>");
-    if(changes >= TYPE && state->type != TYPE_VALUE)
+    if(changes >= TYPE && (state->type != TYPE_VALUE || state->unknown_reading))
     {
         if(state->type == TYPE_NUMBER)
             s = cun_strcpy(s, "<span class='number'>");
@@ -191,6 +191,8 @@ char* open_html(char* s, int changes, const State* state)
             s = cun_strcpy(s, "<span class='description'>");
         else if(state->type == TYPE_DAMAGE)
             s = cun_strcpy(s, "<span class='damage'>");
+        else if(state->unknown_reading)
+            s = cun_strcpy(s, "<span class='unknown_reading'>");
     }
     if(changes >= INDICATOR && state->indicator)
         s = cun_strcpy(s, "<span class='indicator'>");
@@ -374,8 +376,7 @@ Datum cuneiform_cun_agg_html_finalfunc(PG_FUNCTION_ARGS)
 
     // the finalfunc may not alter state, therefore we need to copy everything
     text* string = (text*) palloc0(VARSIZE(state->string) + 500);
-    SET_VARSIZE(string, VARSIZE(state->string) + 500);
-    char* s = ((char*)memcpy((void *)VARDATA(string), (void *)VARDATA(state->string), VARSIZE(state->string))) + VARSIZE(state->string);
+    char* s = (char*)memcpy(VARDATA(string), VARDATA(state->string), VARSIZE_ANY_EXHDR(state->string)) + VARSIZE_ANY_EXHDR(state->string);;
     Datum* lines = (Datum*) palloc0((state->line_count+1) * sizeof(Datum));
     memcpy(lines, state->lines, state->line_count * sizeof(Datum));
     lines[state->line_count] = PointerGetDatum(string);
@@ -504,8 +505,7 @@ Datum cuneiform_cun_agg_finalfunc(PG_FUNCTION_ARGS)
 
     // the finalfunc may not alter state, therefore we need to copy everything
     text* string = (text*) palloc0(VARSIZE(state->string) + 500);
-    SET_VARSIZE(string, VARSIZE(state->string) + 500);
-    char* s = ((char*)memcpy((void *)VARDATA(string), (void *)VARDATA(state->string), VARSIZE(state->string))) + VARSIZE(state->string);
+    char* s = (char*)memcpy(VARDATA(string), VARDATA(state->string), VARSIZE_ANY_EXHDR(state->string)) + VARSIZE_ANY_EXHDR(state->string);;
     Datum* lines = (Datum*) palloc0((state->line_count+1) * sizeof(Datum));
     memcpy(lines, state->lines, state->line_count * sizeof(Datum));
     lines[state->line_count] = PointerGetDatum(string);
