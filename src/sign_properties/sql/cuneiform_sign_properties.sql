@@ -1,8 +1,7 @@
-CREATE TYPE
-LANGUAGE AS
-ENUM (
+CREATE TYPE language AS ENUM (
     'sumerian',
     'akkadian',
+    'hittite',
     'other'
 );
 
@@ -11,7 +10,7 @@ CREATE TYPE sign_type AS ENUM (
     'sign',
     'number',
     'punctuation',
-    'desc',
+    'description',
     'damage'
 );
 
@@ -26,7 +25,8 @@ CREATE TYPE sign_condition AS ENUM (
     'damaged',
     'lost',
     'inserted',
-    'deleted'
+    'deleted',
+    'erased'
 );
 
 CREATE TYPE sign_properties AS (
@@ -36,3 +36,13 @@ CREATE TYPE sign_properties AS (
     phonographic boolean
 );
 
+CREATE TYPE pn_type AS ENUM (
+    'person', 
+    'god',
+    'place',   
+    'water', 
+    'field', 
+    'temple', 
+    'month',
+    'object'
+);
