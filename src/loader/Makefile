@@ -29,4 +29,4 @@ DATA_PATH ?= /home/marc/Arbeit/Datenbank/Dateien
 
 build/$(EXTENSION)--$(version).sql: sql/$(EXTENSION).sql
 	@mkdir -p build
-	@sed 's_{{path}}_$(DATA_PATH)_g' sql/$(EXTENSION).sql > build/$(EXTENSION)--$(version).sql
+	@cp sql/$(EXTENSION).sql build/$(EXTENSION)--$(version).sql
