@@ -1,0 +1,4 @@
+comment = 'Context information for cuneiform text'
+default_version = '0.0.1'
+relocatable = true
+module_pathname = '$libdir/cuneiform_context'
