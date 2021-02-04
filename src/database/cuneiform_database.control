@@ -1,0 +1,5 @@
+comment = 'Core data structures for Cuneiform Database'
+default_version = '0.0.1'
+relocatable = false
+module_pathname = '$libdir/cuneiform_database'
+requires = 'cuneiform_sign_properties, cuneiform_context, cuneiform_signlist'
