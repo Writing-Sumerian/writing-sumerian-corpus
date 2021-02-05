@@ -495,7 +495,7 @@ CREATE TEMPORARY TABLE periods_tmp_ (
     super_name text
 );
 
-EXECUTE format('COPY periods_tmp_(name, start_year, end_year, super_name) FROM %L DELIMITER '','';', path || 'periods.csv');
+EXECUTE format('COPY periods_tmp_(name, start_year, end_year, super_name) FROM %L CSV NULL ''\N''', path || 'periods.csv');
 
 INSERT INTO periods
 SELECT
@@ -509,9 +509,9 @@ FROM
 
 DROP TABLE periods_tmp_;
 
-EXECUTE format('COPY proveniences(name, modern_name, latitude, longitude) FROM %L DELIMITER '',''', path || 'proveniences.csv');
+EXECUTE format('COPY proveniences(name, modern_name, latitude, longitude) FROM %L CSV NULL ''\N''', path || 'proveniences.csv');
 
-EXECUTE format('COPY genres(name) FROM %L DELIMITER '',''', path || 'genres.csv');
+EXECUTE format('COPY genres(name) FROM %L CSV NULL ''\N''', path || 'genres.csv');
 
 END
 
@@ -586,10 +586,10 @@ CREATE TEMPORARY TABLE unknown_signs_tmp_ (
     sign_name text
 );
 
-EXECUTE format('COPY signs(sign, composition, unicode, mzl_no) FROM %L DELIMITER '','';', path || 'signs.csv');
-EXECUTE format('COPY values_tmp_ FROM %L DELIMITER '','';', path || 'values.csv');
-EXECUTE format('COPY value_variants_tmp_ FROM %L DELIMITER '','';', path || 'value_variants.csv');
-EXECUTE format('COPY unknown_signs_tmp_ FROM %L DELIMITER '','';', path || 'unknown_signs.csv');
+EXECUTE format('COPY signs(sign, composition, unicode, mzl_no) FROM %L CSV NULL ''\N''', path || 'signs.csv');
+EXECUTE format('COPY values_tmp_ FROM %L CSV NULL ''\N''', path || 'values.csv');
+EXECUTE format('COPY value_variants_tmp_ FROM %L CSV NULL ''\N''', path || 'value_variants.csv');
+EXECUTE format('COPY unknown_signs_tmp_ FROM %L CSV NULL ''\N''', path || 'unknown_signs.csv');
 
 INSERT INTO value_ids_tmp_(sign_name, main_value)
 SELECT
