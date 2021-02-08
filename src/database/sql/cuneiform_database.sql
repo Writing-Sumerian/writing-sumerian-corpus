@@ -84,10 +84,10 @@ SELECT
     corpus_norm.word_no,
     corpus_norm.line_no,
     row_number() OVER (PARTITION BY corpus_norm.transliteration_id ORDER BY corpus_norm.sign_no, sign_composition.pos) AS component_no,
-    coalesce(sign_composition.pos, 1),
+    coalesce(sign_composition.pos, 1) AS pos,
     sign_composition.component_sign_id,
-    coalesce(sign_composition.initial, TRUE),
-    coalesce(sign_composition.final, TRUE),
+    coalesce(sign_composition.initial, TRUE) AS initial,
+    coalesce(sign_composition.final, TRUE) AS final,
     corpus_norm.properties
    FROM corpus_norm
      LEFT JOIN sign_composition USING (sign_id)
