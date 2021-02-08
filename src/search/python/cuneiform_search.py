@@ -144,7 +144,6 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             # Characters
             if node.data == 'value':
                 if len(node.children) == 2:
-                    #r = plpy.execute(f"SELECT array_agg(a.value_id) AS ids FROM value_variants a JOIN values x USING (value_id) JOIN values y USING (sign_id) JOIN value_variants b ON (y.value_id = b.value_id) WHERE a.value = '{node.children[0]}' AND b.value = '{node.children[1].lower()}'")
                     r = plpy.execute(f"SELECT array_agg(value_id) AS ids FROM value_variants JOIN values USING (value_id) JOIN sign_identifiers USING (sign_id) WHERE value = '{node.children[0]}' AND sign_identifier = '{node.children[1][1:-1].replace('x', '×')}'")
                 else:
                     r = plpy.execute(f"SELECT array_agg(value_id) AS ids FROM value_variants WHERE value = '{node.children[0]}'")
@@ -167,7 +166,7 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             elif node.data == 'pattern':
                 pattern = '^'+node.children[0][1:-1]+'([0-9]+|x)?$'
                 if len(node.children) == 2:
-                    r = plpy.execute(f"SELECT array_agg(value_id) AS ids FROM value_variants JOIN values USING (value_id) JOIN sign_identifiers USING (sign_id) WHERE value = '{pattern}' AND sign_identifier = '{node.children[1][1:-1].replace('x', '×')}'")
+                    r = plpy.execute(f"SELECT array_agg(value_id) AS ids FROM value_variants JOIN values USING (value_id) JOIN sign_identifiers USING (sign_id) WHERE value ~ '{pattern}' AND sign_identifier = '{node.children[1][1:-1].replace('x', '×')}'")
                 else:
                     r = plpy.execute(f"SELECT array_agg(value_id) AS ids FROM value_variants WHERE value ~ '{pattern}'")
                 value_ids = r[0]['ids']
