@@ -241,7 +241,7 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
                     if child.data == 'wordbreak':
                         self.conditions.append(f"(cstart.word_no IS NULL OR cstart.word_no != c0.word_no)")
                     elif child.data == 'linebreak':
-                        self.conditions.append(f"(cstart.line_no IS NULL OR cstart.lineno != c0.line_no)")
+                        self.conditions.append(f"(cstart.line_no IS NULL OR cstart.line_no != c0.line_no)")
             elif node.data == 'breakend':
                 if self.previous_sign:
                     self.conditions.append(f'c{self.i-1}.final')
