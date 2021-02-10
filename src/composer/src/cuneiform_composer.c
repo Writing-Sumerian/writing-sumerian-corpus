@@ -40,6 +40,7 @@ Oid ALIGNMENT_CENTER;
 Oid LANGUAGE_SUMERIAN;
 Oid LANGUAGE_AKKADIAN;
 Oid LANGUAGE_HITTITE;
+Oid LANGUAGE_EBLAITE;
 Oid LANGUAGE_OTHER;
 
 Oid CONDITION_INTACT;
@@ -53,7 +54,7 @@ void _PG_init(void)
 {
     SPI_connect();
 
-    SPI_execute("SELECT 'sumerian'::language, 'akkadian'::language, 'hittite'::language, 'other'::language" , true, 1);
+    SPI_execute("SELECT 'sumerian'::language, 'akkadian'::language, 'hittite'::language, 'eblaite'::language, 'other'::language" , true, 1);
     if(SPI_tuptable != NULL && SPI_processed == 1)
     {
         const HeapTuple tuple = SPI_tuptable->vals[0];
@@ -62,7 +63,8 @@ void _PG_init(void)
         LANGUAGE_SUMERIAN = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 1, &isnull));
         LANGUAGE_AKKADIAN = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 2, &isnull));
         LANGUAGE_HITTITE = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 3, &isnull));
-        LANGUAGE_OTHER = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 4, &isnull));
+        LANGUAGE_EBLAITE = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 4, &isnull));
+        LANGUAGE_OTHER = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 5, &isnull));
     }
     SPI_execute("SELECT 'left'::alignment, 'right'::alignment, 'center'::alignment", true, 1);
     if(SPI_tuptable != NULL && SPI_processed == 1)
@@ -248,6 +250,10 @@ char* open_html(char* s, int changes, const State* state)
     {
         if(state->language == LANGUAGE_AKKADIAN)
             s = cun_strcpy(s, "<span class='akkadian'>");
+        else if(state->language == LANGUAGE_HITTITE)
+            s = cun_strcpy(s, "<span class='hittite'>");
+        else if(state->language == LANGUAGE_EBLAITE)
+            s = cun_strcpy(s, "<span class='eblaite'>");
         else
             s = cun_strcpy(s, "<span class='otherlanguage'>");
     }

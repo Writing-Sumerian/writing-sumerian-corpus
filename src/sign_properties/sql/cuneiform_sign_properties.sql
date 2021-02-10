@@ -2,6 +2,7 @@ CREATE TYPE language AS ENUM (
     'sumerian',
     'akkadian',
     'hittite',
+    'eblaite',
     'other'
 );
 
