@@ -76,7 +76,8 @@ void _PG_init(void)
         ALIGNMENT_RIGHT = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 2, &isnull));
         ALIGNMENT_CENTER = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 3, &isnull));
     }
-    SPI_execute("SELECT 'value'::sign_type, 'sign'::sign_type, 'number'::sign_type, 'punctuation'::sign_type, 'description'::sign_type, 'damage'::sign_type", true, 1);
+    SPI_execute("SELECT 'value'::sign_type, 'sign'::sign_type, 'number'::sign_type, 'punctuation'::sign_type,"
+                "       'description'::sign_type, 'damage'::sign_type", true, 1);
     if(SPI_tuptable != NULL && SPI_processed == 1)
     {
         const HeapTuple tuple = SPI_tuptable->vals[0];
@@ -121,6 +122,18 @@ char* cun_strcpy(char* s1, const char* s2)
     while(*s2 != '\0')
         *s1++ = *s2++;
     return s1;
+}
+
+int cun_strcmp(char* s1, const char* s2)
+{
+    while(*s2 != '\0')
+    {
+        if(*s1 < *s2)
+            return -1;
+        if(*s1++ > *s2++)
+            return 1;
+    }
+    return 0;
 }
 
 typedef struct State
@@ -216,7 +229,7 @@ char* close_html(char* s, int changes, const State* state)
 {
     if(changes >= INDICATOR && state->indicator)
         s = cun_strcpy(s, "</span>");
-    if(changes >= TYPE && (state->type != TYPE_VALUE || state->unknown_reading))
+    if(changes >= TYPE && (state->type != TYPE_VALUE || state->unknown_reading) && state->type != TYPE_PUNCTUATION)
         s = cun_strcpy(s, "</span>");
     if(changes >= PHONOGRAPHIC && state->phonographic && !state->phonographic_null)
         s = cun_strcpy(s, "</span>");
@@ -263,12 +276,10 @@ char* open_html(char* s, int changes, const State* state)
         s = cun_strcpy(s, "<span class='highlight'>");
     if(changes >= PHONOGRAPHIC && state->phonographic && !state->phonographic_null)
         s = cun_strcpy(s, "<span class='phonographic'>");
-    if(changes >= TYPE && (state->type != TYPE_VALUE || state->unknown_reading))
+    if(changes >= TYPE && (state->type != TYPE_VALUE || state->unknown_reading)  && state->type != TYPE_PUNCTUATION)
     {
         if(state->type == TYPE_NUMBER)
             s = cun_strcpy(s, "<span class='number'>");
-        else if(state->type == TYPE_PUNCTUATION)
-            s = cun_strcpy(s, "<span class='punctuation'>");
         else if(state->type == TYPE_DESCRIPTION)
             s = cun_strcpy(s, "<span class='description'>");
         else if(state->type == TYPE_DAMAGE)
@@ -440,13 +451,27 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         }
     }
     else
-        changes = INT_MAX;      
+        changes = INT_MAX;   
 
+    if(newline)   
+        s = cun_strcpy(s, "<br class='internal-linebreak'>");
     
     s = open_html(s, changes, state);
 
     if(value)
-        s = cun_memcpy(s, VARDATA_ANY(value), value_size);
+    {
+        if(!cun_strcmp(VARDATA_ANY(value), "||"))
+            s = cun_strcpy(s, "<span class='hspace'></span>");
+        else if(!cun_strcmp(VARDATA_ANY(value), "="))
+            s = cun_strcpy(s, "<span class='vspace'></span>");
+        else if(!cun_strcmp(VARDATA_ANY(value), "|"))
+            s = cun_strcpy(s, "<span class='hline'></span>");
+        else if(!cun_strcmp(VARDATA_ANY(value), "–"))
+            s = cun_strcpy(s, "<span class='vline'></span>");
+        else
+            s = cun_memcpy(s, VARDATA_ANY(value), value_size);
+    }
+        
 
     if(critics_size)
     {
