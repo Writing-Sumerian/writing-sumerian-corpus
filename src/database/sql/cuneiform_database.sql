@@ -127,6 +127,8 @@ CREATE INDEX ON texts_norm(genre_id);
 
 CREATE INDEX ON corpus_norm (value_id);
 CREATE INDEX ON corpus_composition (component_sign_id);
+CREATE INDEX ON corpus_composition (transliteration_id, sign_no);
+CREATE UNIQUE INDEX ON corpus_composition (transliteration_id, component_no);
 
 ALTER TABLE corpus_norm ALTER COLUMN value_id SET STATISTICS 1000;
 ALTER MATERIALIZED VIEW corpus_composition ALTER COLUMN component_sign_id SET STATISTICS 1000;
