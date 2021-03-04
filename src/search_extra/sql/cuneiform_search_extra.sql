@@ -173,3 +173,13 @@ ORDER BY
   transliteration_id
 $BODY$;
 
+-- An array of these represents a match, only including destinctive informatition
+CREATE TYPE sign_match AS (
+    sign_no INTEGER, 
+    word_no INTEGER, 
+    compound_no INTEGER, 
+    value_id INTEGER, 
+    sign_id INTEGER, 
+    properties sign_properties, 
+    stem bool
+);
