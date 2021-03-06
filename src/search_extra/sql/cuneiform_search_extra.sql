@@ -11,7 +11,7 @@ CREATE OR REPLACE FUNCTION public.search (
   COST 100 STABLE ROWS 1000
   AS $BODY$
 BEGIN
-  RETURN QUERY EXECUTE 'WITH r AS MATERIALIZED (' || parse_search (search_term, 'corpus', ARRAY['transliteration_id']) || ')'
+  RETURN QUERY EXECUTE 'WITH r AS MATERIALIZED (' || parse_search (search_term, 'corpus', 'corpus_composition', ARRAY['transliteration_id']) || ')'
     'SELECT r.* FROM r JOIN transliterations USING (transliteration_id) JOIN texts_norm USING (TEXT_ID)'
     'WHERE (cardinality($1) = 0 OR period_id = ANY($1)) AND'
           '(cardinality($2) = 0 OR provenience_id = ANY($2)) AND'

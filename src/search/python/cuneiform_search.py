@@ -2,7 +2,7 @@ from typing import List
 from py2plpy import plpy
 
 
-def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str:
+def parse_search(search_term:str, target_table:str, composition_table:str, target_key:List[str]) -> str:
     """COST 100 STABLE"""
      
     from lark import Lark
@@ -108,9 +108,9 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
                 self.conditions.append(f"(c{self.i}.properties).phonographic = '{self.phonographic}'")
 
             if sign:
-                self.sources.append(f'corpus_composition c{self.i}')
+                self.sources.append(f'{composition_table} c{self.i}')
             else:
-                self.sources.append(f'corpus c{self.i}')
+                self.sources.append(f'{target_table} c{self.i}')
 
             self.i += 1
             self.consecutive = True
@@ -134,8 +134,8 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             arrayClause = ', '.join(f'c{i}.sign_no' for i in range(self.i))
             frontKey = ' AND '.join([f'cstart.{key} = c0.{key}' for key in target_key])
             backKey = ' AND '.join([f'cend.{key} = c0.{key}' for key in target_key])
-            frontJoinClause = f'LEFT JOIN corpus cstart ON cstart.sign_no = c0.sign_no-1 AND {frontKey}'
-            backJoinClause = f'LEFT JOIN corpus cend ON cend.sign_no = c{self.i-1}.sign_no+1 AND {backKey}'
+            frontJoinClause = f'LEFT JOIN {target_table} cstart ON cstart.sign_no = c0.sign_no-1 AND {frontKey}'
+            backJoinClause = f'LEFT JOIN {target_table} cend ON cend.sign_no = c{self.i-1}.sign_no+1 AND {backKey}'
             keys = ', '.join([f'c0.{key}' for key in target_key])
             return f'SELECT {keys}, ARRAY[{arrayClause}] AS signs FROM {fromClause} {frontJoinClause} {backJoinClause} WHERE {whereClause}'
         
@@ -263,5 +263,3 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
         return f'SELECT {keys}, ARRAY[]::integer[] AS signs FROM {target_table} WHERE FALSE'
     plpy.notice(r.compose())
     return r.compose()
-
-print(parse_search('x(A.A)', 'corpus', ['text_id']))
