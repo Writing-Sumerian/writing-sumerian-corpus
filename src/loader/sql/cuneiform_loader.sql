@@ -216,7 +216,7 @@ CREATE TEMPORARY TABLE lines_tmp_ (
 
 EXECUTE format('COPY lines_tmp_ FROM %L CSV  NULL ''\N''', path || 'lines.csv');
 
-INSERT INTO public.lines 
+INSERT INTO lines 
 SELECT
     transliteration_id,
     line_no,
@@ -262,8 +262,6 @@ CREATE TEMPORARY TABLE corpus_tmp_ (
 );
 
 EXECUTE format('COPY corpus_tmp_ FROM %L CSV NULL ''\N''', path || 'corpus.csv');
-
-UPDATE corpus_tmp_ SET value = lower(value) WHERE type = 'value';
 
 INSERT INTO corpus_norm
 SELECT
@@ -347,8 +345,8 @@ FROM
     JOIN words USING (transliteration_id, word_no)
     JOIN compounds USING (transliteration_id, compound_no)
     JOIN lines USING (transliteration_id, line_no)
-    LEFT JOIN LATERAL regexp_split_to_table(COALESCE(comment, compound_comment, line_comment), '[$;]') AS _(candidate) ON TRUE
-    LEFT JOIN LATERAL trim(from replace(replace(regexp_replace(candidate, '[\|?!\[\]⌈⌉<>/\\\*]|^=|^:', '', 'g'), 'x', '×'), '@s', '@š')) AS __(candidate_cleaned) ON TRUE
+    LEFT JOIN LATERAL regexp_split_to_table(COALESCE(comment, '')||';'||COALESCE(compound_comment, '')||';'||COALESCE(line_comment, ''), '[$;]') AS _(candidate) ON TRUE
+    LEFT JOIN LATERAL trim(replace(replace(regexp_replace(candidate, '[\|?!\[\]⌈⌉<>/\\\*]|^=|^:', '', 'g'), 'x', '×'), '@s', '@š')) AS __(candidate_cleaned) ON TRUE
     JOIN unknown_signs ON candidate_cleaned = unknown_signs.name
 WHERE corpus_norm.sign_id IS NULL AND orig_value ~ 'x'
 )
@@ -383,7 +381,7 @@ FROM
     JOIN compounds USING (transliteration_id, compound_no)
     JOIN lines USING (transliteration_id, line_no)
     LEFT JOIN LATERAL regexp_split_to_table(COALESCE(comment, '')||';'||COALESCE(compound_comment, '')||';'||COALESCE(line_comment, ''), '[$;]') AS _(candidate) ON TRUE
-    LEFT JOIN LATERAL trim(from replace(replace(regexp_replace(candidate, '[\|?!\[\]⌈⌉<>/\\\*]|^=|^:', '', 'g'), 'x', '×'), '@s', '@š')) AS __(candidate_cleaned) ON TRUE
+    LEFT JOIN LATERAL trim(replace(replace(regexp_replace(candidate, '[\|?!\[\]⌈⌉<>/\\\*]|^=|^:', '', 'g'), 'x', '×'), '@s', '@š')) AS __(candidate_cleaned) ON TRUE
     LEFT JOIN LATERAL unnest(regexp_split_to_array(candidate_cleaned, '[.+()×%&@gštnkzi]+'), regexp_split_to_array(replace(candidate_cleaned, '+', '.'), '[^.+()×%&@gštnkzi]+')) WITH ORDINALITY as a(component, op, ord) ON TRUE
     LEFT JOIN value_variants ON lower(component) = value_variants.value
     LEFT JOIN values ON value_variants.value_id = values.value_id
