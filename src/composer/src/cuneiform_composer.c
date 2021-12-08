@@ -518,7 +518,7 @@ Datum cuneiform_cun_agg_html_finalfunc(PG_FUNCTION_ARGS)
 
     // the finalfunc may not alter state, therefore we need to copy everything
     text* string = (text*) palloc0(VARSIZE(state->string) + 500);
-    char* s = (char*)memcpy(VARDATA(string), VARDATA(state->string), VARSIZE_ANY_EXHDR(state->string)) + VARSIZE_ANY_EXHDR(state->string);;
+    char* s = (char*)memcpy(VARDATA(string), VARDATA(state->string), VARSIZE_ANY_EXHDR(state->string)) + VARSIZE_ANY_EXHDR(state->string);
     Datum* lines = (Datum*) palloc0((state->line_count+1) * sizeof(Datum));
     memcpy(lines, state->lines, state->line_count * sizeof(Datum));
     lines[state->line_count] = PointerGetDatum(string);
@@ -680,7 +680,7 @@ Datum cuneiform_cun_agg_finalfunc(PG_FUNCTION_ARGS)
 
     // the finalfunc may not alter state, therefore we need to copy everything
     text* string = (text*) palloc0(VARSIZE(state->string) + 500);
-    char* s = (char*)memcpy(VARDATA(string), VARDATA(state->string), VARSIZE_ANY_EXHDR(state->string)) + VARSIZE_ANY_EXHDR(state->string);;
+    char* s = (char*)memcpy(VARDATA(string), VARDATA(state->string), VARSIZE_ANY_EXHDR(state->string)) + VARSIZE_ANY_EXHDR(state->string);
     Datum* lines = (Datum*) palloc0((state->line_count+1) * sizeof(Datum));
     memcpy(lines, state->lines, state->line_count * sizeof(Datum));
     lines[state->line_count] = PointerGetDatum(string);
