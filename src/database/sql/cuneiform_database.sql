@@ -20,7 +20,25 @@ CREATE TABLE texts_norm (
 CREATE TABLE transliterations (
     transliteration_id serial PRIMARY KEY,
     text_id integer NOT NULL REFERENCES texts_norm (text_id) DEFERRABLE INITIALLY IMMEDIATE,
-    description text NOT NULL
+    object text NOT NULL,
+    description text NOT NULL,
+    UNIQUE (transliteration_id, object)
+);
+
+
+-- Compositions
+
+CREATE TABLE compositions (
+    composition_id SERIAL PRIMARY KEY,
+    name text
+);
+
+CREATE TABLE sections (
+    transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
+    section_no integer,
+    compound_no integer NOT NULL,
+    composition_id integer REFERENCES compositions  DEFERRABLE INITIALLY IMMEDIATE,
+    PRIMARY KEY (transliteration_id, section_no)
 );
 
 
@@ -44,14 +62,55 @@ CREATE TABLE words (
     FOREIGN KEY (transliteration_id, compound_no) REFERENCES compounds (transliteration_id, compound_no) DEFERRABLE INITIALLY IMMEDIATE
 );
 
+CREATE TYPE surface_type AS ENUM (
+    'obverse',
+    'reverse',
+    'top',
+    'bottom',
+    'left',
+    'right',
+    'seal',
+    'surface'
+);
+
+CREATE TABLE surfaces (
+    transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
+    surface_no integer,
+    surface_type surface_type,
+    surface_data text,
+    surface_comment text,
+    PRIMARY KEY (transliteration_id, surface_no)
+);
+
+CREATE TYPE block_type AS ENUM (
+    'column',
+    'summary',
+    'date',
+    'caption',
+    'legend',
+    'bottom_column',
+    'block'
+);
+
+CREATE TABLE blocks (
+    transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
+    block_no integer,
+    block_type block_type,
+    block_data text,
+    block_comment text,
+    surface_no integer,
+    PRIMARY KEY (transliteration_id, block_no),
+    FOREIGN KEY (transliteration_id, surface_no) REFERENCES surfaces (transliteration_id, surface_no) DEFERRABLE INITIALLY IMMEDIATE
+);
+
 CREATE TABLE lines (
     transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
     line_no integer,
-    part text,
-    col text,
+    block_no integer,
     line text,
     line_comment text,
-    PRIMARY KEY (transliteration_id, line_no)
+    PRIMARY KEY (transliteration_id, line_no),
+    FOREIGN KEY (transliteration_id, block_no) REFERENCES blocks (transliteration_id, block_no) DEFERRABLE INITIALLY IMMEDIATE
 );
 
 CREATE TABLE corpus_norm (

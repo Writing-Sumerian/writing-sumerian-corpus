@@ -90,33 +90,38 @@ REINDEX TABLE texts_norm;
 
 CREATE TEMPORARY TABLE transliteration_ids_tmp_ (
     transliteration_id integer DEFAULT nextval('transliterations_transliteration_id_seq'),
-    transliteration_identifier text
+    transliteration_identifier text,
+    object text,
+    UNIQUE (transliteration_identifier, object)
 );
 
 CREATE TEMPORARY TABLE transliterations_tmp_ (
     identifier text,
     transliteration_identifier text,
+    object text,
     description text
 );
 
 EXECUTE format('COPY transliterations_tmp_ FROM %L CSV NULL ''\N''', path || 'transliterations.csv');
 
-INSERT INTO transliteration_ids_tmp_ (transliteration_identifier)
+INSERT INTO transliteration_ids_tmp_ (transliteration_identifier, object)
 SELECT
-    transliteration_identifier
+    transliteration_identifier,
+    object
 FROM transliterations_tmp_;
 
-ALTER TABLE transliteration_ids_tmp_ ADD PRIMARY KEY (transliteration_identifier);
+ALTER TABLE transliteration_ids_tmp_ ADD PRIMARY KEY (transliteration_identifier, object);
 
-INSERT INTO transliterations (text_id, transliteration_id, description)
+INSERT INTO transliterations (text_id, transliteration_id, object, description)
 SELECT
     text_id, 
     transliteration_id, 
+    object,
     description
 FROM
     transliterations_tmp_
     JOIN text_ids_tmp_ USING (identifier)
-    JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
+    JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
 
 DROP TABLE transliterations_tmp_;
 
@@ -137,9 +142,11 @@ REINDEX TABLE transliterations;
 
 CREATE TEMPORARY TABLE compounds_tmp_ (
     transliteration_identifier text,
+    object text,
     compound_no integer,
     pn_type pn_type,
     language language,
+    section text,
     comment text
 );
 
@@ -154,7 +161,7 @@ SELECT
     comment
 FROM
     compounds_tmp_
-    JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
 
 DROP TABLE compounds_tmp_;
 
@@ -173,6 +180,7 @@ REINDEX TABLE compounds;
 
 CREATE TEMPORARY TABLE words_tmp_ (
     transliteration_identifier text,
+    object text,
     word_no integer,
     compound_no integer,
     capitalized boolean
@@ -188,7 +196,7 @@ SELECT
     capitalized
 FROM
     words_tmp_
-    JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
 
 DROP TABLE words_tmp_;
 
@@ -203,15 +211,91 @@ WHERE indrelid IN (
 REINDEX TABLE words;
 
 
+-- surfaces
+
+CREATE TEMPORARY TABLE surfaces_tmp_ (
+    transliteration_identifier text,
+    object text,
+    surface_no integer,
+    surface_type surface_type,
+    surface_data text,
+    surface_comment text
+);
+
+EXECUTE format('COPY surfaces_tmp_ FROM %L CSV  NULL ''\N''', path || 'surfaces.csv');
+
+INSERT INTO surfaces 
+SELECT
+    transliteration_id,
+    surface_no,
+    surface_type,
+    surface_data,
+    surface_comment
+FROM
+    surfaces_tmp_
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
+
+DROP TABLE surfaces_tmp_;
+
+UPDATE pg_index
+SET indisready = TRUE
+WHERE indrelid IN (
+    SELECT oid
+    FROM pg_class
+    WHERE relname = 'surfaces'
+);
+
+REINDEX TABLE surfaces;
+
+-- blocks
+
+CREATE TEMPORARY TABLE blocks_tmp_ (
+    transliteration_identifier text,
+    object text,
+    block_no integer,
+    surface_no integer,
+    block_type block_type,
+    block_data text,
+    block_comment text
+);
+
+EXECUTE format('COPY blocks_tmp_ FROM %L CSV  NULL ''\N''', path || 'blocks.csv');
+
+INSERT INTO blocks 
+SELECT
+    transliteration_id,
+    block_no,
+    block_type,
+    block_data,
+    block_comment,
+    surface_no
+FROM
+    blocks_tmp_
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
+
+DROP TABLE blocks_tmp_;
+
+UPDATE pg_index
+SET indisready = TRUE
+WHERE indrelid IN (
+    SELECT oid
+    FROM pg_class
+    WHERE relname = 'blocks'
+);
+
+REINDEX TABLE blocks;
+
+
 -- lines
 
 CREATE TEMPORARY TABLE lines_tmp_ (
     transliteration_identifier text,
+    object text,
     line_no integer,
-    part text,
-    col text,
+    block_no integer,
     line text,
-    comment text
+    comment text,
+    UNIQUE (transliteration_identifier, object, line_no)
 );
 
 EXECUTE format('COPY lines_tmp_ FROM %L CSV  NULL ''\N''', path || 'lines.csv');
@@ -220,13 +304,12 @@ INSERT INTO lines
 SELECT
     transliteration_id,
     line_no,
-    part,
-    col,
+    block_no,
     line,
     comment
 FROM
     lines_tmp_
-    JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
 
 DROP TABLE lines_tmp_;
 
@@ -241,10 +324,14 @@ WHERE indrelid IN (
 REINDEX TABLE lines;
 
 
+
+
+
 -- corpus
 
 CREATE TEMPORARY TABLE corpus_tmp_ (
         transliteration_identifier text,
+        object text,
         sign_no integer NOT NULL,
         line_no integer NOT NULL,
         word_no integer NOT NULL,
@@ -281,9 +368,10 @@ SELECT
     inverted
 FROM
     corpus_tmp_
-    JOIN transliteration_ids_tmp_ USING (transliteration_identifier)
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object)
     LEFT JOIN value_variants ON NOT corpus_tmp_.value ~ 'x' AND value_variants.value = corpus_tmp_.value
-    LEFT JOIN values USING (value_id);
+    LEFT JOIN values USING (value_id)
+    ORDER BY transliteration_id, sign_no;
 
 -- simple unread signs
 UPDATE corpus_norm 
