@@ -1,3 +1,52 @@
+CREATE MATERIALIZED VIEW corpus_search AS (
+SELECT * FROM (
+  SELECT 
+    corpus_norm.transliteration_id,
+    cun_position(
+      corpus_norm.sign_no,
+      sign_composition.pos, 
+      sign_composition.final) AS position,
+    corpus_norm.word_no,
+    corpus_norm.line_no,
+    NULL AS value_id,
+    NULL AS sign_id,
+    sign_composition.component_sign_id,
+    (corpus_norm.properties).type,
+    (corpus_norm.properties).indicator,
+    (corpus_norm.properties).alignment,
+    (corpus_norm.properties).phonographic
+  FROM corpus_norm
+    JOIN sign_composition USING (sign_id)
+  UNION ALL
+  SELECT
+    corpus_norm.transliteration_id,
+    cun_position(
+      corpus_norm.sign_no,
+      0, 
+      TRUE) AS position,
+    corpus_norm.word_no,
+    corpus_norm.line_no,
+    corpus_norm.value_id,
+    corpus_norm.sign_id,
+    NULL AS component_sign_id,
+    (corpus_norm.properties).type,
+    (corpus_norm.properties).indicator,
+    (corpus_norm.properties).alignment,
+    (corpus_norm.properties).phonographic
+  FROM corpus_norm
+  WHERE (corpus_norm.properties).type != 'punctuation' 
+    AND (corpus_norm.properties).type != 'damage')
+  a
+ORDER BY transliteration_id, position);
+
+CREATE INDEX ON corpus_search (value_id);
+CREATE INDEX ON corpus_search (sign_id);
+CREATE INDEX ON corpus_search (component_sign_id);
+CREATE INDEX ON corpus_search (transliteration_id, position);
+ALTER MATERIALIZED VIEW corpus_search ALTER COLUMN value_id SET STATISTICS 1000;
+ALTER MATERIALIZED VIEW corpus_search ALTER COLUMN component_sign_id SET STATISTICS 1000;
+
+
 CREATE OR REPLACE FUNCTION public.search (
   search_term text, 
   periods integer[] DEFAULT ARRAY[]::integer[],
@@ -11,7 +60,7 @@ CREATE OR REPLACE FUNCTION public.search (
   COST 100 STABLE ROWS 1000
   AS $BODY$
 BEGIN
-  RETURN QUERY EXECUTE 'WITH r AS MATERIALIZED (' || parse_search (search_term, 'corpus', 'corpus_composition', ARRAY['transliteration_id']) || ')'
+  RETURN QUERY EXECUTE 'WITH r AS MATERIALIZED (' || parse_search (search_term, 'corpus_search', ARRAY['transliteration_id']) || ')'
     'SELECT r.* FROM r JOIN transliterations USING (transliteration_id) JOIN texts_norm USING (TEXT_ID)'
     'WHERE (cardinality($1) = 0 OR period_id = ANY($1)) AND'
           '(cardinality($2) = 0 OR provenience_id = ANY($2)) AND'

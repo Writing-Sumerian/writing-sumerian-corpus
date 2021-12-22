@@ -136,23 +136,6 @@ CREATE TABLE corpus_norm (
 
 -- Views
 
-CREATE MATERIALIZED VIEW corpus_composition AS (
-SELECT 
-    corpus_norm.transliteration_id,
-    corpus_norm.sign_no,
-    corpus_norm.word_no,
-    corpus_norm.line_no,
-    row_number() OVER (PARTITION BY corpus_norm.transliteration_id ORDER BY corpus_norm.sign_no, sign_composition.pos) AS component_no,
-    coalesce(sign_composition.pos, 1) AS pos,
-    sign_composition.component_sign_id,
-    coalesce(sign_composition.initial, TRUE) AS initial,
-    coalesce(sign_composition.final, TRUE) AS final,
-    corpus_norm.properties
-   FROM corpus_norm
-     LEFT JOIN sign_composition USING (sign_id)
-  ORDER BY corpus_norm.transliteration_id, corpus_norm.sign_no, sign_composition.pos
-);
-
 CREATE VIEW texts AS
 SELECT 
     texts_norm.*,
@@ -183,11 +166,3 @@ FROM
 CREATE INDEX ON texts_norm(provenience_id);
 CREATE INDEX ON texts_norm(period_id);
 CREATE INDEX ON texts_norm(genre_id);
-
-CREATE INDEX ON corpus_norm (value_id);
-CREATE INDEX ON corpus_composition (component_sign_id);
-CREATE INDEX ON corpus_composition (transliteration_id, sign_no);
-CREATE UNIQUE INDEX ON corpus_composition (transliteration_id, component_no);
-
-ALTER TABLE corpus_norm ALTER COLUMN value_id SET STATISTICS 1000;
-ALTER MATERIALIZED VIEW corpus_composition ALTER COLUMN component_sign_id SET STATISTICS 1000;

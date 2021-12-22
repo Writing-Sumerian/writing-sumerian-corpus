@@ -1,0 +1,55 @@
+start       : _break? ( line | word ) ( _sep ( line | word ) )* _break?
+line        : "[" word ( _sep word )* "]"
+word        : _part ( _con _part )*
+
+_part       : ( lindicator _nullsep? )* char ( _nullsep? rindicator )* 
+            | indicator+
+lindicator  : indicator
+rindicator  : indicator 
+indicator   : det 
+            | pc
+det         : "{" char ( _sep char )* "}"
+pc          : "<" char ( _sep char )* ">"
+
+char        : VALUE _signspec?      -> value
+            | SIGN                  -> sign
+            | PATTERN _signspec?    -> pattern
+            | _SIGNX                -> signx
+            | _VALUEX _signspec?    -> valuex
+            | _N                    -> n
+_signspec   : "(" SIGN ")"
+
+_sep        : ( _SPACE | _break )+ 
+            | ( _SPACE | _break )* ellipsis ( _SPACE | _break )*
+            | _SPACE? colon _SPACE?
+_con        : ( ellipsis | colon )? _CON 
+            | _CON ( ellipsis | colon ) _CON?
+_nullsep    : _break+ 
+            | _break* ellipsis _break*
+            | colon
+
+startbreak  : _break
+endbreak    : _break
+
+_break      : wordbreak 
+            | linebreak
+
+ellipsis    : _ELLIPSIS
+colon       : ":"
+wordbreak   : ";"
+linebreak   : _NL
+
+COMMENT.5   : "(" _DOTSIGN ")"
+PATTERN.5   : /\/[^\/]*\//
+SIGN.4      : _SIMPLESIGN (_SIGNCON _SIMPLESIGN)*
+VALUE.3     : /[abdegĝhḫijklmnpqrsšṣtṭuwyz’]+[0-9xX]*/
+_SIGNX.2    : "X"
+_VALUEX.2   : "x"
+_N.2        : /[Nn]/
+_ELLIPSIS.2 : "…"|"..."
+_CON.1      : /[.-]/
+_SPACE      : /[\t \f\n]+/
+_NL         : "//"
+_SIGNCON    : /[×x%&]/
+_SIMPLESIGN : /[ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’]+[0-9]*/
+_DOTSIGN    : _SIMPLESIGN ((_SIGNCON|".") _SIMPLESIGN)*

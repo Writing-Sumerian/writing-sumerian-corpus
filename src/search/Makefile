@@ -25,6 +25,12 @@ include $(PGXS)
 
 all: build/$(EXTENSION)--$(version).sql
 
-build/$(EXTENSION)--$(version).sql: python/$(EXTENSION).py 
+build/$(EXTENSION)--$(version).sql: build/$(EXTENSION)_comp.py sql/$(EXTENSION).sql
 	@mkdir -p build
-	@py2plpy python/$(EXTENSION).py build/$(EXTENSION)--$(version).sql
+	@py2plpy build/$(EXTENSION)_comp.py build/$(EXTENSION)--$(version).sql
+	@cat sql/$(EXTENSION).sql >> build/$(EXTENSION)--$(version).sql
+
+build/$(EXTENSION)_comp.py: python/$(EXTENSION).py python/grammar.lark
+	@mkdir -p build
+	@csplit -n 1 --suppress-matched --elide-empty-files -f build/$(EXTENSION) python/$(EXTENSION).py /{{grammar}}/ {*}
+	@cat build/$(EXTENSION)0 python/grammar.lark build/$(EXTENSION)1 > build/$(EXTENSION)_comp.py

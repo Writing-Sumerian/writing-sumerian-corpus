@@ -511,19 +511,6 @@ WHERE indrelid IN (
 
 REINDEX TABLE corpus_norm;
 
-
-REFRESH MATERIALIZED VIEW corpus_composition;
-
-UPDATE pg_index
-SET indisready = TRUE
-WHERE indrelid IN (
-    SELECT oid
-    FROM pg_class
-    WHERE relname = 'corpus_composition'
-);
-
-REINDEX TABLE corpus_composition;
-
 SET CONSTRAINTS ALL IMMEDIATE;
 
 END

@@ -44,7 +44,7 @@ CREATE MATERIALIZED VIEW sign_composition AS (
 SELECT 
     a.sign_id,
     b.sign_id AS component_sign_id,
-    x.pos,
+    x.pos::integer - 1 AS pos,
     x.pos = 1 AS initial,
     x.pos = max(x.pos) OVER (PARTITION BY a.sign_id) AS final
 FROM signs a,
