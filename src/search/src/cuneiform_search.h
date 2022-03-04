@@ -70,3 +70,6 @@ PG_FUNCTION_INFO_V1(unique);
 
 Datum consecutive(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(consecutive);
+
+Datum get_sign_nos(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(get_sign_nos);

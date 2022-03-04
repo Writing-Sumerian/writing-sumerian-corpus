@@ -4,19 +4,22 @@ SELECT * FROM (
     corpus_norm.transliteration_id,
     cun_position(
       corpus_norm.sign_no,
-      sign_composition.pos, 
-      sign_composition.final) AS position,
+      a.pos::integer - 1, 
+      rank() OVER (PARTITION BY transliteration_id, sign_no ORDER BY pos DESC) = 1
+      ) AS position,
     corpus_norm.word_no,
     corpus_norm.line_no,
     NULL AS value_id,
-    NULL AS sign_id,
-    sign_composition.component_sign_id,
+    NULL AS sign_variant_id,
+    grapheme_id,
+    glyph_id,
     (corpus_norm.properties).type,
     (corpus_norm.properties).indicator,
     (corpus_norm.properties).alignment,
     (corpus_norm.properties).phonographic
   FROM corpus_norm
-    JOIN sign_composition USING (sign_id)
+    JOIN sign_variants USING (sign_variant_id)
+    LEFT JOIN LATERAL unnest(grapheme_ids, glyph_ids) WITH ORDINALITY a(grapheme_id, glyph_id, pos) ON TRUE
   UNION ALL
   SELECT
     corpus_norm.transliteration_id,
@@ -27,8 +30,9 @@ SELECT * FROM (
     corpus_norm.word_no,
     corpus_norm.line_no,
     corpus_norm.value_id,
-    corpus_norm.sign_id,
-    NULL AS component_sign_id,
+    corpus_norm.sign_variant_id,
+    NULL AS grapheme_id,
+    NULL AS glyph_id,
     (corpus_norm.properties).type,
     (corpus_norm.properties).indicator,
     (corpus_norm.properties).alignment,
@@ -37,14 +41,36 @@ SELECT * FROM (
   WHERE (corpus_norm.properties).type != 'punctuation' 
     AND (corpus_norm.properties).type != 'damage')
   a
+  UNION ALL
+  SELECT
+    NULL AS transliteration_id,
+    NULL AS position,
+    NULL AS word_no,
+    NULL AS line_no,
+    NULL AS value_id,
+    NULL AS sign_variant_id,
+    NULL AS grapheme_id,
+    NULL AS glyph_id,
+    NULL AS type,
+    NULL AS indicator,
+    NULL AS alignment,
+    NULL AS phonographic
 ORDER BY transliteration_id, position);
 
-CREATE INDEX ON corpus_search (value_id);
-CREATE INDEX ON corpus_search (sign_id);
-CREATE INDEX ON corpus_search (component_sign_id);
-CREATE INDEX ON corpus_search (transliteration_id, position);
+CREATE INDEX ON corpus_search (transliteration_id);
+CREATE INDEX ON corpus_search (value_id) WHERE value_id IS NOT NULL;
+CREATE INDEX ON corpus_search (transliteration_id, value_id) WHERE value_id IS NOT NULL;
+CREATE INDEX ON corpus_search (sign_variant_id) WHERE sign_variant_id IS NOT NULL;
+CREATE INDEX ON corpus_search (transliteration_id, sign_variant_id) WHERE sign_variant_id IS NOT NULL;
+CREATE INDEX ON corpus_search (grapheme_id) WHERE grapheme_id IS NOT NULL;
+CREATE INDEX ON corpus_search (transliteration_id, grapheme_id) WHERE grapheme_id IS NOT NULL;
+CREATE INDEX ON corpus_search (glyph_id) WHERE glyph_id IS NOT NULL;
+CREATE INDEX ON corpus_search (transliteration_id, glyph_id) WHERE glyph_id IS NOT NULL;
+--CREATE INDEX ON corpus_search (transliteration_id, position);
 ALTER MATERIALIZED VIEW corpus_search ALTER COLUMN value_id SET STATISTICS 1000;
-ALTER MATERIALIZED VIEW corpus_search ALTER COLUMN component_sign_id SET STATISTICS 1000;
+ALTER MATERIALIZED VIEW corpus_search ALTER COLUMN sign_variant_id SET STATISTICS 1000;
+ALTER MATERIALIZED VIEW corpus_search ALTER COLUMN grapheme_id SET STATISTICS 1000;
+ALTER MATERIALIZED VIEW corpus_search ALTER COLUMN glyph_id SET STATISTICS 1000;
 
 
 CREATE OR REPLACE FUNCTION public.search (
@@ -228,7 +254,8 @@ CREATE TYPE sign_match AS (
     word_no INTEGER, 
     compound_no INTEGER, 
     value_id INTEGER, 
-    sign_id INTEGER, 
+    sign_variant_id INTEGER,
+    variant_type sign_variant_type,
     properties sign_properties, 
     stem bool
 );

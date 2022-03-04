@@ -1,10 +1,8 @@
 
 -- corpus
 
-CREATE OR REPLACE FUNCTION load_corpus (path text)
-    RETURNS void
-    LANGUAGE 'plpgsql'
-    COST 100 VOLATILE
+CREATE OR REPLACE PROCEDURE load_corpus (path text)
+    LANGUAGE PLPGSQL
     AS $BODY$
     
 BEGIN
@@ -188,7 +186,7 @@ CREATE TEMPORARY TABLE words_tmp_ (
 
 EXECUTE format('COPY words_tmp_ FROM %L CSV  NULL ''\N''', path || 'words.csv');
 
-INSERT INTO public.words 
+INSERT INTO words 
 SELECT
     transliteration_id,
     word_no,
@@ -324,9 +322,6 @@ WHERE indrelid IN (
 REINDEX TABLE lines;
 
 
-
-
-
 -- corpus
 
 CREATE TEMPORARY TABLE corpus_tmp_ (
@@ -336,6 +331,7 @@ CREATE TEMPORARY TABLE corpus_tmp_ (
         line_no integer NOT NULL,
         word_no integer NOT NULL,
         value text,
+        sign_spec text,
         type SIGN_TYPE,
         indicator boolean,
         alignment ALIGNMENT,
@@ -345,11 +341,72 @@ CREATE TEMPORARY TABLE corpus_tmp_ (
         crits text,
         comment text,
         newline boolean,
-        inverted boolean
+        inverted boolean,
+        ligature boolean
 );
 
 EXECUTE format('COPY corpus_tmp_ FROM %L CSV NULL ''\N''', path || 'corpus.csv');
 
+CREATE INDEX ON corpus_tmp_ (type, (sign_spec IS null));
+
+CREATE TEMPORARY VIEW normalized_signs AS
+WITH x AS (
+    SELECT
+        transliteration_identifier,
+        object,
+        sign_no,
+        glyph_no,
+        normalize_operators(string_agg(op||COALESCE('('||sign||')', ''), '' ORDER BY component_no)) AS normalized_glyph
+    FROM
+        corpus_tmp_
+        LEFT JOIN LATERAL split_glyphs(COALESCE(sign_spec, value, '')) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
+        LEFT JOIN LATERAL split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
+        LEFT JOIN sign_map ON component = identifier
+    WHERE sign_spec IS NOT NULL OR type = 'sign'
+    GROUP BY 
+        transliteration_identifier,
+        object,
+        sign_no,
+        glyph_no
+)
+SELECT 
+    transliteration_identifier,
+    object,
+    sign_no,
+    string_agg(normalized_glyph, '.' ORDER BY glyph_no) AS normalized_sign
+FROM
+    x
+GROUP BY
+    transliteration_identifier,
+    object,
+    sign_no;
+
+
+-- values
+WITH value_map AS (
+    SELECT
+        value,
+        value_id,
+        sign_variant_id
+    FROM
+        value_variants
+        JOIN values USING (value_id)
+        JOIN allomorphs USING (sign_id)
+        JOIN sign_variants USING (allomorph_id)
+    WHERE value !~ 'x' AND sign_variants.variant_type = 'default'
+    UNION ALL
+    SELECT
+        value,
+        value_id,
+        sign_variant_id
+    FROM
+        glyph_values 
+        JOIN sign_variants USING (glyph_ids)
+        JOIN allomorphs USING (allomorph_id)
+        JOIN values USING (sign_id, value_id)
+        JOIN sign_variants_text USING (sign_variant_id)
+    WHERE sign_variants.specific
+)
 INSERT INTO corpus_norm
 SELECT
     transliteration_id,
@@ -358,146 +415,128 @@ SELECT
     word_no,
     corpus_tmp_.value,
     value_id,
-    sign_id,
+    sign_variant_id,
+    null,
     (type, indicator,  alignment, corpus_tmp_.phonographic)::sign_properties,
     stem,
     condition,
     crits,
     comment,
     newline,
-    inverted
+    inverted,
+    ligature
 FROM
     corpus_tmp_
     LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object)
-    LEFT JOIN value_variants ON NOT corpus_tmp_.value ~ 'x' AND value_variants.value = corpus_tmp_.value
-    LEFT JOIN values USING (value_id)
-    ORDER BY transliteration_id, sign_no;
+    LEFT JOIN value_map USING (value)
+WHERE sign_spec IS NULL AND type != 'sign' AND type != 'number';
 
--- simple unread signs
-UPDATE corpus_norm 
-SET 
-    sign_id = values.sign_id 
-FROM 
-    value_variants 
-    JOIN values USING (value_id) 
-WHERE corpus_norm.sign_id IS NULL AND (properties).type = 'sign' AND lower(orig_value) = value_variants.value;
+-- values with sign_spec
+WITH value_map AS (
+    SELECT
+        value,
+        value_id,
+        sign_variant_id,
+        glyphs
+    FROM
+        value_variants
+        JOIN values USING (value_id)
+        JOIN allomorphs USING (sign_id)
+        JOIN sign_variants_text USING (allomorph_id)
+    UNION ALL
+    SELECT
+        value,
+        value_id,
+        sign_variant_id,
+        glyphs
+    FROM
+        glyph_values 
+        JOIN sign_variants USING (glyph_ids)
+        JOIN allomorphs USING (allomorph_id)
+        JOIN values USING (sign_id, value_id)
+        JOIN sign_variants_text USING (sign_variant_id)
+)
+INSERT INTO corpus_norm
+SELECT DISTINCT
+    transliteration_id,
+    sign_no,
+    line_no,
+    word_no,
+    corpus_tmp_.value || COALESCE('(' || sign_spec  || ')', ''),
+    value_map.value_id,
+    value_map.sign_variant_id,
+    null,
+    (type, indicator,  alignment, corpus_tmp_.phonographic)::sign_properties,
+    stem,
+    condition,
+    crits,
+    comment,
+    newline,
+    inverted,
+    ligature
+FROM
+    corpus_tmp_
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object)
+    LEFT JOIN normalized_signs USING (transliteration_identifier, object, sign_no)
+    LEFT JOIN value_map ON glyphs = normalized_sign AND 
+        ((corpus_tmp_.value !~ 'x' AND corpus_tmp_.value = value_map.value) OR  
+         (corpus_tmp_.value ~ 'x' AND replace(corpus_tmp_.value, 'x', '') = regexp_replace(value_map.value, '[x0-9]+', '')))
+WHERE sign_spec IS NOT NULL AND type != 'sign' AND type != 'number';
 
-
--- unknown signs
-UPDATE corpus_norm 
-SET 
-    sign_id = unknown_signs.sign_id 
-FROM 
-    unknown_signs
-WHERE corpus_norm.sign_id IS NULL AND (properties).type = 'sign' AND orig_value = unknown_signs.name;
-
-
--- complex unread signs
-WITH s AS (
+-- signs
+INSERT INTO corpus_norm
 SELECT
     transliteration_id,
     sign_no,
-    string_agg(op||COALESCE(sign, ''), '' ORDER BY ord) AS normalized_sign
+    line_no,
+    word_no,
+    corpus_tmp_.value,
+    null,
+    sign_variant_id,
+    null,
+    (type, indicator,  alignment, corpus_tmp_.phonographic)::sign_properties,
+    stem,
+    condition,
+    crits,
+    comment,
+    newline,
+    inverted,
+    ligature
 FROM
-    corpus_norm
-    LEFT JOIN LATERAL unnest(regexp_split_to_array(orig_value, '[.+()×%&@gštnkzi]+'), regexp_split_to_array(replace(orig_value, '+', '.'), '[^.+()×%&@gštnkzi]+')) WITH ORDINALITY as a(component, op, ord) ON TRUE
-    LEFT JOIN value_variants ON lower(component) = value_variants.value
-    LEFT JOIN values ON value_variants.value_id = values.value_id
-    LEFT JOIN signs ON values.sign_id = signs.sign_id
-WHERE corpus_norm.sign_id IS NULL AND (properties).type = 'sign'
-GROUP BY 
-    transliteration_id,
-    sign_no
-)
-UPDATE corpus_norm 
-SET 
-    sign_id = signs.sign_id 
-FROM
-    s,
-    signs
-WHERE 
-    normalized_sign = replace(sign, '+', '.') AND
-    corpus_norm.transliteration_id = s.transliteration_id AND 
-    corpus_norm.sign_no = s.sign_no;
+    corpus_tmp_
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object)
+    LEFT JOIN normalized_signs USING (transliteration_identifier, object, sign_no)
+    LEFT JOIN sign_variants_text ON glyphs = normalized_sign AND specific AND length = 1
+WHERE type = 'sign';
 
-
--- x values of unknown signs
-WITH 
-s AS (
-SELECT 
+-- numbers
+INSERT INTO corpus_norm
+SELECT
     transliteration_id,
     sign_no,
-    unknown_signs.sign_id
-FROM 
-    corpus_norm
-    JOIN words USING (transliteration_id, word_no)
-    JOIN compounds USING (transliteration_id, compound_no)
-    JOIN lines USING (transliteration_id, line_no)
-    LEFT JOIN LATERAL regexp_split_to_table(COALESCE(comment, '')||';'||COALESCE(compound_comment, '')||';'||COALESCE(line_comment, ''), '[$;]') AS _(candidate) ON TRUE
-    LEFT JOIN LATERAL trim(replace(replace(regexp_replace(candidate, '[\|?!\[\]⌈⌉<>/\\\*]|^=|^:', '', 'g'), 'x', '×'), '@s', '@š')) AS __(candidate_cleaned) ON TRUE
-    JOIN unknown_signs ON candidate_cleaned = unknown_signs.name
-WHERE corpus_norm.sign_id IS NULL AND orig_value ~ 'x'
-)
-UPDATE corpus_norm 
-SET 
-    value_id = values.value_id,
-    sign_id = signs.sign_id
+    line_no,
+    word_no,
+    corpus_tmp_.value || COALESCE('(' || sign_spec  || ')', ''),
+    null,
+    sign_variant_id,
+    corpus_tmp_.value,
+    (type, indicator,  alignment, corpus_tmp_.phonographic)::sign_properties,
+    stem,
+    condition,
+    crits,
+    comment,
+    newline,
+    inverted,
+    ligature
 FROM
-    s, 
-    signs, 
-    values, 
-    value_variants
-WHERE
-    s.sign_id = signs.sign_id AND
-    signs.sign_id = values.sign_id AND
-    value_variants.value_id = values.value_id AND
-    value = orig_value AND
-    corpus_norm.transliteration_id = s.transliteration_id AND 
-    corpus_norm.sign_no = s.sign_no;
+    corpus_tmp_
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object)
+    LEFT JOIN normalized_signs USING (transliteration_identifier, object, sign_no)
+    LEFT JOIN grapheme_identifiers ON normalized_sign = grapheme_identifier
+    LEFT JOIN sign_variants ON grapheme_ids = ARRAY[grapheme_id] AND specific
+    WHERE type = 'number';
 
-
--- x values
-WITH 
-s AS (
-SELECT 
-    transliteration_id,
-    sign_no,
-    string_agg(op||COALESCE(sign, ''), '' ORDER BY ord) AS normalized_sign
-FROM 
-    corpus_norm
-    JOIN words USING (transliteration_id, word_no)
-    JOIN compounds USING (transliteration_id, compound_no)
-    JOIN lines USING (transliteration_id, line_no)
-    LEFT JOIN LATERAL regexp_split_to_table(COALESCE(comment, '')||';'||COALESCE(compound_comment, '')||';'||COALESCE(line_comment, ''), '[$;]') AS _(candidate) ON TRUE
-    LEFT JOIN LATERAL trim(replace(replace(regexp_replace(candidate, '[\|?!\[\]⌈⌉<>/\\\*]|^=|^:', '', 'g'), 'x', '×'), '@s', '@š')) AS __(candidate_cleaned) ON TRUE
-    LEFT JOIN LATERAL unnest(regexp_split_to_array(candidate_cleaned, '[.+()×%&@gštnkzi]+'), regexp_split_to_array(replace(candidate_cleaned, '+', '.'), '[^.+()×%&@gštnkzi]+')) WITH ORDINALITY as a(component, op, ord) ON TRUE
-    LEFT JOIN value_variants ON lower(component) = value_variants.value
-    LEFT JOIN values ON value_variants.value_id = values.value_id
-    LEFT JOIN signs ON values.sign_id = signs.sign_id
-WHERE corpus_norm.sign_id IS NULL AND orig_value ~ 'x'
-GROUP BY 
-    transliteration_id,
-    sign_no,
-    candidate
-)
-UPDATE corpus_norm 
-SET 
-    value_id = values.value_id,
-    sign_id = signs.sign_id
-FROM
-    s, 
-    signs, 
-    values, 
-    value_variants
-WHERE
-    normalized_sign = replace(sign, '+', '.') AND
-    signs.sign_id = values.sign_id AND
-    value_variants.value_id = values.value_id AND
-    value = orig_value AND
-    corpus_norm.transliteration_id = s.transliteration_id AND 
-    corpus_norm.sign_no = s.sign_no;
-
-DROP TABLE corpus_tmp_;
+DROP TABLE corpus_tmp_ CASCADE;
 
 DROP TABLE transliteration_ids_tmp_;
 
@@ -513,15 +552,15 @@ REINDEX TABLE corpus_norm;
 
 SET CONSTRAINTS ALL IMMEDIATE;
 
+CLUSTER corpus_norm;
+
 END
 
 $BODY$;
 
 
-CREATE OR REPLACE FUNCTION reload_corpus (path text)
-    RETURNS void
-    LANGUAGE 'plpgsql'
-    COST 100 VOLATILE
+CREATE OR REPLACE PROCEDURE reload_corpus (path text)
+    LANGUAGE PLPGSQL
     AS $BODY$
     
 BEGIN
@@ -540,7 +579,7 @@ DELETE FROM transliterations;
 
 DELETE FROM texts_norm;
 
-PERFORM load_corpus(path);
+CALL load_corpus(path);
 
 END
 
@@ -550,10 +589,8 @@ $BODY$;
 
 -- context
 
-CREATE OR REPLACE FUNCTION load_context (path text)
-    RETURNS void
-    LANGUAGE 'plpgsql'
-    COST 100 VOLATILE
+CREATE OR REPLACE PROCEDURE load_context (path text)
+    LANGUAGE PLPGSQL
     AS $BODY$
 
 BEGIN
@@ -591,10 +628,8 @@ END
 $BODY$;
 
 
-CREATE OR REPLACE FUNCTION reload_context (path text)
-    RETURNS void
-    LANGUAGE 'plpgsql'
-    COST 100 VOLATILE
+CREATE OR REPLACE PROCEDURE reload_context (path text)
+    LANGUAGE PLPGSQL
     AS $BODY$
 
 BEGIN
@@ -609,7 +644,7 @@ DELETE FROM periods;
 DELETE FROM proveniences;
 DELETE FROM genres;
 
-PERFORM load_context(path);
+CALL load_context(path);
 
 UPDATE texts_norm SET period_id = (SELECT periods.period_id FROM periods JOIN periods_old_ USING (name) WHERE periods_old_.period_id = texts_norm.period_id);
 UPDATE texts_norm SET provenience_id = (SELECT proveniences.provenience_id FROM proveniences JOIN proveniences_old_ USING (name) WHERE proveniences_old_.provenience_id = texts_norm.provenience_id);
@@ -626,95 +661,43 @@ $BODY$;
 
 -- signlist
 
-CREATE OR REPLACE FUNCTION load_signlist (path text)
-    RETURNS void
-    LANGUAGE 'plpgsql'
-    COST 100 VOLATILE
+CREATE OR REPLACE PROCEDURE load_signlist (path text)
+    LANGUAGE PLPGSQL
     AS $BODY$
 
 BEGIN
 
 SET CONSTRAINTS ALL DEFERRED;
 
-CREATE TEMPORARY TABLE values_tmp_ (
-    sign_name text,
-    main_value text,
-    phonographic boolean
-);
+EXECUTE format('COPY glyphs(glyph_id, glyph, unicode) FROM %L CSV NULL ''\N''', path || 'glyphs.csv');
+EXECUTE format('COPY glyph_synonyms(synonym, glyph_id) FROM %L CSV NULL ''\N''', path || 'glyph_synonyms.csv');
+EXECUTE format('COPY glyph_values(value, value_id, glyph_ids) FROM %L CSV NULL ''\N''', path || 'glyph_values.csv');
+EXECUTE format('COPY graphemes(grapheme_id, grapheme, mzl_no) FROM %L CSV NULL ''\N''', path || 'graphemes.csv');
+EXECUTE format('COPY allographs(grapheme_id, glyph_id, variant_type, specific) FROM %L CSV NULL ''\N''', path || 'allographs.csv');
+EXECUTE format('COPY allomorphs(allomorph_id, sign_id, variant_type, specific) FROM %L CSV NULL ''\N''', path || 'allomorphs.csv');
+EXECUTE format('COPY allomorph_components(allomorph_id, pos, grapheme_id) FROM %L CSV NULL ''\N''', path || 'allomorph_components.csv');
+EXECUTE format('COPY value_variants(value_variant_id, value_id, value) FROM %L CSV NULL ''\N''', path || 'value_variants.csv');
+EXECUTE format('COPY values(value_id, sign_id, main_variant_id, phonographic) FROM %L CSV NULL ''\N''', path || 'values.csv');
 
-CREATE TEMPORARY TABLE value_ids_tmp_ (
-    value_id integer DEFAULT nextval('values_value_id_seq'),
-    sign_name text,
-    main_value text
-);
+INSERT INTO signs SELECT DISTINCT sign_id FROM allomorphs;
 
-CREATE TEMPORARY TABLE value_variants_tmp_ (
-    sign_name text,
-    main_value text,
-    value text
-);
+PERFORM setval('glyphs_glyph_id_seq', max(glyph_id)) FROM glyphs;
+PERFORM setval('graphemes_grapheme_id_seq', max(grapheme_id)) FROM graphemes;
+PERFORM setval('allographs_allograph_id_seq', max(allograph_id)) FROM allographs;
+PERFORM setval('allomorphs_allomorph_id_seq', max(allomorph_id)) FROM allomorphs;
+PERFORM setval('values_value_id_seq', max(value_id)) FROM values;
+PERFORM setval('value_variants_value_variant_id_seq', max(value_variant_id)) FROM value_variants;
+PERFORM setval('signs_sign_id_seq', max(sign_id)) FROM signs;
 
-CREATE TEMPORARY TABLE unknown_signs_tmp_ (
-    name text,
-    sign_name text
-);
-
-EXECUTE format('COPY signs(sign, composition, unicode, mzl_no) FROM %L CSV NULL ''\N''', path || 'signs.csv');
-EXECUTE format('COPY values_tmp_ FROM %L CSV NULL ''\N''', path || 'values.csv');
-EXECUTE format('COPY value_variants_tmp_ FROM %L CSV NULL ''\N''', path || 'value_variants.csv');
-EXECUTE format('COPY unknown_signs_tmp_ FROM %L CSV NULL ''\N''', path || 'unknown_signs.csv');
-
-INSERT INTO value_ids_tmp_(sign_name, main_value)
-SELECT
-    sign_name,
-    main_value
-FROM values_tmp_;
-
-INSERT INTO value_variants(value_id, value)
-SELECT
-    value_id,
-    value
-FROM
-    value_variants_tmp_ a
-    JOIN value_ids_tmp_ USING (sign_name, main_value);
-
-INSERT INTO values
-SELECT
-    value_ids_tmp_.value_id,
-    sign_id,
-    value_variant_id,
-    phonographic
-FROM
-    values_tmp_
-    JOIN value_ids_tmp_ USING (sign_name, main_value)
-    JOIN signs ON sign_name = sign
-    JOIN value_variants ON value = main_value AND value_variants.value_id = value_ids_tmp_.value_id;
-
-INSERT INTO unknown_signs(name, sign_id)
-SELECT
-    unknown_signs_tmp_.name,
-    sign_id
-FROM
-    unknown_signs_tmp_
-    JOIN signs ON sign_name = sign;
-
-DROP TABLE values_tmp_;
-DROP TABLE value_ids_tmp_;
-DROP TABLE value_variants_tmp_;
-DROP TABLE unknown_signs_tmp_;
-
-REFRESH MATERIALIZED VIEW sign_composition;
-REFRESH MATERIALIZED VIEW sign_identifiers;
+CALL signlist_refresh_materialized_views();
 
 END
 
 $BODY$;
 
 
-CREATE OR REPLACE FUNCTION reload_signlist (path text)
-    RETURNS void
-    LANGUAGE 'plpgsql'
-    COST 100 VOLATILE
+CREATE OR REPLACE PROCEDURE reload_signlist (path text)
+    LANGUAGE PLPGSQL
     AS $BODY$
 
 BEGIN
@@ -724,9 +707,10 @@ SET CONSTRAINTS ALL DEFERRED;
 DELETE FROM unknown_signs;
 DELETE FROM value_variants;
 DELETE FROM values;
+DELETE FROM sign_variants;
 DELETE FROM signs;
 
-PERFORM load_signlist(path);
+CALL load_signlist(path);
 
 END
 

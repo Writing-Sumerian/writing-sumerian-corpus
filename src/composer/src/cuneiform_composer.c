@@ -9,6 +9,7 @@
 #include <access/htup_details.h>
 #include <catalog/pg_type.h>
 #include <utils/array.h>
+#include <tcop/pquery.h>
 
 
 #define  CONDITION          64
@@ -50,8 +51,16 @@ Oid CONDITION_INSERTED;
 Oid CONDITION_DELETED;
 Oid CONDITION_ERASED;
 
+Oid VARIANT_TYPE_DEFAULT;
+Oid VARIANT_TYPE_NONDEFAULT;
+Oid VARIANT_TYPE_REDUCED;
+Oid VARIANT_TYPE_AUGMENTED;
+Oid VARIANT_TYPE_NONSTANDARD;
+
 void _PG_init(void)
 {
+    EnsurePortalSnapshotExists();
+
     SPI_connect();
 
     SPI_execute("SELECT 'sumerian'::language, 'akkadian'::language, 'hittite'::language, 'eblaite'::language, 'other'::language" , true, 1);
@@ -104,27 +113,40 @@ void _PG_init(void)
         CONDITION_DELETED = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 5, &isnull));
         CONDITION_ERASED = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 6, &isnull));
     }
+    SPI_execute("SELECT 'default'::sign_variant_type, 'nondefault'::sign_variant_type, 'reduced'::sign_variant_type,"
+                "       'augmented'::sign_variant_type, 'nonstandard'::sign_variant_type", true, 1);
+    if(SPI_tuptable != NULL && SPI_processed == 1)
+    {
+        const HeapTuple tuple = SPI_tuptable->vals[0];
+        const TupleDesc tupdesc = SPI_tuptable->tupdesc;
+        bool isnull;
+        VARIANT_TYPE_DEFAULT = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 1, &isnull));
+        VARIANT_TYPE_NONDEFAULT = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 2, &isnull));
+        VARIANT_TYPE_REDUCED = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 3, &isnull));
+        VARIANT_TYPE_AUGMENTED = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 4, &isnull));
+        VARIANT_TYPE_NONSTANDARD = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 5, &isnull));
+    }
 
     SPI_finish();
 }
 
 
 
-char* cun_memcpy(char* s1, const char* s2, size_t n)
+static char* cun_memcpy(char* s1, const char* s2, size_t n)
 {
     while(n-- != 0)
         *s1++ = *s2++;
     return s1;
 }
 
-char* cun_strcpy(char* s1, const char* s2)
+static char* cun_strcpy(char* s1, const char* s2)
 {
     while(*s2 != '\0')
         *s1++ = *s2++;
     return s1;
 }
 
-int cun_strcmp(char* s1, const char* s2)
+static int cun_strcmp(char* s1, const char* s2)
 {
     while(*s2 != '\0')
     {
@@ -163,7 +185,7 @@ typedef struct State
     bool highlight;
 } State;
 
-State* init_state(FunctionCallInfo fcinfo, MemoryContext memcontext, State* state_old)
+static State* init_state(FunctionCallInfo fcinfo, MemoryContext memcontext, State* state_old)
 {
     bool isnull;
     State* state;
@@ -184,27 +206,28 @@ State* init_state(FunctionCallInfo fcinfo, MemoryContext memcontext, State* stat
         state = (State*) PG_GETARG_POINTER(0);
     *state_old = *state;
 
-    state->unknown_reading = PG_GETARG_BOOL(2);
-    state->sign_no = PG_GETARG_INT32(3);
-    state->word_no = PG_GETARG_INT32(4);
-    state->compound_no = PG_GETARG_INT32(5);
-    state->line_no = PG_GETARG_INT32(6);
-    const HeapTupleHeader properties = PG_GETARG_HEAPTUPLEHEADER(7);
+    state->sign_no = PG_GETARG_INT32(4);
+    state->word_no = PG_GETARG_INT32(5);
+    state->compound_no = PG_GETARG_INT32(6);
+    state->line_no = PG_GETARG_INT32(7);
+    const HeapTupleHeader properties = PG_GETARG_HEAPTUPLEHEADER(8);
     state->type = DatumGetObjectId(GetAttributeByName(properties, "type", &isnull));
     state->phonographic = DatumGetBool(GetAttributeByName(properties, "phonographic", &state->phonographic_null));
     state->alignment = DatumGetObjectId(GetAttributeByName(properties, "alignment", &isnull));
     state->indicator = DatumGetBool(GetAttributeByName(properties, "indicator", &isnull));
-    state->stem = PG_GETARG_BOOL(8);
-    state->stem_null = PG_ARGISNULL(8);
-    state->condition = PG_GETARG_OID(9);
-    state->language = PG_GETARG_OID(10);
-    state->highlight = PG_ARGISNULL(16) ? false : PG_GETARG_BOOL(16);
+    state->stem = PG_GETARG_BOOL(9);
+    state->stem_null = PG_ARGISNULL(9);
+    state->condition = PG_GETARG_OID(10);
+    state->language = PG_GETARG_OID(11);
+    state->highlight = PG_ARGISNULL(17) ? false : PG_GETARG_BOOL(17);
+
+    state->unknown_reading = state->type == TYPE_SIGN;
 
     return state;
 }
 
 
-int get_changes(const State* s1, const State* s2, const bool newline)
+static int get_changes(const State* s1, const State* s2, const bool newline)
 {
     int changes = 0;
     if(s1->indicator != s2->indicator || s1->alignment != s2->alignment)
@@ -225,7 +248,7 @@ int get_changes(const State* s1, const State* s2, const bool newline)
 }
 
 
-char* close_html(char* s, int changes, const State* state)
+static char* close_html(char* s, int changes, const State* state)
 {
     if(changes >= INDICATOR && state->indicator)
         s = cun_strcpy(s, "</span>");
@@ -244,7 +267,7 @@ char* close_html(char* s, int changes, const State* state)
     return s;
 }
 
-char* open_html(char* s, int changes, const State* state)
+static char* open_html(char* s, int changes, const State* state)
 {
     if(changes >= CONDITION && state->condition != CONDITION_INTACT)
     {
@@ -293,7 +316,7 @@ char* open_html(char* s, int changes, const State* state)
     return s;
 }
 
-char* close_code(char* s, int changes, const State* state)
+static char* close_code(char* s, int changes, const State* state)
 {
     if(state->indicator && (changes & INDICATOR || changes & PHONOGRAPHIC))
     {
@@ -321,7 +344,7 @@ char* close_code(char* s, int changes, const State* state)
     return s;
 }
 
-char* open_code(char* s, int changes, const State* state)
+static char* open_code(char* s, int changes, const State* state)
 {
     if(changes & CONDITION)
     {
@@ -355,7 +378,6 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     MemoryContext aggcontext;
     State* state;
     State state_old;
-    bool isnull;
 
     if (!AggCheckCallContext(fcinfo, &aggcontext))
     {
@@ -366,24 +388,30 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     state = init_state(fcinfo, aggcontext, &state_old);
 
     const text* value = PG_ARGISNULL(1) ? NULL : PG_GETARG_TEXT_PP(1);
+    const text* sign = PG_ARGISNULL(2) ? (state->unknown_reading ? value : NULL) : PG_GETARG_TEXT_PP(2);
 
-    const bool inverted = PG_GETARG_BOOL(11);
-    const bool newline = PG_GETARG_BOOL(12);
+    const Oid variant_type = PG_ARGISNULL(3) ? VARIANT_TYPE_NONDEFAULT : PG_GETARG_OID(3);
 
-    const text* critics = PG_ARGISNULL(13) ? NULL : PG_GETARG_TEXT_PP(13);
-    const text* comment = PG_ARGISNULL(14) ? NULL : PG_GETARG_TEXT_PP(14);
+    const bool inverted = PG_GETARG_BOOL(12);
+    const bool newline = PG_GETARG_BOOL(13);
+
+    const text* critics = PG_ARGISNULL(14) ? NULL : PG_GETARG_TEXT_PP(14);
+    const text* comment = PG_ARGISNULL(15) ? NULL : PG_GETARG_TEXT_PP(15);
 
     const int32 string_size = VARSIZE_ANY_EXHDR(state->string);
     const int32 value_size = value ? VARSIZE_ANY_EXHDR(value) : 0;
+    const int32 sign_size = sign ? VARSIZE_ANY_EXHDR(sign) : 0;
     const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
     const int32 comment_size = comment ? VARSIZE_ANY_EXHDR(comment) : 0;
     const int32 compound_comment_size = state_old.compound_comment ? VARSIZE_ANY_EXHDR(state_old.compound_comment) : 0;
-    const int32 size = value_size + critics_size + comment_size + compound_comment_size;
+    const int32 size = value_size + sign_size + critics_size + comment_size + compound_comment_size;
     if(state->string_capacity < string_size + size + MAX_EXTRA_SIZE_HTML)
     {
         state->string = (text*)repalloc(state->string, string_size + size + EXP_LINE_SIZE_HTML + VARHDRSZ);
         state->string_capacity += size + EXP_LINE_SIZE_HTML;
     }
+
+    const bool x_value = value_size >= 8 ? *((char*)VARDATA_ANY(value) + value_size - 8) == 'x' : false;
 
     char* s = VARDATA(state->string)+string_size;
 
@@ -458,7 +486,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     
     s = open_html(s, changes, state);
 
-    if(value)
+    if(!state->unknown_reading && value)
     {
         if(!cun_strcmp(VARDATA_ANY(value), "||"))
             s = cun_strcpy(s, "<span class='hspace'></span>");
@@ -470,16 +498,43 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
             s = cun_strcpy(s, "<span class='vline'></span>");
         else
             s = cun_memcpy(s, VARDATA_ANY(value), value_size);
-    }
-        
 
-    if(critics_size)
+        if(variant_type == VARIANT_TYPE_REDUCED)
+            s = cun_strcpy(s, "⁻");
+        if(variant_type == VARIANT_TYPE_AUGMENTED)
+            s = cun_strcpy(s, "⁺");
+
+        if(critics_size || variant_type == VARIANT_TYPE_NONSTANDARD)
+        {
+            s = cun_strcpy(s, "<span class='critics'>");
+            if(critics_size)
+                s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
+            if(variant_type == VARIANT_TYPE_NONSTANDARD) 
+                s = cun_strcpy(s, "!");
+            s = cun_strcpy(s, "</span>");
+        }
+
+        if(sign && (variant_type == VARIANT_TYPE_NONSTANDARD || 
+                    variant_type == VARIANT_TYPE_NONDEFAULT || 
+                    state->type == TYPE_NUMBER || 
+                    x_value))
+        {
+            s = cun_strcpy(s, "<span class='signspec'>");
+            s = cun_memcpy(s, VARDATA_ANY(sign), sign_size);
+            s = cun_strcpy(s, "</span>");
+        }
+    }
+    else if(sign)
     {
-        s = cun_strcpy(s, "<span class='critics'>");
-        s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
-        s = cun_strcpy(s, "</span>");
+        s = cun_memcpy(s, VARDATA_ANY(sign), sign_size);
+        if(critics_size)
+        {
+            s = cun_strcpy(s, "<span class='critics'>");
+            s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
+            s = cun_strcpy(s, "</span>");
+        }
     }
-
+    
     if(comment_size)
     {
         s = cun_strcpy(s, "<span class='comment'>");
@@ -546,7 +601,6 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     MemoryContext aggcontext;
     State* state;
     State state_old;
-    bool isnull;
 
     if (!AggCheckCallContext(fcinfo, &aggcontext))
     {
@@ -557,24 +611,30 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     state = init_state(fcinfo, aggcontext, &state_old);
 
     const text* value = PG_ARGISNULL(1) ? NULL : PG_GETARG_TEXT_PP(1);
+    const text* sign = PG_ARGISNULL(2) ? (state->unknown_reading ? value : NULL) : PG_GETARG_TEXT_PP(2);
 
-    const bool inverted = PG_GETARG_BOOL(11);
-    const bool newline = PG_GETARG_BOOL(12);
+    const Oid variant_type = PG_ARGISNULL(3) ? VARIANT_TYPE_NONDEFAULT : PG_GETARG_OID(3);
 
-    const text* critics = PG_ARGISNULL(13) ? NULL : PG_GETARG_TEXT_PP(13);
-    const text* comment = PG_ARGISNULL(14) ? NULL : PG_GETARG_TEXT_PP(14);
+    const bool inverted = PG_GETARG_BOOL(12);
+    const bool newline = PG_GETARG_BOOL(13);
+
+    const text* critics = PG_ARGISNULL(14) ? NULL : PG_GETARG_TEXT_PP(14);
+    const text* comment = PG_ARGISNULL(15) ? NULL : PG_GETARG_TEXT_PP(15);
 
     const int32 string_size = VARSIZE_ANY_EXHDR(state->string);
     const int32 value_size = value ? VARSIZE_ANY_EXHDR(value) : 0;
+    const int32 sign_size = sign ? VARSIZE_ANY_EXHDR(sign) : 0;
     const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
     const int32 comment_size = comment ? VARSIZE_ANY_EXHDR(comment) : 0;
     const int32 compound_comment_size = state_old.compound_comment ? VARSIZE_ANY_EXHDR(state_old.compound_comment) : 0;
-    const int32 size = value_size + critics_size + comment_size;
+    const int32 size = value_size + sign_size + critics_size + comment_size;
     if(state->string_capacity < string_size + size + MAX_EXTRA_SIZE_CODE)
     {
         state->string = (text*)repalloc(state->string, string_size + size + EXP_LINE_SIZE_CODE + VARHDRSZ);
         state->string_capacity += size + EXP_LINE_SIZE_CODE;
     }
+
+    const bool x_value = value_size ? *((char*)VARDATA_ANY(value) + value_size - 1) == 'x' : false;
 
     char* s = VARDATA(state->string)+string_size;
 
@@ -636,11 +696,39 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     
     s = open_code(s, changes, state);
 
-    if(value)
-        s = cun_memcpy(s, VARDATA_ANY(value), value_size);
+    if(!state->unknown_reading)
+    {
+        if(value)
+        {
+            s = cun_memcpy(s, VARDATA_ANY(value), value_size);
 
-    if(critics_size)
-        s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
+            if(variant_type == VARIANT_TYPE_REDUCED)
+                s = cun_strcpy(s, "⁻");
+            if(variant_type == VARIANT_TYPE_AUGMENTED)
+                s = cun_strcpy(s, "⁺");
+        }
+
+        if(critics_size)
+            s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
+        if(variant_type == VARIANT_TYPE_NONSTANDARD)
+            s = cun_strcpy(s, "!");
+
+        if(sign && (variant_type == VARIANT_TYPE_NONSTANDARD || 
+                    variant_type == VARIANT_TYPE_NONDEFAULT || 
+                    state->type == TYPE_NUMBER ||
+                    x_value))
+        {
+            *s++ = '(';
+            s = cun_memcpy(s, VARDATA_ANY(sign), sign_size);
+            *s++ = ')';
+        }
+    }
+    else if(sign)
+    {
+        s = cun_memcpy(s, VARDATA_ANY(sign), sign_size);
+        if(critics_size)
+            s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
+    }
 
     if(comment_size)
     {

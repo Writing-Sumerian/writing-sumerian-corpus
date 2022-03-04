@@ -180,7 +180,19 @@ CREATE OPERATOR CLASS hash_cun_position_ops
         FUNCTION        1       cun_position_hash,
         FUNCTION        2       cun_position_hash_extended;
 
+CREATE OPERATOR FAMILY brin_cun_position_minmax_ops USING brin;
 
+CREATE OPERATOR CLASS brin_cun_position_minmax_ops
+    DEFAULT FOR TYPE cun_position USING brin FAMILY brin_cun_position_minmax_ops AS
+        OPERATOR        1       <,
+        OPERATOR        2       <=,
+        OPERATOR        3       =,
+        OPERATOR        4       >=,
+        OPERATOR        5       >,
+        FUNCTION        1       brin_minmax_opcinfo,
+        FUNCTION        2       brin_minmax_add_value,
+        FUNCTION        3       brin_minmax_consistent,
+        FUNCTION        4       brin_minmax_union;
 
 CREATE FUNCTION next (cun_position)
     RETURNS cun_position
@@ -224,3 +236,53 @@ CREATE OR REPLACE FUNCTION consecutive (VARIADIC cun_position[])
     IMMUTABLE
     COST 10;
 
+CREATE OR REPLACE FUNCTION get_sign_nos (VARIADIC cun_position[])
+    RETURNS int[]
+    AS 'cuneiform_search', 'get_sign_nos'
+    LANGUAGE C
+    IMMUTABLE
+    COST 10;
+
+
+--CREATE VIEW signs_search AS
+--SELECT
+--    composition,
+ --   sign_variant_id,
+--    TRUE AS specific
+--FROM
+--    sign_variants
+--UNION ALL
+--SELECT
+--    a.composition,
+--    b.sign_variant_id,
+--    FALSE AS specific
+--FROM
+--    sign_variants a
+--    JOIN sign_variants b USING (sign_id)
+--WHERE a.variant_type = 'default' AND a.composition != b.composition; 
+
+CREATE VIEW values_search AS
+SELECT
+    value,
+    value_id,
+    sign_variant_id,
+    glyphs,
+    graphemes,
+    FALSE AS variant_req
+FROM
+    value_variants
+    JOIN values USING (value_id)
+    JOIN allomorphs USING (sign_id)
+    JOIN sign_variants_text USING (allomorph_id)
+UNION ALL
+SELECT
+    value,
+    value_id,
+    sign_variant_id,
+    glyphs,
+    graphemes,
+    TRUE AS variant_req
+FROM
+    glyph_values 
+    JOIN sign_variants USING (glyph_ids)
+    JOIN sign_variants_text USING (sign_variant_id)

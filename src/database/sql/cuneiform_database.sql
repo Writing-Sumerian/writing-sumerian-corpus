@@ -120,7 +120,8 @@ CREATE TABLE corpus_norm (
     word_no integer NOT NULL,
     orig_value text,
     value_id integer REFERENCES values DEFERRABLE INITIALLY IMMEDIATE,
-    sign_id integer REFERENCES signs DEFERRABLE INITIALLY IMMEDIATE,
+    sign_variant_id integer REFERENCES sign_variants DEFERRABLE INITIALLY IMMEDIATE,
+    number text,
     properties SIGN_PROPERTIES NOT NULL,
     stem boolean,
     condition sign_condition NOT NULL,
@@ -128,10 +129,13 @@ CREATE TABLE corpus_norm (
     comment text,
     newline boolean NOT NULL,
     inverted boolean NOT NULL,
+    ligature boolean NOT NULL,
     PRIMARY KEY (transliteration_id, sign_no),
     FOREIGN KEY (transliteration_id, word_no) REFERENCES public.words (transliteration_id, word_no) DEFERRABLE INITIALLY IMMEDIATE,
     FOREIGN KEY (transliteration_id, line_no) REFERENCES public.lines (transliteration_id, line_no) DEFERRABLE INITIALLY IMMEDIATE
 );
+
+CLUSTER corpus_norm USING corpus_norm_pkey;
 
 
 -- Views
@@ -156,7 +160,7 @@ FROM
     LEFT JOIN words USING (transliteration_id, word_no)
     LEFT JOIN compounds USING (transliteration_id, compound_no)
     LEFT JOIN lines USING (transliteration_id, line_no)
-    LEFT JOIN signs USING (sign_id)
+    LEFT JOIN sign_variants_text USING (sign_variant_id)
     LEFT JOIN (SELECT value_id, main_variant_id AS value_variant_id, phonographic FROM values) _ USING (value_id)
     LEFT JOIN value_variants USING (value_id, value_variant_id);
 
