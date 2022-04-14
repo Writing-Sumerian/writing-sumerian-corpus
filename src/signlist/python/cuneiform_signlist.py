@@ -1,5 +1,5 @@
 def normalize_operators(sign:str) -> str:
-    """COST 100 STABLE"""
+    """COST 100 STABLE STRICT"""
 
     import re
 

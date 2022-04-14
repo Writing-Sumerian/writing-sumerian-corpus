@@ -14,72 +14,68 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
 {{grammar}}  
     """
 
-    value_with_spec_plan = plpy.prepare("""
-        SELECT
-            array_agg(value_id) AS value_ids, 
-            array_agg(sign_variant_id) AS sign_variant_ids 
-        FROM values_search 
-        WHERE value = $1 AND glyphs = $2
-        """, 
-        ["text", "text"])
-    value_plan = plpy.prepare("""
-        SELECT 
-            array_agg(value_id) AS value_ids, 
-            array_agg(sign_variant_id) AS sign_variant_ids 
-        FROM (
-            SELECT DISTINCT
-                value_id,
-                CASE variant_req WHEN TRUE THEN sign_variant_id ELSE NULL END AS sign_variant_id
-            FROM values_search 
-            WHERE value = $1) _
-        """, 
-        ["text"])
-    pattern_with_spec_plan = plpy.prepare("""
-        SELECT 
-            array_agg(value_id) AS value_ids, 
-            array_agg(sign_variant_id) AS sign_variant_ids 
-        FROM (
-            SELECT DISTINCT
-                value_id,
-                sign_variant_id
-            FROM values_search 
-            WHERE value = $1 AND glyphs = $2) _
-        """, 
-        ["text", "text"])
-    pattern_plan = plpy.prepare("""
-        SELECT 
-            array_agg(value_id) AS value_ids, 
-            array_agg(sign_variant_id) AS sign_variant_ids 
-        FROM (
-            SELECT DISTINCT
-                value_id,
-                CASE variant_req WHEN TRUE THEN sign_variant_id ELSE NULL END AS sign_variant_id
-            FROM values_search 
-            WHERE value ~ $1) _
-        """, 
-        ["text"])
-    sign_plan = plpy.prepare("""
+    class DB:
 
-    """,
-    ["text"])
+        QUERY = "SELECT array_agg(value_id) AS value_ids, array_agg(sign_variant_id) AS sign_variant_ids FROM {fromClause} WHERE {whereClause}"
+        NOSPEC_FROM = "(SELECT DISTINCT value, value_id, CASE glyphs_required WHEN TRUE THEN sign_variant_id ELSE NULL END AS sign_variant_id FROM value_map) _"
+        GRAPHEME_TABLE = "sign_variants JOIN allomorphs USING (allomorph_id) JOIN values USING (sign_id) JOIN value_variants USING (value_id)"
+        
+        VALUE_SPEC_PLAN = plpy.prepare(QUERY.format(fromClause='value_map', whereClause='value = $1 AND glyphs = $2'), ["text", "text"])
+        VALUE_NOSPEC_PLAN = plpy.prepare(QUERY.format(fromClause=NOSPEC_FROM, whereClause='value = $1'), ["text"])
+        PATTERN_SPEC_PLAN = plpy.prepare(QUERY.format(fromClause='value_map', whereClause='value ~ $1 AND glyphs = $2'), ["text", "text"])
+        PATTERN_NOSPEC_PLAN = plpy.prepare(QUERY.format(fromClause=NOSPEC_FROM, whereClause='value ~ $1'), ["text"])
+        VALUEX_SPEC_PLAN = plpy.prepare("SELECT sign_variant_id FROM sign_variants_text WHERE glyphs = $1", ["text"])
+        SIGN_SPEC_PLAN = plpy.prepare(f"""SELECT grapheme_ids, glyph_ids FROM {GRAPHEME_TABLE} JOIN sign_variants_text 
+            USING (sign_variant_id, allomorph_id) WHERE value = $1 AND glyphs = $2""", ["text", "text"])
+        SIGN_GRAPHEME_PLAN = plpy.prepare(f"SELECT DISTINCT grapheme_ids FROM {GRAPHEME_TABLE} WHERE value = $1", ["text"])
+        SIGN_GLYPH_PLAN = plpy.prepare("SELECT glyph_ids FROM sign_map WHERE glyphs = $1 AND array_length(glyph_ids, 1) = 1", ["text"])
+        
+        def normalizeGlyphs(sign):
+            r = plpy.execute(f"SELECT normalize_glyphs('{sign}')")
+            return r[0]['normalize_glyphs']
 
-    def normalizeSign(sign):
-        r = plpy.execute(f"""
-        SELECT
-            string_agg(op||COALESCE(sign, ''), '' ORDER BY ord) AS normalized_sign
-        FROM
-            LATERAL split_sign('{sign}') WITH ORDINALITY as b(component, op, ord)
-            LEFT JOIN sign_map ON component = identifier
-        """)
-        return r[0]['normalized_sign']
+        def value(value, spec=None):
+            if spec is not None:
+                r = plpy.execute(DB.VALUE_SPEC_PLAN, [value, DB.normalizeGlyphs(spec)])
+            else:
+                r = plpy.execute(DB.VALUE_NOSPEC_PLAN, [value])
+            value_ids = r[0]['value_ids']
+            if not value_ids:
+                raise ValueError
+            return value_ids, r[0]['sign_variant_ids']
 
-    def make_condition(id, value_id, sign_variant_id):
-        c = []
-        if value_id is not None:
-            c.append(f"c{id}.value_id = {value_id}")
-        if sign_variant_id is not None:
-            c.append(f"c{id}.sign_variant_id = {sign_variant_id}")
-        return '('+" AND ".join(c)+')'
+        def pattern(pattern, spec=None):
+            if spec is not None:
+                r = plpy.execute(DB.PATTERN_SPEC_PLAN, [pattern, DB.normalizeGlyphs(spec)])
+            else:
+                r = plpy.execute(DB.PATTERN_NOSPEC_PLAN, [pattern])
+            value_ids = r[0]['value_ids']
+            if not value_ids:
+                raise ValueError
+            return value_ids, r[0]['sign_variant_ids']
+
+        def valuex(spec):
+            r = plpy.execute(DB.VALUEX_SPEC_PLAN, [DB.normalizeGlyphs(spec)])
+            if len(r) != 1:
+                raise ValueError
+            return r[0]['sign_variant_id']
+
+        def signNoSpec(sign):
+            r = plpy.execute(DB.SIGN_GLYPH_PLAN, [DB.normalizeGlyphs(sign)])
+            glyph_id = r[0]['glyph_ids'][0] if len(r) else None
+            r = plpy.execute(DB.SIGN_GRAPHEME_PLAN, [sign.lower()])
+            grapheme_ids = (row['grapheme_ids'] for row in r)
+            if not glyph_id and not grapheme_ids:
+                raise ValueError
+            return glyph_id, grapheme_ids
+
+        def signSpec(sign, spec):
+            r = plpy.execute(DB.SIGN_SPEC_PLAN, [sign.lower(), DB.normalizeGlyphs(spec)])
+            if len(r) != 1:
+                raise ValueError
+            return r[0]['grapheme_ids'], r[0]['glyph_ids']
+
+
 
     class TokenType(Enum):
         CHAR = 1
@@ -92,9 +88,11 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
         BAR = 8
         CON = 9
 
+
     class Token:
         def __init__(self, type):
             self.type = type
+
 
     class Char(Token):
         def __init__(self, id, condition, sign):
@@ -107,6 +105,15 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
 
 
     class T(Transformer):
+
+        def make_condition(id, value_id, sign_variant_id):
+            c = []
+            if value_id is not None:
+                c.append(f"c{id}.value_id = {value_id}")
+            if sign_variant_id is not None:
+                c.append(f"c{id}.sign_variant_id = {sign_variant_id}")
+            return '('+" AND ".join(c)+')'
+
 
         def __init__(self):
             self.id = 0
@@ -191,50 +198,43 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             return res
 
         def value(self, args):
-            if len(args) == 2:
-                sign = normalizeSign(args[1].replace('x', '×'))
-                r = plpy.execute(value_with_spec_plan, [args[0], sign])
-            else:
-                r = plpy.execute(value_plan, [args[0]])
-            if not r[0]['value_ids']:
-                raise ValueError
-            ids = zip(r[0]['value_ids'], r[0]['sign_variant_ids'])
+            value_ids, sign_variant_ids = DB.value(args[0], args[1].replace('x', '×') if len(args) == 2 else None)
+            ids = zip(value_ids, sign_variant_ids)
             self.id += 1
-            return [Char(self.id, "("+" OR ".join(make_condition(self.id, value_id, sign_variant_id) for value_id, sign_variant_id in ids)+")", False)]
+            return [Char(self.id, "("+" OR ".join(T.make_condition(self.id, value_id, sign_variant_id) for value_id, sign_variant_id in ids)+")", False)]
                     
-        def sign(self, args):
-            r = plpy.execute(f"SELECT glyph_id FROM glyph_identifiers WHERE glyph_identifier = '{args[0]}'")
-            glyph_id = r[0]['glyph_id'] if len(r) else None
-            r = plpy.execute(f"SELECT DISTINCT grapheme_ids FROM sign_variants JOIN allomorphs USING (allomorph_id) JOIN values USING (sign_id) JOIN value_variants USING (value_id) WHERE value = '{args[0].lower()}'")
-            grapheme_ids = (row['grapheme_ids'] for row in r)
-            if not glyph_id and not grapheme_ids:
-                raise ValueError
-            res = []
-            if glyph_id:
-                self.id += 1
-                res.append(Char(self.id, f"c{self.id}.glyph_id = {glyph_id}", True))                   
-            for i, variant in enumerate(grapheme_ids):
-                if i or glyph_id:
-                    res.append(Token(TokenType.BAR))
-                res.append(Token(TokenType.LPAREN))
-                for grapheme_id in variant:
-                    self.id += 1
-                    res.append(Char(self.id, f"c{self.id}.grapheme_id = {grapheme_id}", True))
-                res.append(Token(TokenType.RPAREN))
-            return res
-
         def pattern(self, args):
             pattern = f'^{args[0][1:-1]}([0-9]+|x)?$'
-            if len(args) == 2:
-                sign = normalizeSign(args[1].replace('x', '×'))
-                r = plpy.execute(pattern_with_spec_plan, [pattern, sign])
-            else:
-                r = plpy.execute(pattern_plan, [pattern])
-            if not r[0]['value_ids']:
-                raise ValueError
-            ids = zip(r[0]['value_ids'], r[0]['sign_variant_ids'])
+            value_ids, sign_variant_ids = DB.pattern(pattern, args[1].replace('x', '×') if len(args) == 2 else None)
+            ids = zip(value_ids, sign_variant_ids)
             self.id += 1
-            return [Char(self.id, "("+" OR ".join(make_condition(self.id, value_id, sign_variant_id) for value_id, sign_variant_id in ids)+")", False)]
+            return [Char(self.id, "("+" OR ".join(T.make_condition(self.id, value_id, sign_variant_id) for value_id, sign_variant_id in ids)+")", False)]
+
+        def sign(self, args):
+            res = []
+            
+            if len(args) == 2:
+                grapheme_ids, glyph_ids = DB.signSpec(args[0], args[1])
+                res.append(Token(TokenType.LPAREN))
+                for grapheme_id, glyph_id in zip(grapheme_ids, glyph_ids):
+                    self.id += 1
+                    res.append(Char(self.id, f"c{self.id}.grapheme_id = {grapheme_id} AND c{self.id}.glyph_id = {glyph_id}", True))
+                res.append(Token(TokenType.RPAREN))
+            else:
+                glyph_id, grapheme_ids = DB.signNoSpec(args[0])                
+                if glyph_id:
+                    self.id += 1
+                    res.append(Char(self.id, f"c{self.id}.glyph_id = {glyph_id}", True))                   
+                for i, variant in enumerate(grapheme_ids):
+                    if i or glyph_id:
+                        res.append(Token(TokenType.BAR))
+                    res.append(Token(TokenType.LPAREN))
+                    for grapheme_id in variant:
+                        self.id += 1
+                        res.append(Char(self.id, f"c{self.id}.grapheme_id = {grapheme_id}", True))
+                    res.append(Token(TokenType.RPAREN))
+
+            return res
                         
         def signx(self, args):
             self.id += 1
@@ -244,12 +244,9 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             if not len(args):
                 self.id += 1
                 return [Char(self.id, f"c{self.id}.component_sign_id IS NULL", False)]
-            sign = normalizeSign(args[0].replace('x', '×'))
-            r = plpy.execute(f"SELECT sign_variant_id FROM sign_variants_text WHERE glyphs = '{sign}'")
-            if not len(r):
-                raise ValueError
+            sign_variant_id = DB.valuex(args[0].replace('x', '×'))
             self.id += 1
-            return [Char(self.id, f"c{self.id}.sign_variant_id = {r[0]['sign_id']}", False)]
+            return [Char(self.id, f"c{self.id}.sign_variant_id = {sign_variant_id}", False)]
             
         def n(self, args):
             self.id += 1
@@ -302,9 +299,6 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             self.ids.append(char.id)
             self.condition = char.condition
 
-        #def list(self, column):
-        #    return f"c{self.id}.{column}"
-
         def first(self, column):
             return f"c{self.id}.{column}"
 
@@ -330,9 +324,6 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
         def append(self, table):
             self.ids += table.ids
             self.tables.append(table)
-
-        #def list(self, column):
-        #    return ', '.join(table.list(column) for table in self.tables)
 
         def first(self, column):
             if self.knownStart:

@@ -32,5 +32,5 @@ build/$(EXTENSION)--$(version).sql: build/$(EXTENSION)_comp.py sql/$(EXTENSION).
 
 build/$(EXTENSION)_comp.py: python/$(EXTENSION).py python/grammar.lark
 	@mkdir -p build
-	@csplit -n 1 --suppress-matched --elide-empty-files -f build/$(EXTENSION) python/$(EXTENSION).py /{{grammar}}/ {*}
+	@csplit -n 1 -s --suppress-matched --elide-empty-files -f build/$(EXTENSION) python/$(EXTENSION).py /{{grammar}}/ {*}
 	@cat build/$(EXTENSION)0 python/grammar.lark build/$(EXTENSION)1 > build/$(EXTENSION)_comp.py

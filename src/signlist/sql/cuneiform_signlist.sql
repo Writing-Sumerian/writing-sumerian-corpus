@@ -47,7 +47,8 @@ CREATE TABLE allographs (
     glyph_id integer NOT NULL REFERENCES glyphs (glyph_id) DEFERRABLE INITIALLY IMMEDIATE,
     variant_type sign_variant_type NOT NULL,
     specific boolean NOT NULL,
-    UNIQUE (grapheme_id, glyph_id)
+    UNIQUE (grapheme_id, glyph_id),
+    CHECK (specific OR variant_type != 'default')
 );
 
 CREATE TABLE signs (
@@ -58,7 +59,8 @@ CREATE TABLE allomorphs (
     allomorph_id serial PRIMARY KEY,
     sign_id integer NOT NULL REFERENCES signs (sign_id) DEFERRABLE INITIALLY IMMEDIATE,
     variant_type sign_variant_type NOT NULL,
-    specific boolean NOT NULL
+    specific boolean NOT NULL,
+    CHECK (specific OR variant_type != 'default')
 );
 
 CREATE TABLE allomorph_components (
@@ -187,103 +189,72 @@ WHERE
 
 CREATE INDEX value_index ON value_variants (value);
 
-
-CREATE VIEW glyph_identifiers (glyph_identifier, glyph_id) AS
+CREATE MATERIALIZED VIEW sign_map (identifier, graphemes, grapheme_ids, glyphs, glyph_ids) AS
 SELECT
     upper(value),
-    glyph_id
+    string_agg(grapheme, '.' ORDER BY pos),
+    NULLIF(array_agg(graphemes.grapheme_id ORDER BY pos)::int[], ARRAY[NULL]::int[]),
+    string_agg(glyph, '.' ORDER BY pos),
+    NULLIF(array_agg(glyph_id ORDER BY pos)::int[], ARRAY[NULL]::int[])
 FROM
     value_variants
     JOIN values USING (value_id)
     JOIN allomorphs USING (sign_id)
-    JOIN (
-        SELECT
-            allomorph_id,
-            max(grapheme_id) AS grapheme_id
-        FROM
-            allomorph_components
-        GROUP BY
-            allomorph_id
-        HAVING count(*) = 1
-    ) c USING (allomorph_id)
-    JOIN allographs USING (grapheme_id)
-WHERE 
-    allomorphs.variant_type = 'default'
-    AND allographs.variant_type = 'default'
-    AND value !~ 'x'
+    JOIN allomorph_components ON allomorphs.allomorph_id = allomorph_components.allomorph_id AND allomorphs.variant_type = 'default'
+    LEFT JOIN graphemes USING (grapheme_id)
+    LEFT JOIN allographs ON allomorph_components.grapheme_id = allographs.grapheme_id AND allographs.variant_type = 'default'
+    LEFT JOIN glyphs USING (glyph_id)
+WHERE
+    value !~ 'x'
+GROUP BY
+    value
 UNION
 SELECT
-    glyph,
-    glyph_id
+    upper(value),
+    null,
+    null,
+    string_agg(glyph, '.' ORDER BY ord),
+    glyph_ids
 FROM
-    glyphs
+    glyph_values
+    LEFT JOIN LATERAL UNNEST(glyph_ids) WITH ORDINALITY AS _(glyph_id, ord) ON TRUE
+    LEFT JOIN glyphs USING (glyph_id)
+GROUP BY
+    value
 UNION
 SELECT
     synonym,
-    glyph_id
-FROM 
-    glyph_synonyms;
-
-CREATE VIEW grapheme_identifiers (grapheme_identifier, grapheme_id) AS
-SELECT
-    upper(value),
-    grapheme_id
-FROM
-    value_variants
-    JOIN values USING (value_id)
-    JOIN allomorphs USING (sign_id)
-    JOIN (
-        SELECT
-            allomorph_id,
-            max(grapheme_id) AS grapheme_id
-        FROM
-            allomorph_components
-        GROUP BY
-            allomorph_id
-        HAVING count(*) = 1
-    ) c USING (allomorph_id)
-WHERE 
-    variant_type = 'default'
-    AND value !~ 'x'
-UNION
-SELECT
+    null,
+    null,
     glyph,
-    grapheme_id
+    ARRAY[glyph_id]
 FROM
-    glyphs
-    JOIN allographs USING (glyph_id)
-WHERE specific
+    glyph_synonyms
+    JOIN glyphs USING (glyph_id)
 UNION
 SELECT
     grapheme,
-    grapheme_id
+    grapheme,
+    ARRAY[graphemes.grapheme_id],
+    glyph,
+    NULLIF(ARRAY[glyph_id]::int[], ARRAY[NULL]::int[])
 FROM
     graphemes
+    LEFT JOIN allographs ON graphemes.grapheme_id = allographs.grapheme_id AND variant_type = 'default'
+    LEFT JOIN glyphs USING (glyph_id)
+WHERE grapheme NOT IN (SELECT upper(value) FROM value_variants)
 UNION
 SELECT
-    synonym,
-    grapheme_id
-FROM 
-    glyph_synonyms
-    JOIN allographs USING (glyph_id)
-WHERE specific;
-
-CREATE VIEW sign_map (identifier, sign) AS
-SELECT
-    glyph_identifier,
-    glyph
+    glyph,
+    grapheme,
+    NULLIF(ARRAY[grapheme_id]::int[], ARRAY[NULL]::int[]),
+    glyph,
+    ARRAY[glyphs.glyph_id]
 FROM
-    glyph_identifiers
-    JOIN glyphs USING (glyph_id)
-UNION ALL
-SELECT
-    grapheme_identifier,
-    grapheme
-FROM
-    grapheme_identifiers
-    JOIN graphemes USING (grapheme_id)
-WHERE
-    grapheme_identifier NOT IN (SELECT glyph_identifier FROM glyph_identifiers);
+    glyphs
+    LEFT JOIN allographs ON glyphs.glyph_id = allographs.glyph_id AND specific
+    LEFT JOIN graphemes USING (grapheme_id)
+WHERE glyph NOT IN (SELECT upper(value) FROM value_variants);
 
 CREATE VIEW sign_variants_text AS
 SELECT
@@ -305,6 +276,36 @@ GROUP BY
     allomorph_id,
     variant_type,
     specific;
+
+CREATE MATERIALIZED VIEW value_map (value, value_id, sign_variant_id, glyphs, graphemes, glyphs_required, specific) AS
+SELECT
+    value,
+    value_id,
+    sign_variant_id,
+    glyphs,
+    graphemes,
+    FALSE,
+    value !~ 'x' AND sign_variants_text.variant_type = 'default'
+FROM
+    value_variants
+    JOIN values USING (value_id)
+    JOIN allomorphs USING (sign_id)
+    JOIN sign_variants_text USING (allomorph_id)
+UNION ALL
+SELECT
+    value,
+    value_id,
+    sign_variant_id,
+    glyphs,
+    graphemes,
+    TRUE,
+    sign_variants.specific
+FROM
+    glyph_values 
+    JOIN sign_variants USING (glyph_ids)
+    JOIN allomorphs USING (allomorph_id)
+    JOIN values USING (sign_id, value_id)
+    JOIN sign_variants_text USING (sign_variant_id);
 
 CREATE VIEW signlist AS 
 SELECT 
@@ -330,6 +331,29 @@ ORDER BY
     value_id, 
     main DESC,
     value;
+
+CREATE OR REPLACE FUNCTION normalize_glyphs (
+    glyphs text
+    )
+    RETURNS text
+    STRICT
+    STABLE
+    LANGUAGE SQL
+    AS $BODY$
+    SELECT 
+        string_agg(glyphs, '.' ORDER BY sign_no) AS normalized_sign
+    FROM (
+        SELECT
+            sign_no,
+            normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
+        FROM
+            LATERAL split_glyphs(glyphs) WITH ORDINALITY as a(sign, sign_no)
+            LEFT JOIN LATERAL split_sign(sign) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
+            LEFT JOIN sign_map ON component = identifier
+        GROUP BY 
+            sign_no
+        ) _
+$BODY$;
 
 CREATE OR REPLACE PROCEDURE add_value (
   sign_id integer, 
@@ -412,10 +436,10 @@ CREATE OR REPLACE PROCEDURE add_allomorph (
     SELECT
         allomorph_id,
         pos,
-        grapheme_id
+        grapheme_ids[0]
     FROM
         LATERAL regexp_split_to_table(graphemes, '\.') WITH ORDINALITY a(grapheme_identifier, pos)
-        LEFT JOIN grapheme_identifiers USING (grapheme_identifier);
+        LEFT JOIN sign_map ON identifier = grapheme_identifier AND array_length(grapheme_ids, 1) = 1;
   END;
 $BODY$;
 
@@ -639,7 +663,7 @@ CREATE OR REPLACE FUNCTION split_glyphs (
 $BODY$;
 
 
-CREATE OR REPLACE PROCEDURE signlist_refresh_materialized_views ()
+CREATE OR REPLACE PROCEDURE signlist_refresh ()
     LANGUAGE PLPGSQL
     AS 
 $BODY$
@@ -662,5 +686,8 @@ $BODY$
         FROM
             sign_variants_view
             LEFT JOIN sign_variant_ids USING (allomorph_id, allograph_ids);
+
+    REFRESH MATERIALIZED VIEW sign_map;
+    REFRESH MATERIALIZED VIEW value_map;
     END
 $BODY$;

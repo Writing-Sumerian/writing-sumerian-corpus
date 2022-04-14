@@ -1,6 +1,177 @@
 
 -- corpus
 
+CREATE TABLE corpus_unencoded (
+    transliteration_id integer,
+    sign_no integer,
+    value text,
+    sign_spec text,
+    type sign_type NOT NULL,
+    PRIMARY KEY (transliteration_id, sign_no)
+);
+
+CREATE INDEX ON corpus_unencoded (type, (sign_spec IS null));
+
+CREATE VIEW corpus_normalized_signs AS
+WITH x AS (
+    SELECT
+        transliteration_id,
+        sign_no,
+        glyph_no,
+        normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
+    FROM
+        corpus_unencoded
+        LEFT JOIN LATERAL split_glyphs(value) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
+        LEFT JOIN LATERAL split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
+        LEFT JOIN sign_map ON component = identifier
+    WHERE type = 'sign'
+    GROUP BY 
+        transliteration_id,
+        sign_no,
+        glyph_no
+)
+SELECT 
+    transliteration_id,
+    sign_no,
+    string_agg(glyphs, '.' ORDER BY glyph_no) AS glyphs
+FROM
+    x
+GROUP BY
+    transliteration_id,
+    sign_no;
+
+CREATE VIEW corpus_normalized_sign_specs AS
+WITH x AS (
+    SELECT
+        transliteration_id,
+        sign_no,
+        glyph_no,
+        normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
+    FROM
+        corpus_unencoded
+        LEFT JOIN LATERAL split_glyphs(sign_spec) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
+        LEFT JOIN LATERAL split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
+        LEFT JOIN sign_map ON component = identifier
+    WHERE sign_spec IS NOT NULL
+    GROUP BY 
+        transliteration_id,
+        sign_no,
+        glyph_no
+)
+SELECT 
+    transliteration_id,
+    sign_no,
+    string_agg(glyphs, '.' ORDER BY glyph_no) AS glyphs
+FROM
+    x
+GROUP BY
+    transliteration_id,
+    sign_no;
+
+
+CREATE OR REPLACE PROCEDURE encode_corpus ()
+    LANGUAGE PLPGSQL
+    AS $BODY$
+    
+BEGIN
+
+SET CONSTRAINTS All DEFERRED;
+
+-- values
+UPDATE corpus_norm
+SET
+    value_id = value_map.value_id,
+    sign_variant_id = value_map.sign_variant_id
+FROM
+    corpus_unencoded
+    JOIN value_map USING (value)
+WHERE 
+    value_map.specific AND
+    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
+    corpus_norm.sign_no = corpus_unencoded.sign_no AND
+    corpus_unencoded.sign_spec IS NULL AND 
+    corpus_unencoded.type != 'sign' AND 
+    corpus_unencoded.type != 'number';
+
+-- values with sign_spec
+UPDATE corpus_norm
+SET
+    value_id = value_map.value_id,
+    sign_variant_id = value_map.sign_variant_id
+FROM
+    corpus_unencoded
+    JOIN corpus_normalized_sign_specs USING (transliteration_id, sign_no)
+    JOIN value_map USING (glyphs)
+WHERE 
+    ((corpus_unencoded.value !~ 'x' AND corpus_unencoded.value = value_map.value) OR  
+         (corpus_unencoded.value ~ 'x' AND replace(corpus_unencoded.value, 'x', '') = regexp_replace(value_map.value, '[x0-9]+', ''))) AND
+    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
+    corpus_norm.sign_no = corpus_unencoded.sign_no AND
+    corpus_unencoded.sign_spec IS NOT NULL AND 
+    corpus_unencoded.type != 'sign' AND 
+    corpus_unencoded.type != 'number';
+
+-- signs
+UPDATE corpus_norm
+SET
+    value_id = NULL,
+    sign_variant_id = sign_variants_text.sign_variant_id
+FROM
+    corpus_unencoded
+    JOIN corpus_normalized_signs USING (transliteration_id, sign_no)
+    JOIN sign_variants_text USING (glyphs)
+WHERE
+    specific AND
+    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
+    corpus_norm.sign_no = corpus_unencoded.sign_no AND
+    corpus_unencoded.type = 'sign' AND 
+    corpus_unencoded.sign_spec IS NULL;
+
+-- signs with sign_spec
+UPDATE corpus_norm
+SET
+    value_id = NULL,
+    sign_variant_id = sign_variants_text.sign_variant_id
+FROM
+    corpus_unencoded
+    JOIN corpus_normalized_sign_specs USING (transliteration_id, sign_no)
+    JOIN sign_variants_text USING (glyphs)
+    JOIN sign_map ON identifier = value
+WHERE 
+    sign_map.graphemes = sign_variants_text.graphemes AND
+    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
+    corpus_norm.sign_no = corpus_unencoded.sign_no AND
+    corpus_unencoded.type = 'sign' AND 
+    corpus_unencoded.sign_spec IS NOT NULL;
+
+-- numbers
+UPDATE corpus_norm
+SET
+    value_id = NULL,
+    sign_variant_id = sign_variants_text.sign_variant_id
+FROM
+    corpus_unencoded
+    LEFT JOIN corpus_normalized_sign_specs USING (transliteration_id, sign_no)
+    LEFT JOIN sign_variants_text USING (glyphs)
+WHERE 
+    specific AND
+    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
+    corpus_norm.sign_no = corpus_unencoded.sign_no AND
+    corpus_unencoded.type = 'number';
+
+SET CONSTRAINTS All IMMEDIATE;
+
+DELETE FROM corpus_unencoded
+USING
+    corpus_norm
+WHERE
+    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
+    corpus_norm.sign_no = corpus_unencoded.sign_no AND
+    sign_variant_id IS NOT NULL;
+
+END
+$BODY$;
+
 CREATE OR REPLACE PROCEDURE load_corpus (path text)
     LANGUAGE PLPGSQL
     AS $BODY$
@@ -347,169 +518,6 @@ CREATE TEMPORARY TABLE corpus_tmp_ (
 
 EXECUTE format('COPY corpus_tmp_ FROM %L CSV NULL ''\N''', path || 'corpus.csv');
 
-CREATE INDEX ON corpus_tmp_ (type, (sign_spec IS null));
-
-CREATE TEMPORARY VIEW normalized_signs AS
-WITH x AS (
-    SELECT
-        transliteration_identifier,
-        object,
-        sign_no,
-        glyph_no,
-        normalize_operators(string_agg(op||COALESCE('('||sign||')', ''), '' ORDER BY component_no)) AS normalized_glyph
-    FROM
-        corpus_tmp_
-        LEFT JOIN LATERAL split_glyphs(COALESCE(sign_spec, value, '')) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
-        LEFT JOIN LATERAL split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
-        LEFT JOIN sign_map ON component = identifier
-    WHERE sign_spec IS NOT NULL OR type = 'sign'
-    GROUP BY 
-        transliteration_identifier,
-        object,
-        sign_no,
-        glyph_no
-)
-SELECT 
-    transliteration_identifier,
-    object,
-    sign_no,
-    string_agg(normalized_glyph, '.' ORDER BY glyph_no) AS normalized_sign
-FROM
-    x
-GROUP BY
-    transliteration_identifier,
-    object,
-    sign_no;
-
-
--- values
-WITH value_map AS (
-    SELECT
-        value,
-        value_id,
-        sign_variant_id
-    FROM
-        value_variants
-        JOIN values USING (value_id)
-        JOIN allomorphs USING (sign_id)
-        JOIN sign_variants USING (allomorph_id)
-    WHERE value !~ 'x' AND sign_variants.variant_type = 'default'
-    UNION ALL
-    SELECT
-        value,
-        value_id,
-        sign_variant_id
-    FROM
-        glyph_values 
-        JOIN sign_variants USING (glyph_ids)
-        JOIN allomorphs USING (allomorph_id)
-        JOIN values USING (sign_id, value_id)
-        JOIN sign_variants_text USING (sign_variant_id)
-    WHERE sign_variants.specific
-)
-INSERT INTO corpus_norm
-SELECT
-    transliteration_id,
-    sign_no,
-    line_no,
-    word_no,
-    corpus_tmp_.value,
-    value_id,
-    sign_variant_id,
-    null,
-    (type, indicator,  alignment, corpus_tmp_.phonographic)::sign_properties,
-    stem,
-    condition,
-    crits,
-    comment,
-    newline,
-    inverted,
-    ligature
-FROM
-    corpus_tmp_
-    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object)
-    LEFT JOIN value_map USING (value)
-WHERE sign_spec IS NULL AND type != 'sign' AND type != 'number';
-
--- values with sign_spec
-WITH value_map AS (
-    SELECT
-        value,
-        value_id,
-        sign_variant_id,
-        glyphs
-    FROM
-        value_variants
-        JOIN values USING (value_id)
-        JOIN allomorphs USING (sign_id)
-        JOIN sign_variants_text USING (allomorph_id)
-    UNION ALL
-    SELECT
-        value,
-        value_id,
-        sign_variant_id,
-        glyphs
-    FROM
-        glyph_values 
-        JOIN sign_variants USING (glyph_ids)
-        JOIN allomorphs USING (allomorph_id)
-        JOIN values USING (sign_id, value_id)
-        JOIN sign_variants_text USING (sign_variant_id)
-)
-INSERT INTO corpus_norm
-SELECT DISTINCT
-    transliteration_id,
-    sign_no,
-    line_no,
-    word_no,
-    corpus_tmp_.value || COALESCE('(' || sign_spec  || ')', ''),
-    value_map.value_id,
-    value_map.sign_variant_id,
-    null,
-    (type, indicator,  alignment, corpus_tmp_.phonographic)::sign_properties,
-    stem,
-    condition,
-    crits,
-    comment,
-    newline,
-    inverted,
-    ligature
-FROM
-    corpus_tmp_
-    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object)
-    LEFT JOIN normalized_signs USING (transliteration_identifier, object, sign_no)
-    LEFT JOIN value_map ON glyphs = normalized_sign AND 
-        ((corpus_tmp_.value !~ 'x' AND corpus_tmp_.value = value_map.value) OR  
-         (corpus_tmp_.value ~ 'x' AND replace(corpus_tmp_.value, 'x', '') = regexp_replace(value_map.value, '[x0-9]+', '')))
-WHERE sign_spec IS NOT NULL AND type != 'sign' AND type != 'number';
-
--- signs
-INSERT INTO corpus_norm
-SELECT
-    transliteration_id,
-    sign_no,
-    line_no,
-    word_no,
-    corpus_tmp_.value,
-    null,
-    sign_variant_id,
-    null,
-    (type, indicator,  alignment, corpus_tmp_.phonographic)::sign_properties,
-    stem,
-    condition,
-    crits,
-    comment,
-    newline,
-    inverted,
-    ligature
-FROM
-    corpus_tmp_
-    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object)
-    LEFT JOIN normalized_signs USING (transliteration_identifier, object, sign_no)
-    LEFT JOIN sign_variants_text ON glyphs = normalized_sign AND specific AND length = 1
-WHERE type = 'sign';
-
--- numbers
 INSERT INTO corpus_norm
 SELECT
     transliteration_id,
@@ -518,8 +526,8 @@ SELECT
     word_no,
     corpus_tmp_.value || COALESCE('(' || sign_spec  || ')', ''),
     null,
-    sign_variant_id,
-    corpus_tmp_.value,
+    null,
+    CASE WHEN type = 'number' THEN corpus_tmp_.value ELSE NULL END,
     (type, indicator,  alignment, corpus_tmp_.phonographic)::sign_properties,
     stem,
     condition,
@@ -530,14 +538,24 @@ SELECT
     ligature
 FROM
     corpus_tmp_
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
+
+INSERT INTO corpus_unencoded
+SELECT
+    transliteration_id,
+    sign_no,
+    value,
+    sign_spec,
+    type
+FROM
+    corpus_tmp_
     LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object)
-    LEFT JOIN normalized_signs USING (transliteration_identifier, object, sign_no)
-    LEFT JOIN grapheme_identifiers ON normalized_sign = grapheme_identifier
-    LEFT JOIN sign_variants ON grapheme_ids = ARRAY[grapheme_id] AND specific
-    WHERE type = 'number';
+WHERE
+    type = 'value' OR
+    type = 'sign' OR
+    (type = 'number' AND sign_spec IS NOT NULL);
 
-DROP TABLE corpus_tmp_ CASCADE;
-
+DROP TABLE corpus_tmp_;
 DROP TABLE transliteration_ids_tmp_;
 
 UPDATE pg_index
@@ -554,6 +572,12 @@ SET CONSTRAINTS ALL IMMEDIATE;
 
 CLUSTER corpus_norm;
 
+COMMIT;
+
+CALL encode_corpus ();
+
+CLUSTER corpus_norm;
+
 END
 
 $BODY$;
@@ -567,16 +591,15 @@ BEGIN
 
 SET CONSTRAINTS All DEFERRED;
 
+DELETE FROM corpus_unencoded;
+
 DELETE FROM corpus_norm;
-
 DELETE FROM words;
-
 DELETE FROM compounds;
-
 DELETE FROM lines;
-
+DELETE FROM blocks;
+DELETE FROM surfaces;
 DELETE FROM transliterations;
-
 DELETE FROM texts_norm;
 
 CALL load_corpus(path);
@@ -689,7 +712,7 @@ PERFORM setval('values_value_id_seq', max(value_id)) FROM values;
 PERFORM setval('value_variants_value_variant_id_seq', max(value_variant_id)) FROM value_variants;
 PERFORM setval('signs_sign_id_seq', max(sign_id)) FROM signs;
 
-CALL signlist_refresh_materialized_views();
+CALL signlist_refresh();
 
 END
 
@@ -704,10 +727,15 @@ BEGIN
 
 SET CONSTRAINTS ALL DEFERRED;
 
-DELETE FROM unknown_signs;
+DELETE FROM glyph_synonyms;
+DELETE FROM glyph_values;
 DELETE FROM value_variants;
 DELETE FROM values;
-DELETE FROM sign_variants;
+DELETE FROM allographs;
+DELETE FROM allomorph_components;
+DELETE FROM allomorphs;
+DELETE FROM graphemes;
+DELETE FROM glyphs;
 DELETE FROM signs;
 
 CALL load_signlist(path);

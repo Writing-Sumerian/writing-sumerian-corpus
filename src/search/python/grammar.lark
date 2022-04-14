@@ -13,7 +13,7 @@ det         : "{" char ( _sep char )* "}"
 pc          : "<" char ( _sep char )* ">"
 
 char        : VALUE signspec?       -> value
-            | signt                 -> sign
+            | signt signspec?       -> sign
             | PATTERN signspec?     -> pattern
             | _SIGNX                -> signx
             | X signspec?           -> valuex
@@ -51,6 +51,7 @@ xcon        : X
 
 PATTERN.5   : /\/[^\/]*\//
 VALUE.3     : /[abdegĝhḫijklmnpqrsšṣtṭuwyz’]+[0-9xX]*/
+SIMPLESIGN.3: /[ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’]+[0-9]*/
 _SIGNX.2    : "X"
 X.2         : "x"
 _N.2        : /[Nn]/
@@ -60,4 +61,3 @@ _SPACE      : /[\t \f\n]+/
 _NL         : "//"
 MOD         : "@" ( /[tgšnkzicdfvabx]/ | "90" | "45" )
 SIGNCON     : /[×%&@]/
-SIMPLESIGN  : /[ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’]+[0-9]*/
