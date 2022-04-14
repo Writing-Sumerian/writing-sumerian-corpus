@@ -70,6 +70,7 @@ CREATE TYPE surface_type AS ENUM (
     'left',
     'right',
     'seal',
+    'fragment',
     'surface'
 );
 
