@@ -2,3 +2,4 @@ comment = 'Cuneiform signlist'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_signlist'
+requires = 'jsonb_plpython3u'

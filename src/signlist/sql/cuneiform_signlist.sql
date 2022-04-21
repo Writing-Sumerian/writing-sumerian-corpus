@@ -189,6 +189,44 @@ WHERE
 
 CREATE INDEX value_index ON value_variants (value);
 
+
+CREATE MATERIALIZED VIEW sign_variants_composed AS
+SELECT
+    sign_variant_id,
+    graphemes,
+    glyphs,
+    unicode,
+    parse_sign(glyphs) AS tree
+FROM (
+    SELECT
+        sign_variant_id,
+        string_agg(grapheme, '.' ORDER BY ord) AS graphemes,
+        string_agg(glyph, '.' ORDER BY ord) AS glyphs,
+        string_agg(COALESCE(unicode, '□'), '' ORDER BY ord) AS unicode
+    FROM
+        sign_variants
+        LEFT JOIN LATERAL unnest(grapheme_ids, glyph_ids) WITH ORDINALITY AS a(grapheme_id, glyph_id, ord) ON TRUE
+        LEFT JOIN graphemes USING (grapheme_id)
+        LEFT JOIN glyphs USING (glyph_id)
+    GROUP BY
+        sign_variant_id
+    ) _;
+
+CREATE VIEW sign_variants_text AS
+SELECT
+    sign_variant_id,
+    allomorph_id,
+    graphemes,
+    glyphs,
+    unicode,
+    variant_type,
+    specific,
+    array_length(glyph_ids, 1) AS length
+FROM
+    sign_variants
+    JOIN sign_variants_composed USING (sign_variant_id);
+
+
 CREATE MATERIALIZED VIEW sign_map (identifier, graphemes, grapheme_ids, glyphs, glyph_ids) AS
 SELECT
     upper(value),
@@ -256,27 +294,6 @@ FROM
     LEFT JOIN graphemes USING (grapheme_id)
 WHERE glyph NOT IN (SELECT upper(value) FROM value_variants);
 
-CREATE VIEW sign_variants_text AS
-SELECT
-    sign_variant_id,
-    allomorph_id,
-    string_agg(grapheme, '.' ORDER BY ord) AS graphemes,
-    string_agg(glyph, '.' ORDER BY ord) AS glyphs,
-    string_agg(COALESCE(unicode, '□'), '' ORDER BY ord) AS unicode,
-    variant_type,
-    specific,
-    count(*) AS length
-FROM
-    sign_variants
-    LEFT JOIN LATERAL unnest(grapheme_ids, glyph_ids) WITH ORDINALITY AS a(grapheme_id, glyph_id, ord) ON TRUE
-    LEFT JOIN graphemes USING (grapheme_id)
-    LEFT JOIN glyphs USING (glyph_id)
-GROUP BY
-    sign_variant_id,
-    allomorph_id,
-    variant_type,
-    specific;
-
 CREATE MATERIALIZED VIEW value_map (value, value_id, sign_variant_id, glyphs, graphemes, glyphs_required, specific) AS
 SELECT
     value,
@@ -307,6 +324,8 @@ FROM
     JOIN values USING (sign_id, value_id)
     JOIN sign_variants_text USING (sign_variant_id);
 
+
+
 CREATE VIEW signlist AS 
 SELECT 
     sign_id, 
@@ -331,6 +350,17 @@ ORDER BY
     value_id, 
     main DESC,
     value;
+
+CREATE OR REPLACE FUNCTION normalize_operators (
+    sign text
+    )
+    RETURNS text
+    STRICT
+    IMMUTABLE
+    LANGUAGE SQL
+    AS $BODY$
+    SELECT compose_sign(normalize_sign(parse_sign(sign)));
+$BODY$;
 
 CREATE OR REPLACE FUNCTION normalize_glyphs (
     glyphs text
@@ -687,6 +717,7 @@ $BODY$
             sign_variants_view
             LEFT JOIN sign_variant_ids USING (allomorph_id, allograph_ids);
 
+    REFRESH MATERIALIZED VIEW sign_variants_composed;
     REFRESH MATERIALIZED VIEW sign_map;
     REFRESH MATERIALIZED VIEW value_map;
     END
