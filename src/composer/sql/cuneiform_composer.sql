@@ -122,26 +122,53 @@ CREATE AGGREGATE cun_agg_html (
     FINALFUNC = cun_agg_html_finalfunc
 );
 
-CREATE OR REPLACE FUNCTION display_sign_html (
-    sign text
-    )
-    RETURNS text
-    LANGUAGE SQL
-    STRICT 
+
+CREATE OR REPLACE FUNCTION public.compose_sign_html (
+    tree jsonb)
+    RETURNS TEXT
+    LANGUAGE 'plpython3u' 
+    COST 100
     IMMUTABLE
-    AS
-$BODY$
-SELECT 
-    h AS sign_html
-FROM
-    regexp_replace(sign, '(?<!LAK|KWU|RSP|REC)(?<=[^0-9x×+*&%\.@])([0-9x]+)', '<span class=''index''>\1</span>') a,
-    LATERAL replace(a, '@g', '<span class=''modifier''>gunû</span>') b,
-    LATERAL replace(b, '@š', '<span class=''modifier''>šeššig</span>') c,
-    LATERAL replace(c, '@t', '<span class=''modifier''>tenû</span>') d,
-    LATERAL replace(d, '@n', '<span class=''modifier''>nutillû</span>') e,
-    LATERAL replace(e, '@k', '<span class=''modifier''>kabatenû</span>') f,
-    LATERAL replace(f, '@z', '<span class=''modifier''>zidatenû</span>') g,
-    LATERAL replace(g, '@i', '<span class=''modifier''>inversum</span>') h
+    STRICT
+    TRANSFORM FOR TYPE jsonb
+AS $BODY$
+    import re
+
+    precedence = {'.': 0, '×': 1, '&': 2, '%': 3, '@': 3, '+': 4}
+    modifiers = {'g': 'gunû', 'š': 'šeššig', 't': 'tenû', 'n': 'nutillû', 'k': 'kabatenû', 'z': 'zidatenû', 'i': 'inversum', 'v': 'inversum'}
+
+    def stack(a, b):
+        return f'<span class="stack">{a}<br/>{b}</span>'
+    
+    def rotate(a, val):
+        return f'<span class="rot{val}">{a}</span>'
+
+    def compose(node):
+        op = node['op']
+        if len(node['vals']) == 2:
+            if op == '&':
+                return stack(compose(node['vals'][0]), compose(node['vals'][1]))
+            elif op == '@':
+                return '<span class="cross">'+stack(compose(node['vals'][0]), compose(node['vals'][1]))+'</span>'
+            elif op == '%':
+                return stack(rotate(compose(node['vals'][0]), '180'), compose(node['vals'][1]))
+            return parenthesize(node['vals'][0], precedence[op], True) + op + parenthesize(node['vals'][1], precedence[op], False)
+        elif len(node['vals']) == 1:
+            if op in ['45', '90', '180']:
+                return rotate(compose(node['vals'][0]), op)
+            return parenthesize(node['vals'][0], 100, True) + '<span class="modifier">'+modifiers[op]+'</span>'
+        else:
+            if re.fullmatch(r'(BAU|LAK|KWU|RSP|REC|ZATU|ELLES)[0-9]{3}', op):
+                return re.sub(r'([0-9]+)$', r'<span class="slindex">\1</span>', op)
+            else:
+                return re.sub(r'(?<=[^0-9x])([0-9x]+)$', r'<span class="index">\1</span>', op)
+
+    def parenthesize(node, prec, left):
+        if len(node['vals']) == 2 and precedence[node['op']] + int(left) <= prec and node['op'] in ['.', '×']:
+            return '(' + compose(node) + ')'
+        return compose(node)
+
+    return compose(tree)
 $BODY$;
 
 CREATE MATERIALIZED VIEW values_html AS
@@ -171,9 +198,9 @@ GROUP BY
 CREATE MATERIALIZED VIEW signs_html AS
 SELECT
     sign_variant_id,
-    string_agg(display_sign_html(
+    string_agg(compose_sign_html(parse_sign(
         CASE WHEN allographs.variant_type = 'default' THEN grapheme ELSE glyph END
-        ),
+        )),
         '.'
     ) AS sign_html
 FROM
