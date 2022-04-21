@@ -57,13 +57,17 @@ Oid VARIANT_TYPE_REDUCED;
 Oid VARIANT_TYPE_AUGMENTED;
 Oid VARIANT_TYPE_NONSTANDARD;
 
-void _PG_init(void)
+bool ENUMS_SET = false;
+
+
+static void set_enums()
 {
-    EnsurePortalSnapshotExists();
+    if(ENUMS_SET)
+        return;
 
     SPI_connect();
 
-    SPI_execute("SELECT 'sumerian'::language, 'akkadian'::language, 'hittite'::language, 'eblaite'::language, 'other'::language" , true, 1);
+    SPI_execute("SELECT 'sumerian'::language, 'akkadian'::language, 'hittite'::language, 'eblaite'::language, 'other'::language", true, 1);
     if(SPI_tuptable != NULL && SPI_processed == 1)
     {
         const HeapTuple tuple = SPI_tuptable->vals[0];
@@ -126,10 +130,11 @@ void _PG_init(void)
         VARIANT_TYPE_AUGMENTED = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 4, &isnull));
         VARIANT_TYPE_NONSTANDARD = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 5, &isnull));
     }
-
+    
     SPI_finish();
-}
 
+    ENUMS_SET = true;
+}
 
 
 static char* cun_memcpy(char* s1, const char* s2, size_t n)
@@ -385,6 +390,8 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         elog(ERROR, "array_agg_transfn called in non-aggregate context");
     }
 
+    set_enums();
+
     state = init_state(fcinfo, aggcontext, &state_old);
 
     const text* value = PG_ARGISNULL(1) ? NULL : PG_GETARG_TEXT_PP(1);
@@ -607,6 +614,8 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
         /* cannot be called directly because of internal-type argument */
         elog(ERROR, "array_agg_transfn called in non-aggregate context");
     }
+
+    set_enums();
 
     state = init_state(fcinfo, aggcontext, &state_old);
 
