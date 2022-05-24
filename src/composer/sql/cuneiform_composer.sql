@@ -148,9 +148,9 @@ AS $BODY$
         if len(node['vals']) == 2:
             if op == '&':
                 return stack(compose(node['vals'][0]), compose(node['vals'][1]))
-            elif op == '@':
-                return '<span class="cross">'+stack(compose(node['vals'][0]), compose(node['vals'][1]))+'</span>'
             elif op == '%':
+                return '<span class="cross">'+stack(compose(node['vals'][0]), compose(node['vals'][1]))+'</span>'
+            elif op == '@':
                 return stack(rotate(compose(node['vals'][0]), '180'), compose(node['vals'][1]))
             return parenthesize(node['vals'][0], precedence[op], True) + op + parenthesize(node['vals'][1], precedence[op], False)
         elif len(node['vals']) == 1:
@@ -171,13 +171,20 @@ AS $BODY$
     return compose(tree)
 $BODY$;
 
-CREATE MATERIALIZED VIEW values_html AS
+CREATE MATERIALIZED VIEW value_variants_html AS
 SELECT
-    values.value_id,
+    value_variant_id,
     regexp_replace(value, '(?<=[^0-9x])([0-9x]+)$', '<span class=''index''>\1</span>') AS value_html
 FROM
+    value_variants;
+
+CREATE MATERIALIZED VIEW values_html AS
+SELECT
+    value_id,
+    value_html
+FROM
     values
-    JOIN value_variants ON main_variant_id = value_variant_id;
+    JOIN value_variants_html ON main_variant_id = value_variant_id;
 
 CREATE MATERIALIZED VIEW signs_code AS
 SELECT
@@ -185,6 +192,7 @@ SELECT
     string_agg(
         CASE WHEN allographs.variant_type = 'default' THEN grapheme ELSE glyph END,
         '.'
+        ORDER BY ord
     ) AS sign_code
 FROM
     sign_variants
@@ -198,17 +206,17 @@ GROUP BY
 CREATE MATERIALIZED VIEW signs_html AS
 SELECT
     sign_variant_id,
-    string_agg(compose_sign_html(parse_sign(
-        CASE WHEN allographs.variant_type = 'default' THEN grapheme ELSE glyph END
-        )),
-        '.'
-    ) AS sign_html
+    string_agg(CASE WHEN allographs.variant_type = 'default' THEN grapheme_html ELSE glyph_html END, '.' ORDER BY ord) AS sign_html,
+    string_agg(grapheme_html, '.'ORDER BY ord) AS graphemes_html,
+    string_agg(glyph_html, '.' ORDER BY ord) AS glyphs_html
 FROM
     sign_variants
     LEFT JOIN LATERAL unnest(allograph_ids) WITH ORDINALITY AS a(allograph_id, ord) ON TRUE
     LEFT JOIN allographs USING (allograph_id)
     LEFT JOIN graphemes USING (grapheme_id)
     LEFT JOIN glyphs USING (glyph_id)
+    LEFT JOIN LATERAL compose_sign_html(parse_sign(grapheme)) AS b(grapheme_html) ON TRUE
+    LEFT JOIN LATERAL compose_sign_html(parse_sign(glyph)) AS c(glyph_html) ON TRUE
 GROUP BY
     sign_variant_id;
 
