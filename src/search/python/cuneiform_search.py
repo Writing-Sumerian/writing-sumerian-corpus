@@ -238,13 +238,13 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
                         
         def signx(self, args):
             self.id += 1
-            return [Char(self.id, f"c{self.id}.component_sign_id IS NOT NULL", True)]
+            return [Char(self.id, f"c{self.id}.glyph_id IS NOT NULL", True)]
 
         def valuex(self, args):
-            if not len(args):
+            if len(args) == 1:
                 self.id += 1
-                return [Char(self.id, f"c{self.id}.component_sign_id IS NULL", False)]
-            sign_variant_id = DB.valuex(args[0].replace('x', '×'))
+                return [Char(self.id, f"c{self.id}.sign_variant_id IS NOT NULL", False)]
+            sign_variant_id = DB.valuex(args[1].replace('x', '×'))
             self.id += 1
             return [Char(self.id, f"c{self.id}.sign_variant_id = {sign_variant_id}", False)]
             
@@ -452,13 +452,13 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             fromClause = ''
             conditions = []
             if front:
-                fromClause += f" LEFT JOIN {targetTable} cstart ON cstart.component_sign_id IS NULL AND next(cstart.position) = {tables[0].first('position')} AND {Translator.key(ids[0], 'start', targetKey)}"
+                fromClause += f" LEFT JOIN {targetTable} cstart ON cstart.glyph_id IS NULL AND next(cstart.position) = {tables[0].first('position')} AND {Translator.key(ids[0], 'start', targetKey)}"
                 if front.type == TokenType.WORDBREAK:
                     conditions.append(f"(cstart.word_no IS NULL OR cstart.word_no < {tables[0].first('word_no')})")
                 elif front.type == TokenType.LINEBREAK:
                     conditions.append(f"(cstart.line_no IS NULL OR cstart.line_no < {tables[0].first('line_no')})")
             if back:
-                fromClause += f" LEFT JOIN {targetTable} cend ON cend.component_sign_id IS NULL AND cend.position = next({tables[-1].last('position')}) AND {Translator.key(ids[0], 'end', targetKey)}"
+                fromClause += f" LEFT JOIN {targetTable} cend ON cend.glyph_id IS NULL AND cend.position = next({tables[-1].last('position')}) AND {Translator.key(ids[0], 'end', targetKey)}"
                 if back.type == TokenType.WORDBREAK:
                     conditions.append(f"(cend.word_no IS NULL OR cend.word_no > {tables[-1].last('word_no')})")
                 elif back.type == TokenType.LINEBREAK:

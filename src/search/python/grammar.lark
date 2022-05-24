@@ -50,8 +50,11 @@ parensignt  : "(" signt ( "." signt )* ")"
 xcon        : X
 
 PATTERN.5   : /\/[^\/]*\//
-VALUE.3     : /[abdegĝhḫijklmnpqrsšṣtṭuwyz’]+[0-9xX]*/
-SIMPLESIGN.3: /[ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’]+[0-9]*/
+VALUE.3     : /[abdegĝhḫijklmnpqrsšṣtṭuwyz’][abdegĝhḫijklmnpqrsšṣtṭuwyz’]+[0-9xX]*/
+            | /[aeiou][0-9xX]*/
+            | "d"
+SIMPLESIGN.3: /[ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’][ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’]+[0-9]*/
+            | /[AEIOU][0-9]*/ 
 _SIGNX.2    : "X"
 X.2         : "x"
 _N.2        : /[Nn]/
