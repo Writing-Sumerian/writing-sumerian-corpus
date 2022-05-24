@@ -73,6 +73,26 @@ ALTER MATERIALIZED VIEW corpus_search ALTER COLUMN grapheme_id SET STATISTICS 10
 ALTER MATERIALIZED VIEW corpus_search ALTER COLUMN glyph_id SET STATISTICS 1000;
 
 
+CREATE MATERIALIZED VIEW values_present AS
+SELECT DISTINCT 
+  value_id,
+  period_id,
+  provenience_id,
+  genre_id
+FROM corpus_norm
+  JOIN transliterations USING (transliteration_id)
+  JOIN texts_norm USING (text_id);
+ 
+CREATE MATERIALIZED VIEW sign_variants_present AS
+SELECT DISTINCT 
+  sign_variant_id,
+  period_id,
+  provenience_id,
+  genre_id
+FROM corpus_norm
+  JOIN transliterations USING (transliteration_id)
+  JOIN texts_norm USING (text_id);
+
 CREATE OR REPLACE FUNCTION public.search (
   search_term text, 
   periods integer[] DEFAULT ARRAY[]::integer[],
