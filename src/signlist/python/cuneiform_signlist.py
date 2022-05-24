@@ -9,7 +9,7 @@ def parse_sign(sign:str) -> jsonb:
 
     def parse(sign):
         level = 0
-        for op in ['.', '×&%@', '+']:
+        for op in ['.', '×', '&', '%@', '+']:
             for i, c in list(enumerate(sign))[::-1]:
                 if c == '(':
                     level -= 1
@@ -92,10 +92,18 @@ def normalize_sign(tree:jsonb) -> jsonb:
 def match_sign(tree:jsonb, pattern:jsonb) -> bool:
     """COST 100 IMMUTABLE STRICT TRANSFORM FOR TYPE jsonb"""
 
+    precedence = {'.': 0, '×': 1, '&': 2, '%': 3, '@': 3, '+': 4}
+
     def match(node1, node2):
         if node2['op'] == 'X':
             return True
-        if node1['op'] != node2['op'] or len(node1['vals']) != len(node2['vals']):
+        if len(node1['vals']) != len(node2['vals']):
+            return False
+
+        if len(node2['vals']) == 2 and node2['vals'][1]['op'] == 'X' and precedence[node1['op']] == precedence[node2['op']] and match(node1['vals'][0], node2):
+            return True
+
+        if node1['op'] != node2['op']:
             return False
         for val1, val2 in zip(node1['vals'], node2['vals']):
             if not match(val1, val2):

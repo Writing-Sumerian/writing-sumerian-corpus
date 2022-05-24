@@ -292,7 +292,14 @@ FROM
     glyphs
     LEFT JOIN allographs ON glyphs.glyph_id = allographs.glyph_id AND specific
     LEFT JOIN graphemes USING (grapheme_id)
-WHERE glyph NOT IN (SELECT upper(value) FROM value_variants);
+WHERE glyph NOT IN (SELECT upper(value) FROM value_variants)
+UNION
+SELECT
+    'X',
+    'X',
+    NULL,
+    'X',
+    NULL;
 
 CREATE MATERIALIZED VIEW value_map (value, value_id, sign_variant_id, glyphs, graphemes, glyphs_required, specific) AS
 SELECT
@@ -466,7 +473,7 @@ CREATE OR REPLACE PROCEDURE add_allomorph (
     SELECT
         allomorph_id,
         pos,
-        grapheme_ids[0]
+        grapheme_ids[1]
     FROM
         LATERAL regexp_split_to_table(graphemes, '\.') WITH ORDINALITY a(grapheme_identifier, pos)
         LEFT JOIN sign_map ON identifier = grapheme_identifier AND array_length(grapheme_ids, 1) = 1;
