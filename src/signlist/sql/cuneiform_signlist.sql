@@ -672,6 +672,7 @@ CREATE OR REPLACE FUNCTION split_sign (
     LANGUAGE SQL
     IMMUTABLE
     STRICT
+    ROWS 2
     AS $BODY$
     SELECT 
         regexp_split_to_table(sign, '([()+.&%×]|@[gštnkzi0-9]*)+'), 
@@ -685,6 +686,7 @@ CREATE OR REPLACE FUNCTION split_glyphs (
     LANGUAGE PLPYTHON3U
     IMMUTABLE
     STRICT
+    ROWS 2
     AS $BODY$
     j = 0
     level = 0
