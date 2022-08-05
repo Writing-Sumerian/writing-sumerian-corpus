@@ -1,3 +1,10 @@
+CREATE TABLE corpora (
+    corpus_id serial PRIMARY KEY,
+    name_short text NOT NULL UNIQUE,
+    name_long text NOT NULL,
+    core boolean NOT NULL
+);
+
 
 -- Texts
 
@@ -20,9 +27,7 @@ CREATE TABLE texts_norm (
 CREATE TABLE transliterations (
     transliteration_id serial PRIMARY KEY,
     text_id integer NOT NULL REFERENCES texts_norm (text_id) DEFERRABLE INITIALLY IMMEDIATE,
-    object text NOT NULL,
-    description text NOT NULL,
-    UNIQUE (transliteration_id, object)
+    corpus_id integer NOT NULL REFERENCES corpora (corpus_id) DEFERRABLE INITIALLY IMMEDIATE
 );
 
 
@@ -62,6 +67,22 @@ CREATE TABLE words (
     FOREIGN KEY (transliteration_id, compound_no) REFERENCES compounds (transliteration_id, compound_no) DEFERRABLE INITIALLY IMMEDIATE
 );
 
+CREATE TYPE object_type AS ENUM (
+    'tablet',
+    'envelope',
+    'seal',
+    'object'
+);
+
+CREATE TABLE objects (
+    transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
+    object_no integer,
+    object_type object_type NOT NULL,
+    object_data text,
+    object_comment text,
+    PRIMARY KEY (transliteration_id, object_no)
+);
+
 CREATE TYPE surface_type AS ENUM (
     'obverse',
     'reverse',
@@ -77,10 +98,12 @@ CREATE TYPE surface_type AS ENUM (
 CREATE TABLE surfaces (
     transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
     surface_no integer,
-    surface_type surface_type,
+    surface_type surface_type NOT NULL,
     surface_data text,
     surface_comment text,
-    PRIMARY KEY (transliteration_id, surface_no)
+    object_no integer NOT NULL,
+    PRIMARY KEY (transliteration_id, surface_no),
+    FOREIGN KEY (transliteration_id, object_no) REFERENCES objects (transliteration_id, object_no) DEFERRABLE INITIALLY IMMEDIATE
 );
 
 CREATE TYPE block_type AS ENUM (
@@ -96,10 +119,10 @@ CREATE TYPE block_type AS ENUM (
 CREATE TABLE blocks (
     transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
     block_no integer,
-    block_type block_type,
+    block_type block_type NOT NULL,
     block_data text,
     block_comment text,
-    surface_no integer,
+    surface_no integer NOT NULL,
     PRIMARY KEY (transliteration_id, block_no),
     FOREIGN KEY (transliteration_id, surface_no) REFERENCES surfaces (transliteration_id, surface_no) DEFERRABLE INITIALLY IMMEDIATE
 );
@@ -107,7 +130,7 @@ CREATE TABLE blocks (
 CREATE TABLE lines (
     transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
     line_no integer,
-    block_no integer,
+    block_no integer NOT NULL,
     line text,
     line_comment text,
     PRIMARY KEY (transliteration_id, line_no),
@@ -168,6 +191,20 @@ FROM
 
 -- Performance
 
-CREATE INDEX ON texts_norm(provenience_id);
-CREATE INDEX ON texts_norm(period_id);
-CREATE INDEX ON texts_norm(genre_id);
+CREATE OR REPLACE PROCEDURE database_create_indexes ()
+LANGUAGE SQL
+AS $BODY$
+    CREATE INDEX texts_norm_provenience_id_ix ON texts_norm(provenience_id);
+    CREATE INDEX texts_norm_period_id_ix ON texts_norm(period_id);
+    CREATE INDEX texts_norm_genre_id_ix ON texts_norm(genre_id);
+$BODY$;
+
+CREATE OR REPLACE PROCEDURE database_drop_indexes ()
+LANGUAGE SQL
+AS $BODY$
+    DROP INDEX texts_norm_provenience_id_ix;
+    DROP INDEX texts_norm_period_id_ix;
+    DROP INDEX texts_norm_genre_id_ix;
+$BODY$;
+
+CALL database_create_indexes ();

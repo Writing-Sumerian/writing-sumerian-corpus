@@ -73,7 +73,7 @@ SELECT
             block_data
         ELSE
             block_type || ' ' || block_data
-        END, '') AS long
+        END, '') || coalesce(block_comment, '') AS long
 FROM
     blocks;
 
@@ -97,8 +97,6 @@ SELECT
             'l.e.'
         WHEN 'right' THEN
             'r.e.'
-        WHEN 'seal' THEN
-            's.'
         ELSE
             surface_data
         END, '') AS short,
@@ -116,12 +114,36 @@ SELECT
             'left edge'
         WHEN 'right' THEN
             'right edge'
-        WHEN 'seal' THEN
-            'seal'
         ELSE
             surface_data
-        END, '') AS long
+        END, '') || coalesce(surface_comment, '') AS long
 FROM
     surfaces;
 
 CREATE UNIQUE INDEX ON surfaces_display (transliteration_id, surface_no);
+
+CREATE MATERIALIZED VIEW objects_display AS
+SELECT
+    transliteration_id,
+    object_no,
+    coalesce (
+        CASE object_type
+        WHEN 'object' THEN
+            object_data
+        ELSE
+            object_type::text
+        END, '') || coalesce(object_comment, '') AS name,
+        CASE object_type
+    WHEN 'envelope' THEN
+        0
+    WHEN 'tablet' THEN
+        1
+    WHEN 'object' THEN
+        2
+    WHEN 'seal' THEN
+        3
+    END AS sort_order
+FROM
+    objects;
+
+CREATE UNIQUE INDEX ON objects_display (transliteration_id, object_no);
