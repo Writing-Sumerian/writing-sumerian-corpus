@@ -402,8 +402,8 @@ CREATE OR REPLACE PROCEDURE add_value (
   LANGUAGE PLPGSQL
   AS $BODY$
   BEGIN
-  INSERT INTO values VALUES (default, sign_id, -1, phonographic) RETURNING values.value_id INTO value_id;
-  INSERT INTO value_variants VALUES (default, value_id, value) RETURNING value_variants.value_variant_id INTO value_variant_id;
+  INSERT INTO values VALUES (default, sign_id, -1, phonographic) RETURNING values.value_id INTO add_value.value_id;
+  INSERT INTO value_variants VALUES (default, value_id, value) RETURNING value_variants.value_variant_id INTO add_value.value_variant_id;
   UPDATE values SET main_variant_id = value_variant_id WHERE values.value_id = add_value.value_id;
   END;
 $BODY$;
