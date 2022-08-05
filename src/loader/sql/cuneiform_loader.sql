@@ -12,165 +12,7 @@ CREATE TABLE corpus_unencoded (
 
 CREATE INDEX ON corpus_unencoded (type, (sign_spec IS null));
 
-CREATE VIEW corpus_normalized_signs AS
-WITH x AS (
-    SELECT
-        transliteration_id,
-        sign_no,
-        glyph_no,
-        normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
-    FROM
-        corpus_unencoded
-        LEFT JOIN LATERAL split_glyphs(value) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
-        LEFT JOIN LATERAL split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
-        LEFT JOIN sign_map ON component = identifier
-    WHERE type = 'sign'
-    GROUP BY 
-        transliteration_id,
-        sign_no,
-        glyph_no
-)
-SELECT 
-    transliteration_id,
-    sign_no,
-    string_agg(glyphs, '.' ORDER BY glyph_no) AS glyphs
-FROM
-    x
-GROUP BY
-    transliteration_id,
-    sign_no;
 
-CREATE VIEW corpus_normalized_sign_specs AS
-WITH x AS (
-    SELECT
-        transliteration_id,
-        sign_no,
-        glyph_no,
-        normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
-    FROM
-        corpus_unencoded
-        LEFT JOIN LATERAL split_glyphs(sign_spec) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
-        LEFT JOIN LATERAL split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
-        LEFT JOIN sign_map ON component = identifier
-    WHERE sign_spec IS NOT NULL
-    GROUP BY 
-        transliteration_id,
-        sign_no,
-        glyph_no
-)
-SELECT 
-    transliteration_id,
-    sign_no,
-    string_agg(glyphs, '.' ORDER BY glyph_no) AS glyphs
-FROM
-    x
-GROUP BY
-    transliteration_id,
-    sign_no;
-
-
-CREATE OR REPLACE PROCEDURE encode_corpus ()
-    LANGUAGE PLPGSQL
-    AS $BODY$
-    
-BEGIN
-
-SET CONSTRAINTS All DEFERRED;
-
--- values
-UPDATE corpus_norm
-SET
-    value_id = value_map.value_id,
-    sign_variant_id = value_map.sign_variant_id
-FROM
-    corpus_unencoded
-    JOIN value_map USING (value)
-WHERE 
-    value_map.specific AND
-    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
-    corpus_norm.sign_no = corpus_unencoded.sign_no AND
-    corpus_unencoded.sign_spec IS NULL AND 
-    corpus_unencoded.type != 'sign' AND 
-    corpus_unencoded.type != 'number';
-
--- values with sign_spec
-UPDATE corpus_norm
-SET
-    value_id = value_map.value_id,
-    sign_variant_id = value_map.sign_variant_id
-FROM
-    corpus_unencoded
-    JOIN corpus_normalized_sign_specs USING (transliteration_id, sign_no)
-    JOIN value_map USING (glyphs)
-WHERE 
-    ((corpus_unencoded.value !~ 'x' AND corpus_unencoded.value = value_map.value) OR  
-         (corpus_unencoded.value ~ 'x' AND replace(corpus_unencoded.value, 'x', '') = regexp_replace(value_map.value, '[x0-9]+', ''))) AND
-    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
-    corpus_norm.sign_no = corpus_unencoded.sign_no AND
-    corpus_unencoded.sign_spec IS NOT NULL AND 
-    corpus_unencoded.type != 'sign' AND 
-    corpus_unencoded.type != 'number';
-
--- signs
-UPDATE corpus_norm
-SET
-    value_id = NULL,
-    sign_variant_id = sign_variants_text.sign_variant_id
-FROM
-    corpus_unencoded
-    JOIN corpus_normalized_signs USING (transliteration_id, sign_no)
-    JOIN sign_variants_text USING (glyphs)
-WHERE
-    specific AND
-    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
-    corpus_norm.sign_no = corpus_unencoded.sign_no AND
-    corpus_unencoded.type = 'sign' AND 
-    corpus_unencoded.sign_spec IS NULL;
-
--- signs with sign_spec
-UPDATE corpus_norm
-SET
-    value_id = NULL,
-    sign_variant_id = sign_variants_text.sign_variant_id
-FROM
-    corpus_unencoded
-    JOIN corpus_normalized_sign_specs USING (transliteration_id, sign_no)
-    JOIN sign_variants_text USING (glyphs)
-    JOIN sign_map ON identifier = value
-WHERE 
-    sign_map.graphemes = sign_variants_text.graphemes AND
-    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
-    corpus_norm.sign_no = corpus_unencoded.sign_no AND
-    corpus_unencoded.type = 'sign' AND 
-    corpus_unencoded.sign_spec IS NOT NULL;
-
--- numbers
-UPDATE corpus_norm
-SET
-    value_id = NULL,
-    sign_variant_id = sign_variants_text.sign_variant_id
-FROM
-    corpus_unencoded
-    LEFT JOIN corpus_normalized_sign_specs USING (transliteration_id, sign_no)
-    LEFT JOIN sign_variants_text USING (glyphs)
-WHERE 
-    specific AND
-    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
-    corpus_norm.sign_no = corpus_unencoded.sign_no AND
-    corpus_unencoded.type = 'number';
-
-SET CONSTRAINTS All IMMEDIATE;
-
-DELETE FROM corpus_unencoded
-USING
-    corpus_norm
-WHERE
-    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
-    corpus_norm.sign_no = corpus_unencoded.sign_no AND
-    sign_variant_id IS NOT NULL;
-
-END
-$BODY$;
 
 CREATE OR REPLACE PROCEDURE load_corpus (path text)
     LANGUAGE PLPGSQL
@@ -178,16 +20,27 @@ CREATE OR REPLACE PROCEDURE load_corpus (path text)
     
 BEGIN
 
--- disable all indices
-UPDATE pg_index
-SET indisready = FALSE
-WHERE indrelid IN (
-    SELECT oid
-    FROM pg_class
-    WHERE relname IN ('texts_norm', 'transliterations', 'lines', 'compounds', 'words', 'corpus_norm', 'corpus_composition')
-);
+CALL database_drop_indexes ();
 
-SET CONSTRAINTS All DEFERRED;
+
+-- corpora
+
+CREATE TEMPORARY TABLE corpora_tmp_ (
+    name_short text,
+    name_long text,
+    core boolean
+)
+ON COMMIT DROP;
+
+EXECUTE format('COPY corpora_tmp_ FROM %L CSV NULL ''\N''', path || 'corpora.csv');
+
+INSERT INTO corpora (name_short, name_long, core)
+SELECT
+    name_short,
+    name_long,
+    core
+FROM
+    corpora_tmp_;
 
 
 -- texts
@@ -195,7 +48,8 @@ SET CONSTRAINTS All DEFERRED;
 CREATE TEMPORARY TABLE text_ids_tmp_ (
     text_id integer DEFAULT nextval('texts_norm_text_id_seq'),
     identifier text
-);
+)
+ON COMMIT DROP;
 
 CREATE TEMPORARY TABLE texts_tmp_ (
     identifier text,
@@ -210,7 +64,8 @@ CREATE TEMPORARY TABLE texts_tmp_ (
     genre_comment text,
     date text,
     archive text
-);
+)
+ON COMMIT DROP;
 
 EXECUTE format('COPY texts_tmp_ FROM %L CSV NULL ''\N''', path || 'texts.csv');
 
@@ -242,82 +97,54 @@ FROM
     LEFT JOIN proveniences ON (provenience = proveniences.name)
     LEFT JOIN genres ON (genre = genres.name);
 
-DROP TABLE texts_tmp_;
-
-UPDATE pg_index
-SET indisready = TRUE
-WHERE indrelid IN (
-    SELECT oid
-    FROM pg_class
-    WHERE relname = 'texts_norm'
-);
-
-REINDEX TABLE texts_norm;
-
 
 -- transliterations
 
 CREATE TEMPORARY TABLE transliteration_ids_tmp_ (
     transliteration_id integer DEFAULT nextval('transliterations_transliteration_id_seq'),
-    transliteration_identifier text,
-    object text,
-    UNIQUE (transliteration_identifier, object)
-);
+    transliteration_identifier text UNIQUE
+)
+ON COMMIT DROP;
 
 CREATE TEMPORARY TABLE transliterations_tmp_ (
     identifier text,
     transliteration_identifier text,
-    object text,
-    description text
-);
+    corpus_identifier text
+)
+ON COMMIT DROP ;
 
 EXECUTE format('COPY transliterations_tmp_ FROM %L CSV NULL ''\N''', path || 'transliterations.csv');
 
-INSERT INTO transliteration_ids_tmp_ (transliteration_identifier, object)
+INSERT INTO transliteration_ids_tmp_ (transliteration_identifier)
 SELECT
-    transliteration_identifier,
-    object
+    transliteration_identifier
 FROM transliterations_tmp_;
 
-ALTER TABLE transliteration_ids_tmp_ ADD PRIMARY KEY (transliteration_identifier, object);
+ALTER TABLE transliteration_ids_tmp_ ADD PRIMARY KEY (transliteration_identifier);
 
-INSERT INTO transliterations (text_id, transliteration_id, object, description)
+INSERT INTO transliterations (text_id, transliteration_id, corpus_id)
 SELECT
     text_id, 
     transliteration_id, 
-    object,
-    description
+    corpus_id
 FROM
     transliterations_tmp_
     JOIN text_ids_tmp_ USING (identifier)
-    JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
-
-DROP TABLE transliterations_tmp_;
-
-DROP TABLE text_ids_tmp_;
-
-UPDATE pg_index
-SET indisready = TRUE
-WHERE indrelid IN (
-    SELECT oid
-    FROM pg_class
-    WHERE relname = 'transliterations'
-);
-
-REINDEX TABLE transliterations;
+    JOIN transliteration_ids_tmp_ USING (transliteration_identifier)
+    JOIN corpora ON corpus_identifier = name_short;
 
 
 -- compounds
 
 CREATE TEMPORARY TABLE compounds_tmp_ (
     transliteration_identifier text,
-    object text,
     compound_no integer,
     pn_type pn_type,
     language language,
     section text,
     comment text
-);
+)
+ON COMMIT DROP;
 
 EXECUTE format('COPY compounds_tmp_ FROM %L CSV NULL ''\N''', path || 'compounds.csv');
 
@@ -330,30 +157,18 @@ SELECT
     comment
 FROM
     compounds_tmp_
-    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
-
-DROP TABLE compounds_tmp_;
-
-UPDATE pg_index
-SET indisready = TRUE
-WHERE indrelid IN (
-    SELECT oid
-    FROM pg_class
-    WHERE relname = 'compounds'
-);
-
-REINDEX TABLE compounds;
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
 
 
 -- words
 
 CREATE TEMPORARY TABLE words_tmp_ (
     transliteration_identifier text,
-    object text,
     word_no integer,
     compound_no integer,
     capitalized boolean
-);
+)
+ON COMMIT DROP ;
 
 EXECUTE format('COPY words_tmp_ FROM %L CSV  NULL ''\N''', path || 'words.csv');
 
@@ -365,31 +180,45 @@ SELECT
     capitalized
 FROM
     words_tmp_
-    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
 
-DROP TABLE words_tmp_;
 
-UPDATE pg_index
-SET indisready = TRUE
-WHERE indrelid IN (
-    SELECT oid
-    FROM pg_class
-    WHERE relname = 'words'
-);
+-- objects
 
-REINDEX TABLE words;
+CREATE TEMPORARY TABLE objects_tmp_ (
+    transliteration_identifier text,
+    object_no integer,
+    object object_type,
+    object_data text,
+    object_comment text
+)
+ON COMMIT DROP;
+
+EXECUTE format('COPY objects_tmp_ FROM %L CSV  NULL ''\N''', path || 'objects.csv');
+
+INSERT INTO objects 
+SELECT
+    transliteration_id,
+    object_no,
+    object,
+    object_data,
+    object_comment
+FROM
+    objects_tmp_
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
 
 
 -- surfaces
 
 CREATE TEMPORARY TABLE surfaces_tmp_ (
     transliteration_identifier text,
-    object text,
     surface_no integer,
+    object_no integer,
     surface_type surface_type,
     surface_data text,
     surface_comment text
-);
+)
+ON COMMIT DROP;
 
 EXECUTE format('COPY surfaces_tmp_ FROM %L CSV  NULL ''\N''', path || 'surfaces.csv');
 
@@ -399,34 +228,24 @@ SELECT
     surface_no,
     surface_type,
     surface_data,
-    surface_comment
+    surface_comment,
+    object_no
 FROM
     surfaces_tmp_
-    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
 
-DROP TABLE surfaces_tmp_;
-
-UPDATE pg_index
-SET indisready = TRUE
-WHERE indrelid IN (
-    SELECT oid
-    FROM pg_class
-    WHERE relname = 'surfaces'
-);
-
-REINDEX TABLE surfaces;
 
 -- blocks
 
 CREATE TEMPORARY TABLE blocks_tmp_ (
     transliteration_identifier text,
-    object text,
     block_no integer,
     surface_no integer,
     block_type block_type,
     block_data text,
     block_comment text
-);
+)
+ON COMMIT DROP;
 
 EXECUTE format('COPY blocks_tmp_ FROM %L CSV  NULL ''\N''', path || 'blocks.csv');
 
@@ -440,32 +259,20 @@ SELECT
     surface_no
 FROM
     blocks_tmp_
-    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
-
-DROP TABLE blocks_tmp_;
-
-UPDATE pg_index
-SET indisready = TRUE
-WHERE indrelid IN (
-    SELECT oid
-    FROM pg_class
-    WHERE relname = 'blocks'
-);
-
-REINDEX TABLE blocks;
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
 
 
 -- lines
 
 CREATE TEMPORARY TABLE lines_tmp_ (
     transliteration_identifier text,
-    object text,
     line_no integer,
     block_no integer,
     line text,
     comment text,
-    UNIQUE (transliteration_identifier, object, line_no)
-);
+    UNIQUE (transliteration_identifier, line_no)
+)
+ON COMMIT DROP;
 
 EXECUTE format('COPY lines_tmp_ FROM %L CSV  NULL ''\N''', path || 'lines.csv');
 
@@ -478,43 +285,31 @@ SELECT
     comment
 FROM
     lines_tmp_
-    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
-
-DROP TABLE lines_tmp_;
-
-UPDATE pg_index
-SET indisready = TRUE
-WHERE indrelid IN (
-    SELECT oid
-    FROM pg_class
-    WHERE relname = 'lines'
-);
-
-REINDEX TABLE lines;
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
 
 
 -- corpus
 
 CREATE TEMPORARY TABLE corpus_tmp_ (
-        transliteration_identifier text,
-        object text,
-        sign_no integer NOT NULL,
-        line_no integer NOT NULL,
-        word_no integer NOT NULL,
-        value text,
-        sign_spec text,
-        type SIGN_TYPE,
-        indicator boolean,
-        alignment ALIGNMENT,
-        phonographic boolean,
-        condition sign_condition,
-        stem boolean,
-        crits text,
-        comment text,
-        newline boolean,
-        inverted boolean,
-        ligature boolean
-);
+    transliteration_identifier text,
+    sign_no integer NOT NULL,
+    line_no integer NOT NULL,
+    word_no integer NOT NULL,
+    value text,
+    sign_spec text,
+    type SIGN_TYPE,
+    indicator boolean,
+    alignment ALIGNMENT,
+    phonographic boolean,
+    condition sign_condition,
+    stem boolean,
+    crits text,
+    comment text,
+    newline boolean,
+    inverted boolean,
+    ligature boolean
+)
+ON COMMIT DROP;
 
 EXECUTE format('COPY corpus_tmp_ FROM %L CSV NULL ''\N''', path || 'corpus.csv');
 
@@ -538,7 +333,7 @@ SELECT
     ligature
 FROM
     corpus_tmp_
-    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object);
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
 
 INSERT INTO corpus_unencoded
 SELECT
@@ -549,34 +344,22 @@ SELECT
     type
 FROM
     corpus_tmp_
-    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier, object)
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier)
 WHERE
     type = 'value' OR
     type = 'sign' OR
     (type = 'number' AND sign_spec IS NOT NULL);
 
-DROP TABLE corpus_tmp_;
-DROP TABLE transliteration_ids_tmp_;
 
-UPDATE pg_index
-SET indisready = TRUE
-WHERE indrelid IN (
-    SELECT oid
-    FROM pg_class
-    WHERE relname = 'corpus_norm'
-);
-
-REINDEX TABLE corpus_norm;
-
-SET CONSTRAINTS ALL IMMEDIATE;
-
-CLUSTER corpus_norm;
+CALL database_create_indexes ();
 
 COMMIT;
 
-CALL encode_corpus ();
-
 CLUSTER corpus_norm;
+
+--CALL encode_corpus ();
+
+--CLUSTER corpus_norm;
 
 END
 
