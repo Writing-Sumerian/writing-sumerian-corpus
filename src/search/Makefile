@@ -25,12 +25,18 @@ include $(PGXS)
 
 all: build/$(EXTENSION)--$(version).sql
 
-build/$(EXTENSION)--$(version).sql: build/$(EXTENSION)_comp.py sql/$(EXTENSION).sql
+build/$(EXTENSION)--$(version).sql: build/preparse_search.py build/parse_search.py sql/$(EXTENSION).sql
 	@mkdir -p build
-	@py2plpy build/$(EXTENSION)_comp.py build/$(EXTENSION)--$(version).sql
-	@cat sql/$(EXTENSION).sql >> build/$(EXTENSION)--$(version).sql
+	@py2plpy build/preparse_search.py build/preparse_search.sql
+	@py2plpy build/parse_search.py build/parse_search.sql
+	@cat build/preparse_search.sql build/parse_search.sql sql/$(EXTENSION).sql > build/$(EXTENSION)--$(version).sql
 
-build/$(EXTENSION)_comp.py: python/$(EXTENSION).py python/grammar.lark
+build/preparse_search.py: python/preparse_search.py python/grammar_pre.lark
 	@mkdir -p build
-	@csplit -n 1 -s --suppress-matched --elide-empty-files -f build/$(EXTENSION) python/$(EXTENSION).py /{{grammar}}/ {*}
-	@cat build/$(EXTENSION)0 python/grammar.lark build/$(EXTENSION)1 > build/$(EXTENSION)_comp.py
+	@csplit -n 1 -s --suppress-matched --elide-empty-files -f build/$(EXTENSION) python/preparse_search.py /{{grammar}}/ {*}
+	@cat build/$(EXTENSION)0 python/grammar_pre.lark build/$(EXTENSION)1 > build/preparse_search.py
+
+build/parse_search.py: python/parse_search.py python/grammar.lark
+	@mkdir -p build
+	@csplit -n 1 -s --suppress-matched --elide-empty-files -f build/$(EXTENSION) python/parse_search.py /{{grammar}}/ {*}
+	@cat build/$(EXTENSION)0 python/grammar.lark build/$(EXTENSION)1 > build/parse_search.py

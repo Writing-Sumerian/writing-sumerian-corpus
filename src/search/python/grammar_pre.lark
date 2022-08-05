@@ -1,0 +1,69 @@
+start       : ( pseudochar _break )? _unit ( sep _unit )* ( _break pseudochar )?
+_unit       : line
+            | paren
+            | alt
+            | _part
+
+//TODO: disallow nested lines?
+line        : "[" ( paren | char | alt ) ( sep ( paren | char | alt ) )* "]"
+paren       : "(" _unit ( sep _unit )* ")"
+alt         : ( line | paren | _part ) ( "|" ( line | paren | _part ) )+
+
+_part       : ( lindicator nullsep )* char ( nullsep rindicator )* 
+            | _indicator+
+lindicator  : _indicator
+rindicator  : _indicator 
+_indicator  : det 
+            | pc
+det         : "{" char ( sep char )* "}"
+pc          : "<" char ( sep char )* ">"
+
+char        : VALUE signspec?       -> value
+            | signt signspec?       -> sign
+            | PATTERN signspec?     -> pattern
+            | _SIGNX                -> signx
+            | X signspec?           -> valuex
+            | _N                    -> n
+signspec    : "(" signt ( "." signt )* ")"
+pseudochar  : 
+
+sep         : ( _SPACE | _break )+ 
+            | ( _SPACE | _break )* ellipsis ( _SPACE | _break )*
+            | _SPACE? colon _SPACE?
+            | ( ellipsis | colon )? con 
+            | con ( ellipsis | colon ) con?
+
+nullsep     : _break*
+            | _break* ellipsis _break*
+            | colon
+
+_break      : wordbreak 
+            | linebreak
+
+con         : _CON
+ellipsis    : _ELLIPSIS
+colon       : ":"
+wordbreak   : ";"
+linebreak   : _NL
+
+signt       : SIMPLESIGN MOD* ( ( SIGNCON | xcon ) ( signt | parensignt ) )*
+            | parensignt MOD+ ( ( SIGNCON | xcon ) ( signt | parensignt ) )*
+            | parensignt ( ( SIGNCON | xcon ) ( signt | parensignt ) )+
+parensignt  : "(" signt ( "." signt )* ")"
+xcon        : X
+
+PATTERN.5   : /\/[^\/]*\//
+VALUE.3     : /[abdegĝhḫijklmnpqrsšṣtṭuwyz’][abdegĝhḫijklmnpqrsšṣtṭuwyz’]+[0-9xX]*/
+            | /[aeiou][0-9xX]*/
+            | "d"
+SIMPLESIGN.3: /[ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’][ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’]+[0-9]*/
+            | /[AEIOU][0-9]*/ 
+_SIGNX.2    : "X"
+X.2         : "x"
+_N.2        : /[Nn]/
+_ELLIPSIS.2 : "…"|"..."
+_CON.1      : /[.-]/
+_SPACE      : /[\t \f\n]+/
+_NL         : "//"
+MOD         : "@" ( /[tgšnkzicdfvabx]/ | "90" | "45" )
+SIGNCON     : /[×%&@]/

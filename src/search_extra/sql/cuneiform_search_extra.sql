@@ -2,8 +2,10 @@ CREATE MATERIALIZED VIEW corpus_search AS (
 SELECT * FROM (
   SELECT 
     corpus_norm.transliteration_id,
+    objects.object_no,
+    corpus_norm.sign_no,
     cun_position(
-      corpus_norm.sign_no,
+      rank() OVER (PARTITION BY transliteration_id, object_no ORDER BY sign_no ASC),
       a.pos::integer - 1, 
       rank() OVER (PARTITION BY transliteration_id, sign_no ORDER BY pos DESC) = 1
       ) AS position,
@@ -18,13 +20,19 @@ SELECT * FROM (
     (corpus_norm.properties).alignment,
     (corpus_norm.properties).phonographic
   FROM corpus_norm
+    LEFT JOIN lines USING (transliteration_id, line_no)
+    LEFT JOIN blocks USING (transliteration_id, block_no)
+    LEFT JOIN surfaces USING (transliteration_id, surface_no)
+    LEFT JOIN objects USING (transliteration_id, object_no)
     JOIN sign_variants USING (sign_variant_id)
     LEFT JOIN LATERAL unnest(grapheme_ids, glyph_ids) WITH ORDINALITY a(grapheme_id, glyph_id, pos) ON TRUE
   UNION ALL
   SELECT
     corpus_norm.transliteration_id,
+    objects.object_no,
+    corpus_norm.sign_no,
     cun_position(
-      corpus_norm.sign_no,
+      rank() OVER (PARTITION BY transliteration_id, object_no ORDER BY sign_no ASC),
       0, 
       TRUE) AS position,
     corpus_norm.word_no,
@@ -38,12 +46,68 @@ SELECT * FROM (
     (corpus_norm.properties).alignment,
     (corpus_norm.properties).phonographic
   FROM corpus_norm
+    LEFT JOIN lines USING (transliteration_id, line_no)
+    LEFT JOIN blocks USING (transliteration_id, block_no)
+    LEFT JOIN surfaces USING (transliteration_id, surface_no)
+    LEFT JOIN objects USING (transliteration_id, object_no)
   WHERE (corpus_norm.properties).type != 'punctuation' 
-    AND (corpus_norm.properties).type != 'damage')
-  a
+    AND (corpus_norm.properties).type != 'damage'
   UNION ALL
-  SELECT
-    NULL AS transliteration_id,
+  SELECT                      -- pseudo first row
+    transliteration_id,
+    object_no,
+    NULL AS sign_no,
+    cun_position(0, 0, TRUE) AS position,
+    -1 AS word_no,
+    -1 AS line_no,
+    NULL AS value_id,
+    NULL AS sign_variant_id,
+    NULL AS grapheme_id,
+    NULL AS glyph_id,
+    NULL AS type,
+    NULL AS indicator,
+    NULL AS alignment,
+    NULL AS phonographic
+  FROM corpus_norm
+    LEFT JOIN lines USING (transliteration_id, line_no)
+    LEFT JOIN blocks USING (transliteration_id, block_no)
+    LEFT JOIN surfaces USING (transliteration_id, surface_no)
+    LEFT JOIN objects USING (transliteration_id, object_no)
+  GROUP BY 
+    transliteration_id,
+    object_no
+  UNION ALL
+  SELECT                      -- pseudo final row
+    transliteration_id,
+    object_no,
+    NULL AS sign_no,
+    cun_position(
+      count(*)+1,
+      0,
+      TRUE) AS position,
+    max(word_no)+1 AS word_no,
+    max(line_no)+1 AS line_no,
+    NULL AS value_id,
+    NULL AS sign_variant_id,
+    NULL AS grapheme_id,
+    NULL AS glyph_id,
+    NULL AS type,
+    NULL AS indicator,
+    NULL AS alignment,
+    NULL AS phonographic
+  FROM corpus_norm
+    LEFT JOIN lines USING (transliteration_id, line_no)
+    LEFT JOIN blocks USING (transliteration_id, block_no)
+    LEFT JOIN surfaces USING (transliteration_id, surface_no)
+    LEFT JOIN objects USING (transliteration_id, object_no)
+  GROUP BY 
+    transliteration_id,
+    object_no
+  UNION ALL
+  SELECT                      -- placeholder row
+    transliteration_id,
+    object_no,
+    NULL AS sign_no,
     NULL AS position,
     NULL AS word_no,
     NULL AS line_no,
@@ -55,7 +119,16 @@ SELECT * FROM (
     NULL AS indicator,
     NULL AS alignment,
     NULL AS phonographic
-ORDER BY transliteration_id, position);
+  FROM corpus_norm
+    LEFT JOIN lines USING (transliteration_id, line_no)
+    LEFT JOIN blocks USING (transliteration_id, block_no)
+    LEFT JOIN surfaces USING (transliteration_id, surface_no)
+    LEFT JOIN objects USING (transliteration_id, object_no)
+  GROUP BY 
+    transliteration_id,
+    object_no)
+  a
+ORDER BY transliteration_id, object_no, position);
 
 CREATE INDEX ON corpus_search (transliteration_id);
 CREATE INDEX ON corpus_search (value_id) WHERE value_id IS NOT NULL;
@@ -106,8 +179,8 @@ CREATE OR REPLACE FUNCTION public.search (
   COST 100 STABLE ROWS 1000
   AS $BODY$
 BEGIN
-  RETURN QUERY EXECUTE 'WITH r AS MATERIALIZED (' || parse_search (search_term, 'corpus_search', ARRAY['transliteration_id']) || ')'
-    'SELECT r.* FROM r JOIN transliterations USING (transliteration_id) JOIN texts_norm USING (TEXT_ID)'
+  RETURN QUERY EXECUTE 'WITH r AS MATERIALIZED (' || parse_search (search_term, 'corpus_search', ARRAY['transliteration_id', 'object_no']) || ')'
+    'SELECT r.transliteration_id, r.signs FROM r JOIN transliterations USING (transliteration_id) JOIN texts_norm USING (text_id)'
     'WHERE (cardinality($1) = 0 OR period_id = ANY($1)) AND'
           '(cardinality($2) = 0 OR provenience_id = ANY($2)) AND'
           '(cardinality($3) = 0 OR genre_id = ANY($3))'

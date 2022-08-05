@@ -379,9 +379,63 @@ Datum get_sign_nos(PG_FUNCTION_ARGS)
     for(int i = 0; i < n; i++)
     {
         const int32 v = (int32)sign_no(DatumGetUInt32(vals[i]));
-        if(!n_new || DatumGetInt32(vals_new[n_new-1] != v))
+        if(!n_new || DatumGetInt32(vals_new[n_new-1]) != v)
             vals_new[n_new++] = Int32GetDatum(v);
     }
+
+    get_typlenbyvalalign(INT4OID, &typlen, &typbyval, &typalign);
+    result = construct_array(vals_new, n_new, INT4OID, typlen, typbyval, typalign);
+
+    PG_RETURN_ARRAYTYPE_P(result);
+}
+
+Datum sort_uniq_remove_null(PG_FUNCTION_ARGS)
+{
+    ArrayType* array;
+    ArrayType* result;
+    Oid element_type;
+    bool typbyval;
+    char typalign;
+    int16 typlen;
+
+    Datum* vals;
+    Datum* vals_new;
+    bool* nulls;
+    int nargs;
+    int n;
+    int n_new = 0;
+
+    array = PG_GETARG_ARRAYTYPE_P(0);
+    element_type = ARR_ELEMTYPE(array);
+
+    get_typlenbyvalalign(element_type, &typlen, &typbyval, &typalign);
+    deconstruct_array(array, element_type, typlen, typbyval,
+                      typalign, &vals, &nulls, &nargs);
+           
+    if(!nargs)
+        PG_RETURN_NULL();
+    n = nargs-1;
+    while(nulls[n] && n--);
+    if(n < 0)
+        PG_RETURN_NULL();
+
+    for(int i = 0; i < n; i++)
+    {
+        if(nulls[i])
+        {
+            vals[i] = vals[n];
+            nulls[i] = false;
+            while(n && nulls[--n]);
+        }
+    }
+    ++n;
+
+    qsort(vals, n, sizeof(Datum), cmp);
+
+    vals_new = (Datum*)palloc(n*sizeof(Datum));
+    for(int i = 0; i < n; i++)
+        if(!n_new || vals_new[n_new-1] != vals[i])
+            vals_new[n_new++] = Int32GetDatum(vals[i]);
 
     get_typlenbyvalalign(INT4OID, &typlen, &typbyval, &typalign);
     result = construct_array(vals_new, n_new, INT4OID, typlen, typbyval, typalign);

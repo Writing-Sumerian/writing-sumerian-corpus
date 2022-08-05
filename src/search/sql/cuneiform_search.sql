@@ -243,6 +243,13 @@ CREATE OR REPLACE FUNCTION get_sign_nos (VARIADIC cun_position[])
     IMMUTABLE
     COST 10;
 
+CREATE OR REPLACE FUNCTION sort_uniq_remove_null (VARIADIC integer[])
+    RETURNS int[]
+    AS 'cuneiform_search', 'sort_uniq_remove_null'
+    LANGUAGE C
+    IMMUTABLE
+    COST 10;
+
 
 --CREATE VIEW signs_search AS
 --SELECT
