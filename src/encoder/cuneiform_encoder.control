@@ -1,0 +1,5 @@
+comment = 'Encode cuneiform signs and values'
+default_version = '0.0.1'
+relocatable = false
+module_pathname = '$libdir/cuneiform_encoder'
+requires = 'cuneiform_sign_properties, cuneiform_signlist'
