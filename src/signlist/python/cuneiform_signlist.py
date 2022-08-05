@@ -19,7 +19,8 @@ def parse_sign(sign:str) -> jsonb:
                     if c == '@' and i+1 < len(sign) and sign[i+1] in 'tgšnkzicdfvabx419':
                         continue
                     return {'op': c.replace('+', '.'), 'vals': [parse(sign[:i]), parse(sign[i+1:])]}
-        if m := re.match(r'(.*)@([tgšnkzicdfvabx]|45|90|180)$', sign):
+        m = re.match(r'(.*)@([tgšnkzicdfvabx]|45|90|180)$', sign)
+        if m:
             return {'op': m.group(2), 'vals': [parse(m.group(1))]}
         if sign.startswith('(') and sign.endswith(')'):
             return parse(sign[1:-1])
