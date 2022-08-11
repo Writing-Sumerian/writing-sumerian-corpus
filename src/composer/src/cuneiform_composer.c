@@ -259,6 +259,8 @@ static char* close_html(char* s, int changes, const State* state)
         s = cun_strcpy(s, "</span>");
     if(changes >= TYPE && (state->type != TYPE_VALUE || state->unknown_reading) && state->type != TYPE_PUNCTUATION)
         s = cun_strcpy(s, "</span>");
+    if(changes >= PHONOGRAPHIC && !state->phonographic_null && (state->phonographic == (state->language == LANGUAGE_SUMERIAN)))
+        s = cun_strcpy(s, "</span>");
     if(changes >= PHONOGRAPHIC && state->phonographic && !state->phonographic_null)
         s = cun_strcpy(s, "</span>");
     if(changes >= HIGHLIGHT && state->highlight)
@@ -302,8 +304,13 @@ static char* open_html(char* s, int changes, const State* state)
         s = cun_strcpy(s, "<span class='stem'>");
     if(changes >= HIGHLIGHT && state->highlight)
         s = cun_strcpy(s, "<span class='highlight'>");
-    if(changes >= PHONOGRAPHIC && state->phonographic && !state->phonographic_null)
-        s = cun_strcpy(s, "<span class='phonographic'>");
+    if(changes >= PHONOGRAPHIC && !state->phonographic_null)
+    {
+        if(state->phonographic && state->language == LANGUAGE_SUMERIAN)
+            s = cun_strcpy(s, "<span class='phonographic'>");
+        else if(!state->phonographic && state->language != LANGUAGE_SUMERIAN)
+            s = cun_strcpy(s, "<span class='logographic'>");
+    }
     if(changes >= TYPE && (state->type != TYPE_VALUE || state->unknown_reading)  && state->type != TYPE_PUNCTUATION)
     {
         if(state->type == TYPE_NUMBER)
