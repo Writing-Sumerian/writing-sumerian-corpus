@@ -1,10 +1,10 @@
+from py2plpy import sql_properties
+
 class jsonb:
     pass
 
-
+@sql_properties(cost=100, volatility='immutable', strict=True, transform=[jsonb])
 def parse_sign(sign:str) -> jsonb:
-    """COST 100 IMMUTABLE STRICT TRANSFORM FOR TYPE jsonb"""
-
     import re
 
     def parse(sign):
@@ -29,9 +29,8 @@ def parse_sign(sign:str) -> jsonb:
     return parse(sign)
 
 
-
+@sql_properties(cost=100, volatility='immutable', strict=True, transform=[jsonb])
 def compose_sign(tree:jsonb) -> str:
-    """COST 100 IMMUTABLE STRICT TRANSFORM FOR TYPE jsonb"""
 
     precedence = {'.': 0, '×': 1, '&': 2, '%': 3, '@': 3, '+': 4}
 
@@ -53,9 +52,8 @@ def compose_sign(tree:jsonb) -> str:
     return compose(tree)
 
 
-
+@sql_properties(cost=100, volatility='immutable', strict=True, transform=[jsonb])
 def normalize_sign(tree:jsonb) -> jsonb:
-    """COST 100 IMMUTABLE STRICT TRANSFORM FOR TYPE jsonb"""
 
     precedence = {'.': 0, '×': 1, '&': 2, '%': 3, '@': 3, '+': 4}
 
@@ -89,9 +87,8 @@ def normalize_sign(tree:jsonb) -> jsonb:
     return tree
 
 
-
+@sql_properties(cost=100, volatility='immutable', strict=True, transform=[jsonb])
 def match_sign(tree:jsonb, pattern:jsonb) -> bool:
-    """COST 100 IMMUTABLE STRICT TRANSFORM FOR TYPE jsonb"""
 
     precedence = {'.': 0, '×': 1, '&': 2, '%': 3, '@': 3, '+': 4}
 
