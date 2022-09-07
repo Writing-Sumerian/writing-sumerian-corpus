@@ -12,6 +12,7 @@ CREATE TABLE corpus_unencoded (
 
 CREATE INDEX ON corpus_unencoded (type, (sign_spec IS null));
 
+CALL create_corpus_encoder('corpus_encoder', 'corpus_unencoded', '{transliteration_id}');
 
 
 CREATE OR REPLACE PROCEDURE load_corpus (path text)
@@ -357,9 +358,23 @@ COMMIT;
 
 CLUSTER corpus_norm;
 
---CALL encode_corpus ();
+UPDATE corpus_norm SET 
+    value_id = corpus_encoder.value_id, 
+    sign_variant_id = corpus_encoder.sign_variant_id
+FROM
+    corpus_encoder
+WHERE
+    corpus_norm.transliteration_id = corpus_encoder.transliteration_id AND
+    corpus_norm.sign_no = corpus_encoder.sign_no;
 
---CLUSTER corpus_norm;
+DELETE FROM corpus_unencoded 
+USING corpus_norm 
+WHERE 
+    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
+    corpus_norm.sign_no = corpus_unencoded.sign_no AND
+    corpus_norm.sign_variant_id IS NOT NULL;
+
+CLUSTER corpus_norm;
 
 END
 
