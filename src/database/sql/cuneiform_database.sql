@@ -49,38 +49,12 @@ CREATE TABLE sections (
 
 -- Corpus
 
-CREATE TABLE compounds (
-    transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
-    compound_no integer,
-    pn_type pn_type,
-    language LANGUAGE,
-    compound_comment text,
-    PRIMARY KEY (transliteration_id, compound_no)
-);
-
-CREATE TABLE words (
-    transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
-    word_no integer,
-    compound_no integer NOT NULL,
-    capitalized boolean,
-    PRIMARY KEY (transliteration_id, word_no),
-    FOREIGN KEY (transliteration_id, compound_no) REFERENCES compounds (transliteration_id, compound_no) DEFERRABLE INITIALLY IMMEDIATE
-);
 
 CREATE TYPE object_type AS ENUM (
     'tablet',
     'envelope',
     'seal',
     'object'
-);
-
-CREATE TABLE objects (
-    transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
-    object_no integer,
-    object_type object_type NOT NULL,
-    object_data text,
-    object_comment text,
-    PRIMARY KEY (transliteration_id, object_no)
 );
 
 CREATE TYPE surface_type AS ENUM (
@@ -95,17 +69,6 @@ CREATE TYPE surface_type AS ENUM (
     'surface'
 );
 
-CREATE TABLE surfaces (
-    transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
-    surface_no integer,
-    surface_type surface_type NOT NULL,
-    surface_data text,
-    surface_comment text,
-    object_no integer NOT NULL,
-    PRIMARY KEY (transliteration_id, surface_no),
-    FOREIGN KEY (transliteration_id, object_no) REFERENCES objects (transliteration_id, object_no) DEFERRABLE INITIALLY IMMEDIATE
-);
-
 CREATE TYPE block_type AS ENUM (
     'column',
     'summary',
@@ -116,50 +79,138 @@ CREATE TYPE block_type AS ENUM (
     'block'
 );
 
-CREATE TABLE blocks (
-    transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
-    block_no integer,
-    block_type block_type NOT NULL,
-    block_data text,
-    block_comment text,
-    surface_no integer NOT NULL,
-    PRIMARY KEY (transliteration_id, block_no),
-    FOREIGN KEY (transliteration_id, surface_no) REFERENCES surfaces (transliteration_id, surface_no) DEFERRABLE INITIALLY IMMEDIATE
-);
 
-CREATE TABLE lines (
-    transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
-    line_no integer,
-    block_no integer NOT NULL,
-    line text,
-    line_comment text,
-    PRIMARY KEY (transliteration_id, line_no),
-    FOREIGN KEY (transliteration_id, block_no) REFERENCES blocks (transliteration_id, block_no) DEFERRABLE INITIALLY IMMEDIATE
-);
+CREATE OR REPLACE PROCEDURE create_corpus (schema text)
+    LANGUAGE PLPGSQL
+    AS 
+$BODY$
 
-CREATE TABLE corpus_norm (
-    transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
-    sign_no integer NOT NULL,
-    line_no integer NOT NULL,
-    word_no integer NOT NULL,
-    orig_value text,
-    value_id integer REFERENCES values DEFERRABLE INITIALLY IMMEDIATE,
-    sign_variant_id integer REFERENCES sign_variants DEFERRABLE INITIALLY IMMEDIATE,
-    number text,
-    properties SIGN_PROPERTIES NOT NULL,
-    stem boolean,
-    condition sign_condition NOT NULL,
-    crits text,
-    comment text,
-    newline boolean NOT NULL,
-    inverted boolean NOT NULL,
-    ligature boolean NOT NULL,
-    PRIMARY KEY (transliteration_id, sign_no),
-    FOREIGN KEY (transliteration_id, word_no) REFERENCES public.words (transliteration_id, word_no) DEFERRABLE INITIALLY IMMEDIATE,
-    FOREIGN KEY (transliteration_id, line_no) REFERENCES public.lines (transliteration_id, line_no) DEFERRABLE INITIALLY IMMEDIATE
-);
+BEGIN
 
-CLUSTER corpus_norm USING corpus_norm_pkey;
+EXECUTE format(
+    $$
+    CREATE TABLE %1$I.compounds (
+        transliteration_id integer,
+        compound_no integer,
+        pn_type pn_type,
+        language LANGUAGE,
+        compound_comment text,
+        PRIMARY KEY (transliteration_id, compound_no)
+    )
+    $$,
+    schema);
+
+EXECUTE format(
+    $$
+    CREATE TABLE %1$I.words (
+        transliteration_id integer,
+        word_no integer,
+        compound_no integer NOT NULL,
+        capitalized boolean,
+        PRIMARY KEY (transliteration_id, word_no),
+        FOREIGN KEY (transliteration_id, compound_no) REFERENCES %1$I.compounds (transliteration_id, compound_no) DEFERRABLE INITIALLY IMMEDIATE
+    )
+    $$,
+    schema);
+
+EXECUTE format(
+    $$
+    CREATE TABLE %1$I.objects (
+        transliteration_id integer,
+        object_no integer,
+        object_type object_type NOT NULL,
+        object_data text,
+        object_comment text,
+        PRIMARY KEY (transliteration_id, object_no)
+    )
+    $$,
+    schema);
+
+EXECUTE format(
+    $$
+    CREATE TABLE %1$I.surfaces (
+        transliteration_id integer,
+        surface_no integer,
+        object_no integer NOT NULL,
+        surface_type surface_type NOT NULL,
+        surface_data text,
+        surface_comment text,
+        PRIMARY KEY (transliteration_id, surface_no),
+        FOREIGN KEY (transliteration_id, object_no) REFERENCES %1$I.objects (transliteration_id, object_no) DEFERRABLE INITIALLY IMMEDIATE
+    )
+    $$,
+    schema);
+
+EXECUTE format(
+    $$
+    CREATE TABLE %1$I.blocks (
+        transliteration_id integer,
+        block_no integer,
+        surface_no integer NOT NULL,
+        block_type block_type NOT NULL,
+        block_data text,
+        block_comment text,
+        PRIMARY KEY (transliteration_id, block_no),
+        FOREIGN KEY (transliteration_id, surface_no) REFERENCES %1$I.surfaces (transliteration_id, surface_no) DEFERRABLE INITIALLY IMMEDIATE
+    )
+    $$,
+    schema);
+
+EXECUTE format(
+    $$
+    CREATE TABLE %1$I.lines (
+        transliteration_id integer,
+        line_no integer,
+        block_no integer NOT NULL,
+        line text,
+        line_comment text,
+        PRIMARY KEY (transliteration_id, line_no),
+        FOREIGN KEY (transliteration_id, block_no) REFERENCES %1$I.blocks (transliteration_id, block_no) DEFERRABLE INITIALLY IMMEDIATE
+    )
+    $$,
+    schema);
+
+EXECUTE format(
+    $$
+    CREATE TABLE %1$I.corpus (
+        transliteration_id integer,
+        sign_no integer NOT NULL,
+        line_no integer NOT NULL,
+        word_no integer NOT NULL,
+        orig_value text,
+        value_id integer REFERENCES values DEFERRABLE INITIALLY IMMEDIATE,
+        sign_variant_id integer REFERENCES sign_variants DEFERRABLE INITIALLY IMMEDIATE,
+        number text,
+        properties SIGN_PROPERTIES NOT NULL,
+        stem boolean,
+        condition sign_condition NOT NULL,
+        crits text,
+        comment text,
+        newline boolean NOT NULL,
+        inverted boolean NOT NULL,
+        ligature boolean NOT NULL,
+        PRIMARY KEY (transliteration_id, sign_no),
+        FOREIGN KEY (transliteration_id, word_no) REFERENCES %1$I.words (transliteration_id, word_no) DEFERRABLE INITIALLY IMMEDIATE,
+        FOREIGN KEY (transliteration_id, line_no) REFERENCES %1$I.lines (transliteration_id, line_no) DEFERRABLE INITIALLY IMMEDIATE
+    )
+    $$,
+    schema);
+
+END;
+
+$BODY$;
+
+CALL create_corpus('@extschema@');
+
+ALTER TABLE compounds ADD FOREIGN KEY (transliteration_id) REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE words ADD FOREIGN KEY (transliteration_id) REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE objects ADD FOREIGN KEY (transliteration_id) REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE surfaces ADD FOREIGN KEY (transliteration_id) REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE blocks ADD FOREIGN KEY (transliteration_id) REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE lines ADD FOREIGN KEY (transliteration_id) REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE corpus ADD FOREIGN KEY (transliteration_id) REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE;
+
+CLUSTER corpus USING corpus_pkey;
 
 
 -- Views
@@ -175,18 +226,6 @@ FROM
     LEFT JOIN periods USING (period_id)
     LEFT JOIN proveniences USING (provenience_id)
     LEFT JOIN genres USING (genre_id);
-
-CREATE VIEW corpus AS
-SELECT
-    *
-FROM
-    corpus_norm
-    LEFT JOIN words USING (transliteration_id, word_no)
-    LEFT JOIN compounds USING (transliteration_id, compound_no)
-    LEFT JOIN lines USING (transliteration_id, line_no)
-    LEFT JOIN sign_variants_text USING (sign_variant_id)
-    LEFT JOIN (SELECT value_id, main_variant_id AS value_variant_id, phonographic FROM values) _ USING (value_id)
-    LEFT JOIN value_variants USING (value_id, value_variant_id);
 
 
 -- Performance

@@ -1,25 +1,25 @@
 CREATE MATERIALIZED VIEW corpus_search AS (
 SELECT * FROM (
   SELECT 
-    corpus_norm.transliteration_id,
+    corpus.transliteration_id,
     objects.object_no,
-    corpus_norm.sign_no,
+    corpus.sign_no,
     cun_position(
       rank() OVER (PARTITION BY transliteration_id, object_no ORDER BY sign_no ASC),
       a.pos::integer - 1, 
       rank() OVER (PARTITION BY transliteration_id, sign_no ORDER BY pos DESC) = 1
       ) AS position,
-    corpus_norm.word_no,
-    corpus_norm.line_no,
+    corpus.word_no,
+    corpus.line_no,
     NULL AS value_id,
     NULL AS sign_variant_id,
     grapheme_id,
     glyph_id,
-    (corpus_norm.properties).type,
-    (corpus_norm.properties).indicator,
-    (corpus_norm.properties).alignment,
-    (corpus_norm.properties).phonographic
-  FROM corpus_norm
+    (corpus.properties).type,
+    (corpus.properties).indicator,
+    (corpus.properties).alignment,
+    (corpus.properties).phonographic
+  FROM corpus
     LEFT JOIN lines USING (transliteration_id, line_no)
     LEFT JOIN blocks USING (transliteration_id, block_no)
     LEFT JOIN surfaces USING (transliteration_id, surface_no)
@@ -28,30 +28,30 @@ SELECT * FROM (
     LEFT JOIN LATERAL unnest(grapheme_ids, glyph_ids) WITH ORDINALITY a(grapheme_id, glyph_id, pos) ON TRUE
   UNION ALL
   SELECT
-    corpus_norm.transliteration_id,
+    corpus.transliteration_id,
     objects.object_no,
-    corpus_norm.sign_no,
+    corpus.sign_no,
     cun_position(
       rank() OVER (PARTITION BY transliteration_id, object_no ORDER BY sign_no ASC),
       0, 
       TRUE) AS position,
-    corpus_norm.word_no,
-    corpus_norm.line_no,
-    corpus_norm.value_id,
-    corpus_norm.sign_variant_id,
+    corpus.word_no,
+    corpus.line_no,
+    corpus.value_id,
+    corpus.sign_variant_id,
     NULL AS grapheme_id,
     NULL AS glyph_id,
-    (corpus_norm.properties).type,
-    (corpus_norm.properties).indicator,
-    (corpus_norm.properties).alignment,
-    (corpus_norm.properties).phonographic
-  FROM corpus_norm
+    (corpus.properties).type,
+    (corpus.properties).indicator,
+    (corpus.properties).alignment,
+    (corpus.properties).phonographic
+  FROM corpus
     LEFT JOIN lines USING (transliteration_id, line_no)
     LEFT JOIN blocks USING (transliteration_id, block_no)
     LEFT JOIN surfaces USING (transliteration_id, surface_no)
     LEFT JOIN objects USING (transliteration_id, object_no)
-  WHERE (corpus_norm.properties).type != 'punctuation' 
-    AND (corpus_norm.properties).type != 'damage'
+  WHERE (corpus.properties).type != 'punctuation' 
+    AND (corpus.properties).type != 'damage'
   UNION ALL
   SELECT                      -- pseudo first row
     transliteration_id,
@@ -68,7 +68,7 @@ SELECT * FROM (
     NULL AS indicator,
     NULL AS alignment,
     NULL AS phonographic
-  FROM corpus_norm
+  FROM corpus
     LEFT JOIN lines USING (transliteration_id, line_no)
     LEFT JOIN blocks USING (transliteration_id, block_no)
     LEFT JOIN surfaces USING (transliteration_id, surface_no)
@@ -95,7 +95,7 @@ SELECT * FROM (
     NULL AS indicator,
     NULL AS alignment,
     NULL AS phonographic
-  FROM corpus_norm
+  FROM corpus
     LEFT JOIN lines USING (transliteration_id, line_no)
     LEFT JOIN blocks USING (transliteration_id, block_no)
     LEFT JOIN surfaces USING (transliteration_id, surface_no)
@@ -119,7 +119,7 @@ SELECT * FROM (
     NULL AS indicator,
     NULL AS alignment,
     NULL AS phonographic
-  FROM corpus_norm
+  FROM corpus
     LEFT JOIN lines USING (transliteration_id, line_no)
     LEFT JOIN blocks USING (transliteration_id, block_no)
     LEFT JOIN surfaces USING (transliteration_id, surface_no)
@@ -152,7 +152,7 @@ SELECT DISTINCT
   period_id,
   provenience_id,
   genre_id
-FROM corpus_norm
+FROM corpus
   JOIN transliterations USING (transliteration_id)
   JOIN texts_norm USING (text_id);
  
@@ -162,7 +162,7 @@ SELECT DISTINCT
   period_id,
   provenience_id,
   genre_id
-FROM corpus_norm
+FROM corpus
   JOIN transliterations USING (transliteration_id)
   JOIN texts_norm USING (text_id);
 
@@ -199,8 +199,7 @@ CREATE OR REPLACE FUNCTION public.search_signs_clean (search_term text)
   AS $BODY$
   SELECT
     transliteration_id,
-    (cun_agg (COALESCE(value, sign, placeholder((properties).type)), value IS NULL, sign_no, word_no, compound_no, 0, properties, stem, 'intact',
-      LANGUAGE, FALSE, FALSE, NULL, NULL, NULL, FALSE ORDER BY sign_no))[1],
+    (cun_agg (value, sign, variant_type, sign_no, word_no, compound_no, 0, properties, stem, 'intact', LANGUAGE, FALSE, FALSE, NULL, NULL, NULL, FALSE ORDER BY sign_no))[1],
     signs
   FROM (
     SELECT
@@ -210,7 +209,7 @@ CREATE OR REPLACE FUNCTION public.search_signs_clean (search_term text)
       UNNEST(signs) AS sign_no
     FROM
       search (search_term)) a
-  JOIN corpus USING (transliteration_id, sign_no)
+  JOIN corpus_code_clean USING (transliteration_id, sign_no)
 GROUP BY
   row_number,
   signs,
@@ -253,18 +252,17 @@ found_words AS (
     row_number
 )
 SELECT
-  corpus.transliteration_id,
-  (cun_agg (COALESCE(value, sign, placeholder((properties).type)), value IS NULL, sign_no, corpus.word_no, compound_no, 0, properties, stem, 'intact',
-    LANGUAGE, FALSE, FALSE, '', NULL, NULL, FALSE ORDER BY sign_no))[1]
+  corpus_code_clean.transliteration_id,
+  (cun_agg (value, sign, variant_type, sign_no, corpus_code_clean.word_no, compound_no, 0, properties, stem, 'intact', LANGUAGE, FALSE, FALSE, '', NULL, NULL, FALSE ORDER BY sign_no))[1]
 FROM
   found_words
-  JOIN corpus ON found_words.transliteration_id = corpus.transliteration_id
+  JOIN corpus_code_clean ON found_words.transliteration_id = corpus_code_clean.transliteration_id
     AND word_no = ANY (word_nos)
 GROUP BY
-  corpus.transliteration_id,
+  corpus_code_clean.transliteration_id,
   row_number
 ORDER BY
-  corpus.transliteration_id
+  corpus_code_clean.transliteration_id
 $BODY$;
 
 CREATE OR REPLACE FUNCTION public.search_lines (search_term text)
@@ -290,12 +288,11 @@ CREATE OR REPLACE FUNCTION public.search_lines (search_term text)
     JOIN corpus USING (transliteration_id, sign_no))
 SELECT
   transliteration_id,
-  array_to_string( cun_agg (COALESCE(value, sign, orig_value), value IS NULL, sign_no, word_no, compound_no, line_no, properties, stem, condition,
-    LANGUAGE, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no), '\n'),
+  array_to_string(cun_agg(value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, LANGUAGE, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no), '\n'),
   line_no
 FROM
   found_lines
-  JOIN corpus USING (transliteration_id, line_no)
+  JOIN corpus_code USING (transliteration_id, line_no)
 GROUP BY
   row_number,
   transliteration_id,
@@ -327,12 +324,11 @@ CREATE OR REPLACE FUNCTION public.search_lines_html (search_term text)
     JOIN corpus USING (transliteration_id, sign_no))
 SELECT
   transliteration_id,
-  array_to_string( cun_agg_html (COALESCE(mark_index_html(value), mark_index_html(sign), orig_value), value IS NULL, sign_no, word_no, compound_no, line_no, properties, stem, condition,
-    LANGUAGE, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no), '<br/>'),
+  array_to_string(cun_agg_html(value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, LANGUAGE, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no), '<br/>'),
   line_no
 FROM
   found_lines
-  JOIN corpus USING (transliteration_id, line_no)
+  JOIN corpus_html USING (transliteration_id, line_no)
 GROUP BY
   row_number,
   transliteration_id,

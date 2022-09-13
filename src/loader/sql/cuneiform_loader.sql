@@ -227,10 +227,10 @@ INSERT INTO surfaces
 SELECT
     transliteration_id,
     surface_no,
+    object_no,
     surface_type,
     surface_data,
-    surface_comment,
-    object_no
+    surface_comment
 FROM
     surfaces_tmp_
     LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
@@ -254,10 +254,10 @@ INSERT INTO blocks
 SELECT
     transliteration_id,
     block_no,
+    surface_no,
     block_type,
     block_data,
-    block_comment,
-    surface_no
+    block_comment
 FROM
     blocks_tmp_
     LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
@@ -314,7 +314,7 @@ ON COMMIT DROP;
 
 EXECUTE format('COPY corpus_tmp_ FROM %L CSV NULL ''\N''', path || 'corpus.csv');
 
-INSERT INTO corpus_norm
+INSERT INTO corpus
 SELECT
     transliteration_id,
     sign_no,
@@ -356,25 +356,25 @@ CALL database_create_indexes ();
 
 COMMIT;
 
-CLUSTER corpus_norm;
+CLUSTER corpus;
 
-UPDATE corpus_norm SET 
+UPDATE corpus SET 
     value_id = corpus_encoder.value_id, 
     sign_variant_id = corpus_encoder.sign_variant_id
 FROM
     corpus_encoder
 WHERE
-    corpus_norm.transliteration_id = corpus_encoder.transliteration_id AND
-    corpus_norm.sign_no = corpus_encoder.sign_no;
+    corpus.transliteration_id = corpus_encoder.transliteration_id AND
+    corpus.sign_no = corpus_encoder.sign_no;
 
 DELETE FROM corpus_unencoded 
-USING corpus_norm 
+USING corpus 
 WHERE 
-    corpus_norm.transliteration_id = corpus_unencoded.transliteration_id AND
-    corpus_norm.sign_no = corpus_unencoded.sign_no AND
-    corpus_norm.sign_variant_id IS NOT NULL;
+    corpus.transliteration_id = corpus_unencoded.transliteration_id AND
+    corpus.sign_no = corpus_unencoded.sign_no AND
+    corpus.sign_variant_id IS NOT NULL;
 
-CLUSTER corpus_norm;
+CLUSTER corpus;
 
 END
 
@@ -391,7 +391,7 @@ SET CONSTRAINTS All DEFERRED;
 
 DELETE FROM corpus_unencoded;
 
-DELETE FROM corpus_norm;
+DELETE FROM corpus;
 DELETE FROM words;
 DELETE FROM compounds;
 DELETE FROM lines;

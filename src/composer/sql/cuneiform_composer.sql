@@ -246,32 +246,89 @@ AS $BODY$
 $BODY$;
 
 
-
 CREATE VIEW corpus_code AS
 SELECT
-    a.transliteration_id,
-    RANGE,
-    cun_agg (COALESCE(value, number, orig_value), sign_code, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY corpus.sign_no) AS content
-FROM (
-    SELECT
-        a.transliteration_id,
-        int4range(a.sign_no, b.sign_no, '[]') AS RANGE
-    FROM
-        corpus a
-        JOIN corpus b ON a.transliteration_id = b.transliteration_id
-            AND a.sign_no <= b.sign_no) a
-JOIN corpus ON a.transliteration_id = corpus.transliteration_id
-    AND RANGE @> corpus.sign_no
-LEFT JOIN signs_code USING (sign_variant_id)
-GROUP BY
-    a.transliteration_id,
-    RANGE;
+    transliteration_id,
+    COALESCE(value, number, orig_value) AS value,
+    sign_code AS sign, 
+    variant_type, 
+    sign_no, 
+    word_no, 
+    compound_no, 
+    line_no, 
+    properties, 
+    stem, 
+    condition, 
+    language, 
+    inverted, 
+    newline, 
+    crits, 
+    comment, 
+    compound_comment
+FROM
+    corpus
+    LEFT JOIN words USING (transliteration_id, word_no) 
+    LEFT JOIN compounds USING (transliteration_id, compound_no) 
+    LEFT JOIN sign_variants USING (sign_variant_id) 
+    LEFT JOIN signs_code USING (sign_variant_id)
+    LEFT JOIN values USING (value_id) 
+    LEFT JOIN value_variants ON main_variant_id = value_variant_id;
+
+
+CREATE VIEW corpus_code_clean AS
+SELECT
+    transliteration_id,
+    COALESCE(value, placeholder((properties).type)) AS value,
+    sign_code AS sign, 
+    variant_type, 
+    sign_no, 
+    word_no, 
+    compound_no, 
+    properties, 
+    stem,
+    language
+FROM
+    corpus
+    LEFT JOIN words USING (transliteration_id, word_no) 
+    LEFT JOIN compounds USING (transliteration_id, compound_no) 
+    LEFT JOIN sign_variants USING (sign_variant_id) 
+    LEFT JOIN signs_code USING (sign_variant_id)
+    LEFT JOIN values USING (value_id) 
+    LEFT JOIN value_variants ON main_variant_id = value_variant_id;
+
 
 CREATE VIEW corpus_html AS
 SELECT
+    transliteration_id,
+    COALESCE(value_html, number, orig_value) AS value,
+    sign_html AS sign, 
+    variant_type, 
+    sign_no, 
+    word_no, 
+    compound_no, 
+    line_no, 
+    properties, 
+    stem, 
+    condition, 
+    language, 
+    inverted, 
+    newline, 
+    crits, 
+    comment, 
+    compound_comment
+FROM
+    corpus
+    LEFT JOIN words USING (transliteration_id, word_no) 
+    LEFT JOIN compounds USING (transliteration_id, compound_no) 
+    LEFT JOIN sign_variants USING (sign_variant_id) 
+    LEFT JOIN values_html USING (value_id)
+    LEFT JOIN signs_html USING (sign_variant_id);
+
+CREATE VIEW corpus_code_range AS
+SELECT
     a.transliteration_id,
     RANGE,
-    cun_agg_html (COALESCE(value_html, number, orig_value), sign_html, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no)  AS content
+    cun_agg (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no) AS content
 FROM (
     SELECT
         a.transliteration_id,
@@ -280,19 +337,36 @@ FROM (
         corpus a
         JOIN corpus b ON a.transliteration_id = b.transliteration_id
             AND a.sign_no <= b.sign_no) a
-JOIN corpus ON a.transliteration_id = corpus.transliteration_id
-    AND RANGE @> corpus.sign_no
-LEFT JOIN values_html USING (value_id)
-LEFT JOIN signs_html USING (sign_variant_id)
+JOIN corpus_code ON a.transliteration_id = corpus_code.transliteration_id
+    AND RANGE @> corpus_code.sign_no
 GROUP BY
     a.transliteration_id,
     RANGE;
 
-CREATE VIEW corpus_lines_code AS
+CREATE VIEW corpus_html_range AS
 SELECT
     a.transliteration_id,
     RANGE,
-    cun_agg (COALESCE(value, number, orig_value), sign_code, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no) AS content
+    cun_agg_html (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no)  AS content
+FROM (
+    SELECT
+        a.transliteration_id,
+        int4range(a.sign_no, b.sign_no, '[]') AS RANGE
+    FROM
+        corpus a
+        JOIN corpus b ON a.transliteration_id = b.transliteration_id
+            AND a.sign_no <= b.sign_no) a
+JOIN corpus_html ON a.transliteration_id = corpus_html.transliteration_id
+    AND RANGE @> corpus_html.sign_no
+GROUP BY
+    a.transliteration_id,
+    RANGE;
+
+CREATE VIEW corpus_code_lines AS
+SELECT
+    a.transliteration_id,
+    RANGE,
+    cun_agg (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no) AS content
 FROM (
     SELECT DISTINCT
         a.transliteration_id,
@@ -301,32 +375,74 @@ FROM (
         corpus a
         JOIN corpus b ON a.transliteration_id = b.transliteration_id
             AND a.line_no <= b.line_no) a
-JOIN corpus ON a.transliteration_id = corpus.transliteration_id
-    AND RANGE @> corpus.line_no
-LEFT JOIN signs_code USING (sign_variant_id)
+JOIN corpus_code ON a.transliteration_id = corpus_code.transliteration_id
+    AND RANGE @> corpus_code.line_no
 GROUP BY
     a.transliteration_id,
     RANGE;
 
-CREATE VIEW corpus_transliterations_code AS
+CREATE OR REPLACE VIEW corpus_code_transliterations AS
 WITH a AS (
 SELECT
-    corpus.transliteration_id,
-    cun_agg (COALESCE(value, number, orig_value), sign_code, variant_type, sign_no,word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no) AS lines
-FROM corpus
-LEFT JOIN signs_code USING (sign_variant_id)
+    transliteration_id,
+    cun_agg (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no) AS lines
+FROM corpus_code
 GROUP BY
-    corpus.transliteration_id)
-SELECT transliteration_id, line_no-1 AS line_no, line FROM a, LATERAL UNNEST(lines) WITH ORDINALITY AS content(line, line_no);
+    transliteration_id
+),
+b AS (
+SELECT
+    a.transliteration_id,
+    block_no,
+    string_agg(line || E'\t' || content || COALESCE(E'\n# '|| line_comment, ''), E'\n' ORDER BY line_no) AS content
+FROM
+    a
+    LEFT JOIN LATERAL UNNEST(lines) WITH ORDINALITY AS content(content, line_no_plus_one) ON TRUE
+    LEFT JOIN lines ON a.transliteration_id = lines.transliteration_id AND line_no_plus_one = line_no + 1
+GROUP BY
+    a.transliteration_id,
+    block_no
+),
+c AS (
+SELECT
+    transliteration_id,
+    surface_no,
+    string_agg('@' || block_type::text || COALESCE(' '||block_data, '') || E'\n' || content || COALESCE(E'\n# '|| block_comment, ''), E'\n' ORDER BY block_no) AS content
+FROM
+    b
+    LEFT JOIN blocks USING (transliteration_id, block_no)
+GROUP BY
+    transliteration_id,
+    surface_no
+),
+d AS (
+SELECT
+    transliteration_id,
+    object_no,
+    string_agg('@' || surface_type::text || COALESCE(' '||surface_data, '') || E'\n' || content || COALESCE(E'\n# '|| surface_comment, ''), E'\n' ORDER BY surface_no) AS content
+FROM
+    c
+    LEFT JOIN surfaces USING (transliteration_id, surface_no)
+GROUP BY
+    transliteration_id,
+    object_no
+)
+SELECT
+    transliteration_id,
+    string_agg('@' || object_type::text || COALESCE(' '||object_data, '') || E'\n' || content || COALESCE(E'\n# '|| object_comment, ''), E'\n' ORDER BY object_no) AS content
+FROM
+    d
+    LEFT JOIN objects USING (transliteration_id, object_no)
+GROUP BY
+    transliteration_id;
 
-CREATE VIEW corpus_transliterations_html AS
+CREATE VIEW corpus_html_transliterations AS
 WITH a AS (
 SELECT
-    corpus.transliteration_id,
-    cun_agg_html (COALESCE(value_html, orig_value), sign_html, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no) AS lines
-FROM corpus
-LEFT JOIN values_html USING (value_id)
-LEFT JOIN signs_html USING (sign_variant_id)
+    transliteration_id,
+    cun_agg_html (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no) AS lines
+FROM corpus_html
 GROUP BY
-    corpus.transliteration_id)
+    transliteration_id
+)
 SELECT transliteration_id, line_no-1 AS line_no, line FROM a, LATERAL UNNEST(lines) WITH ORDINALITY AS content(line, line_no);
