@@ -2,3 +2,4 @@ comment = 'Parse transliterations for the Cuneiform Database'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_parser'
+requires = 'cuneiform_encoder'
