@@ -13,8 +13,11 @@ CREATE OR REPLACE FUNCTION cun_agg_sfunc (
     language, 
     boolean, 
     boolean, 
+    boolean,
     text, 
     text,
+    boolean,
+    pn_type,
     text,
     boolean
     )
@@ -50,8 +53,11 @@ CREATE AGGREGATE cun_agg (
     language, 
     boolean, 
     boolean, 
+    boolean,
     text, 
     text,
+    boolean,
+    pn_type,
     text,
     boolean
     ) (
@@ -75,8 +81,11 @@ CREATE OR REPLACE FUNCTION cun_agg_html_sfunc (
     language, 
     boolean, 
     boolean, 
+    boolean,
     text, 
     text,
+    boolean,
+    pn_type,
     text,
     boolean
     )
@@ -112,8 +121,11 @@ CREATE AGGREGATE cun_agg_html (
     language, 
     boolean, 
     boolean, 
+    boolean,
     text, 
     text,
+    boolean,
+    pn_type,
     text,
     boolean
     ) (
@@ -171,6 +183,7 @@ AS $BODY$
     return compose(tree)
 $BODY$;
 
+
 CREATE MATERIALIZED VIEW value_variants_html AS
 SELECT
     value_variant_id,
@@ -185,6 +198,14 @@ SELECT
 FROM
     values
     JOIN value_variants_html ON main_variant_id = value_variant_id;
+
+CREATE MATERIALIZED VIEW values_code AS
+SELECT
+    values.value_id,
+    value AS value_code
+FROM
+    values
+    JOIN value_variants ON main_variant_id = value_variant_id;
 
 CREATE MATERIALIZED VIEW signs_code AS
 SELECT
@@ -249,9 +270,9 @@ $BODY$;
 CREATE VIEW corpus_code AS
 SELECT
     transliteration_id,
-    COALESCE(value, number, orig_value) AS value,
+    COALESCE(value_code, custom_value) AS value,
     sign_code AS sign, 
-    variant_type, 
+    variant_type,
     sign_no, 
     word_no, 
     compound_no, 
@@ -261,9 +282,12 @@ SELECT
     condition, 
     language, 
     inverted, 
-    newline, 
+    newline,
+    ligature,
     crits, 
-    comment, 
+    comment,
+    capitalized,
+    pn_type,
     compound_comment
 FROM
     corpus
@@ -271,8 +295,7 @@ FROM
     LEFT JOIN compounds USING (transliteration_id, compound_no) 
     LEFT JOIN sign_variants USING (sign_variant_id) 
     LEFT JOIN signs_code USING (sign_variant_id)
-    LEFT JOIN values USING (value_id) 
-    LEFT JOIN value_variants ON main_variant_id = value_variant_id;
+    LEFT JOIN values_code USING (value_id);
 
 
 CREATE VIEW corpus_code_clean AS
@@ -300,7 +323,7 @@ FROM
 CREATE VIEW corpus_html AS
 SELECT
     transliteration_id,
-    COALESCE(value_html, number, orig_value) AS value,
+    COALESCE(value_html, custom_value) AS value,
     sign_html AS sign, 
     variant_type, 
     sign_no, 
@@ -312,9 +335,12 @@ SELECT
     condition, 
     language, 
     inverted, 
-    newline, 
+    newline,
+    ligature,
     crits, 
     comment, 
+    capitalized,
+    pn_type,
     compound_comment
 FROM
     corpus
@@ -324,11 +350,33 @@ FROM
     LEFT JOIN values_html USING (value_id)
     LEFT JOIN signs_html USING (sign_variant_id);
 
+CREATE VIEW corpus_html_clean AS
+SELECT
+    transliteration_id,
+    COALESCE(value_html, placeholder((properties).type)) AS value,
+    sign_html AS sign, 
+    variant_type, 
+    sign_no, 
+    word_no, 
+    compound_no, 
+    properties, 
+    stem,
+    language
+FROM
+    corpus
+    LEFT JOIN words USING (transliteration_id, word_no) 
+    LEFT JOIN compounds USING (transliteration_id, compound_no) 
+    LEFT JOIN sign_variants USING (sign_variant_id) 
+    LEFT JOIN values_html USING (value_id)
+    LEFT JOIN signs_html USING (sign_variant_id);
+
+
 CREATE VIEW corpus_code_range AS
 SELECT
     a.transliteration_id,
     RANGE,
-    cun_agg (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no) AS content
+    cun_agg (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, 
+        inverted, newline, ligature, crits, comment, capitalized, pn_type, compound_comment, FALSE ORDER BY sign_no) AS content
 FROM (
     SELECT
         a.transliteration_id,
@@ -347,7 +395,8 @@ CREATE VIEW corpus_html_range AS
 SELECT
     a.transliteration_id,
     RANGE,
-    cun_agg_html (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no)  AS content
+    cun_agg_html (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, 
+        inverted, newline, ligature, crits, comment, capitalized, pn_type, compound_comment, FALSE ORDER BY sign_no)  AS content
 FROM (
     SELECT
         a.transliteration_id,
@@ -366,7 +415,8 @@ CREATE VIEW corpus_code_lines AS
 SELECT
     a.transliteration_id,
     RANGE,
-    cun_agg (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no) AS content
+    cun_agg (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, 
+        inverted, ligature, newline, crits, comment, capitalized, pn_type, compound_comment, FALSE ORDER BY sign_no) AS content
 FROM (
     SELECT DISTINCT
         a.transliteration_id,
@@ -385,7 +435,8 @@ CREATE OR REPLACE VIEW corpus_code_transliterations AS
 WITH a AS (
 SELECT
     transliteration_id,
-    cun_agg (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no) AS lines
+    cun_agg (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, 
+        inverted, ligature, newline, crits, comment, capitalized, pn_type, compound_comment, FALSE ORDER BY sign_no) AS lines
 FROM corpus_code
 GROUP BY
     transliteration_id
@@ -436,11 +487,13 @@ FROM
 GROUP BY
     transliteration_id;
 
+
 CREATE VIEW corpus_html_transliterations AS
 WITH a AS (
 SELECT
     transliteration_id,
-    cun_agg_html (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no) AS lines
+    cun_agg_html (value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, language, 
+        inverted, ligature, newline, crits, comment, capitalized, pn_type, compound_comment, FALSE ORDER BY sign_no) AS lines
 FROM corpus_html
 GROUP BY
     transliteration_id

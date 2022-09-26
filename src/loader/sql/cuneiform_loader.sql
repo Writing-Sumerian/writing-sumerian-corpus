@@ -320,10 +320,9 @@ SELECT
     sign_no,
     line_no,
     word_no,
-    corpus_tmp_.value || COALESCE('(' || sign_spec  || ')', ''),
     null,
     null,
-    CASE WHEN type = 'number' THEN corpus_tmp_.value ELSE NULL END,
+    CASE WHEN type = 'value' OR type = 'sign' THEN NULL ELSE corpus_tmp_.value END,
     (type, indicator,  alignment, corpus_tmp_.phonographic)::sign_properties,
     stem,
     condition,
@@ -373,6 +372,14 @@ WHERE
     corpus.transliteration_id = corpus_unencoded.transliteration_id AND
     corpus.sign_no = corpus_unencoded.sign_no AND
     corpus.sign_variant_id IS NOT NULL;
+
+UPDATE corpus SET 
+    custom_value = corpus_unencoded.value
+FROM
+    corpus_unencoded
+WHERE
+    corpus.transliteration_id = corpus_unencoded.transliteration_id AND
+    corpus.sign_no = corpus_unencoded.sign_no;
 
 CLUSTER corpus;
 
