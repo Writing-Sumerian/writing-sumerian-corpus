@@ -199,7 +199,8 @@ CREATE OR REPLACE FUNCTION public.search_signs_clean (search_term text)
   AS $BODY$
   SELECT
     transliteration_id,
-    (cun_agg (value, sign, variant_type, sign_no, word_no, compound_no, 0, properties, stem, 'intact', LANGUAGE, FALSE, FALSE, NULL, NULL, NULL, FALSE ORDER BY sign_no))[1],
+    (cun_agg(value, sign, variant_type, sign_no, word_no, compound_no, 0, properties, stem, 'intact', LANGUAGE, 
+            FALSE, FALSE, FALSE, NULL, NULL, FALSE, NULL, NULL, FALSE ORDER BY sign_no))[1],
     signs
   FROM (
     SELECT
@@ -253,7 +254,8 @@ found_words AS (
 )
 SELECT
   corpus_code_clean.transliteration_id,
-  (cun_agg (value, sign, variant_type, sign_no, corpus_code_clean.word_no, compound_no, 0, properties, stem, 'intact', LANGUAGE, FALSE, FALSE, '', NULL, NULL, FALSE ORDER BY sign_no))[1]
+  (cun_agg (value, sign, variant_type, sign_no, corpus_code_clean.word_no, compound_no, 0, properties, stem, 'intact', LANGUAGE, 
+            FALSE, FALSE, FALSE, NULL, NULL, FALSE, NULL, NULL, FALSE ORDER BY sign_no))[1]
 FROM
   found_words
   JOIN corpus_code_clean ON found_words.transliteration_id = corpus_code_clean.transliteration_id
@@ -288,7 +290,8 @@ CREATE OR REPLACE FUNCTION public.search_lines (search_term text)
     JOIN corpus USING (transliteration_id, sign_no))
 SELECT
   transliteration_id,
-  array_to_string(cun_agg(value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, LANGUAGE, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no), '\n'),
+  array_to_string(cun_agg(value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, LANGUAGE, 
+      inverted, newline, ligature, crits, comment, capitalized, pn_type, compound_comment, FALSE ORDER BY sign_no), '\n'),
   line_no
 FROM
   found_lines
@@ -300,51 +303,3 @@ GROUP BY
 ORDER BY
   transliteration_id
 $BODY$;
-
-CREATE OR REPLACE FUNCTION public.search_lines_html (search_term text)
-  RETURNS TABLE (
-    transliteration_id integer,
-    line text,
-    line_no integer)
-  LANGUAGE 'sql'
-  COST 100 STABLE ROWS 1000
-  AS $BODY$
-  WITH found_lines AS (
-    SELECT DISTINCT
-      row_number,
-      transliteration_id,
-      line_no
-    FROM (
-      SELECT
-        row_number() OVER (),
-        transliteration_id,
-        UNNEST(signs) AS sign_no
-    FROM
-      search (search_term)) a
-    JOIN corpus USING (transliteration_id, sign_no))
-SELECT
-  transliteration_id,
-  array_to_string(cun_agg_html(value, sign, variant_type, sign_no, word_no, compound_no, line_no, properties, stem, condition, LANGUAGE, inverted, newline, crits, comment, compound_comment, FALSE ORDER BY sign_no), '<br/>'),
-  line_no
-FROM
-  found_lines
-  JOIN corpus_html USING (transliteration_id, line_no)
-GROUP BY
-  row_number,
-  transliteration_id,
-  line_no
-ORDER BY
-  transliteration_id
-$BODY$;
-
--- An array of these represents a match, only including destinctive informatition
-CREATE TYPE sign_match AS (
-    sign_no INTEGER, 
-    word_no INTEGER, 
-    compound_no INTEGER, 
-    value_id INTEGER, 
-    sign_variant_id INTEGER,
-    variant_type sign_variant_type,
-    properties sign_properties, 
-    stem bool
-);
