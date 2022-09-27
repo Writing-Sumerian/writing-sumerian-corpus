@@ -23,8 +23,8 @@ from cuneiformparser import parseText
 import pandas as pd
 
 corpus_plan = plpy.prepare(
-    f"INSERT INTO {schema}.corpus VALUES ($1, $2, $3, $4, $5 || COALESCE('(' || $6  || ')', ''), NULL, NULL, CASE WHEN $7 = 'number' THEN $5 ELSE NULL END, ($7, $8, $9, $10)::sign_properties, $11, $12, $13, $14, $15, $16, $17)", 
-    ['integer', 'integer', 'integer', 'integer', 'text', 'text', 'sign_type', 'boolean', 'alignment', 'boolean', 'boolean', 'sign_condition', 'text', 'text', 'boolean', 'boolean', 'boolean']
+    f"INSERT INTO {schema}.corpus VALUES ($1, $2, $3, $4, NULL, NULL, $5, ($6, $7, $8, $9)::sign_properties, $10, $11, $12, $13, $14, $15, $16)", 
+    ['integer', 'integer', 'integer', 'integer', 'text', 'sign_type', 'boolean', 'alignment', 'boolean', 'boolean', 'sign_condition', 'text', 'text', 'boolean', 'boolean', 'boolean']
 )
 
 corpus_unencoded_plan = plpy.prepare(
@@ -86,7 +86,7 @@ for ix, row in lines.iterrows():
     plpy.execute(lines_plan, [id, ix]+[row[key] for key in ['block_no', 'line', 'comment']])
 
 for ix, row in signs.iterrows():
-    plpy.execute(corpus_plan, [id, ix]+[row[key] for key in ['line_no', 'word_no', 'value', 'sign_spec', 'type', 'indicator', 'alignment', 'phonographic', 'stem', 'condition', 'crits', 'comment', 'newline', 'inverted', 'ligature']])
+    plpy.execute(corpus_plan, [id, ix]+[row[key] for key in ['line_no', 'word_no', 'value', 'type', 'indicator', 'alignment', 'phonographic', 'stem', 'condition', 'crits', 'comment', 'newline', 'inverted', 'ligature']])
 for ix, row in signs.iterrows():
     if row['type'] in ['value', 'sign'] or (row['type'] == 'number' and row['sign_spec'] is not None):
         plpy.execute(corpus_unencoded_plan, [id, ix]+[row[key] for key in ['value', 'sign_spec', 'type']])
@@ -96,6 +96,7 @@ for ix, row in errors.iterrows():
 
 plpy.execute(f"""
     UPDATE {schema}.corpus SET 
+        custom_value = NULL,
         value_id = a.value_id, 
         sign_variant_id = a.sign_variant_id 
     FROM 
