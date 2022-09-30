@@ -175,7 +175,7 @@ static char* cun_strcpy(char* s1, const char* s2)
     return s1;
 }
 
-static int cun_strcmp(char* s1, const char* s2)
+static int cun_strcmp(const char* s1, const char* s2)
 {
     while(*s2 != '\0')
     {
@@ -208,6 +208,14 @@ static void cun_capitalize(char* s)
     }
     else
         *s = toupper(*s);
+}
+
+static bool cun_has_char(const char* s, char c, size_t n)
+{
+    while(n-- != 0)
+        if(s[n] == c)
+            return true;
+    return false;
 }
 
 #define ARG_VALUE                1
@@ -337,7 +345,7 @@ static int get_changes(const State* s1, const State* s2)
 
 static char* write_connector(char* s, char connector)
 {
-    if(connector == '~')
+    if(connector == '*')
         s = cun_strcpy(s, "--");
     else
         *s++ = connector;
@@ -684,60 +692,89 @@ Datum cuneiform_cun_agg_html_finalfunc(PG_FUNCTION_ARGS)
 
 // Code
 
-static char* close_code(char* s, int changes, const State* state)
+static char* close_code(char* s, const State* s1, const State* s2)
 {
-    if(state->indicator && (changes & INDICATOR || changes & PHONOGRAPHIC))
+    if(s1->indicator && (s2 == NULL || !s2->indicator || s1->phonographic != s2->phonographic || s2->phonographic_null || s1->line_no != s2->line_no))
     {
-        if(state->phonographic & !state->phonographic_null)
+        if(s1->phonographic)
             *s++ = '>';
         else 
             *s++ = '}';
     }
-    if(changes & TYPE && state->type == TYPE_DESCRIPTION)
-        *s++ = '"';
-    if(changes & STEM && state->stem && !state->stem_null)
-        s = cun_strcpy(s, "⟩");
+
+    if(s2 == NULL || s1->condition != s2->condition || s1->line_no != s2->line_no)
+    {
+        if(s1->condition == CONDITION_LOST)
+            s = cun_strcpy(s, "]");
+        else if(s1->condition == CONDITION_DAMAGED)
+            s = cun_strcpy(s, "⸣");
+        else if(s1->condition == CONDITION_INSERTED)
+            s = cun_strcpy(s, "›");
+        else if(s1->condition == CONDITION_DELETED)
+            s = cun_strcpy(s, "»");
+    }
+
+    if(s2 != NULL && s1->stem && !s2->stem && !s1->stem_null && !s2->stem_null && s1->word_no == s2->word_no)
+        *s++ = ';';
         
     return s;
 }
 
-static char* open_code(char* s, int changes, const State* state)
+
+static char* open_code(char* s, const State* s1, State* s2)
 {
-    if(changes & LANGUAGE)
+    if(s1->language != s2->language || (s1 == NULL && s2->language != LANGUAGE_SUMERIAN))
     {
-        if(state->language == LANGUAGE_AKKADIAN)
+        if(s2->language == LANGUAGE_AKKADIAN)
             s = cun_strcpy(s, "%a ");
-        else if(state->language == LANGUAGE_EBLAITE)
+        else if(s2->language == LANGUAGE_EBLAITE)
             s = cun_strcpy(s, "%e ");
-        else if(state->language == LANGUAGE_HITTITE)
+        else if(s2->language == LANGUAGE_HITTITE)
             s = cun_strcpy(s, "%h ");
-        else if(state->language == LANGUAGE_SUMERIAN)
+        else if(s2->language == LANGUAGE_SUMERIAN)
             s = cun_strcpy(s, "%s ");
     }
-    if(changes & PN_TYPE && !state->pn_type_null)
+    if(!s2->pn_type_null && (s1 == NULL || s1->pn_type != s2->pn_type || s2->pn_type_null || s1->word_no != s2->word_no))
     {
-        if(state->pn_type == PN_PERSON)
+        if(s2->pn_type == PN_PERSON)
             s = cun_strcpy(s, "%person ");
-        else if(state->pn_type == PN_GOD)
+        else if(s2->pn_type == PN_GOD)
             s = cun_strcpy(s, "%god ");
-        else if(state->pn_type == PN_PLACE)
+        else if(s2->pn_type == PN_PLACE)
             s = cun_strcpy(s, "%place ");
-        else if(state->pn_type == PN_WATER)
+        else if(s2->pn_type == PN_WATER)
             s = cun_strcpy(s, "%water ");
-        else if(state->pn_type == PN_FIELD)
+        else if(s2->pn_type == PN_FIELD)
             s = cun_strcpy(s, "%field ");
-        else if(state->pn_type == PN_TEMPLE)
+        else if(s2->pn_type == PN_TEMPLE)
             s = cun_strcpy(s, "%temple ");
-        else if(state->pn_type == PN_OBJECT)
+        else if(s2->pn_type == PN_OBJECT)
             s = cun_strcpy(s, "%object ");
     }
-    if(changes & STEM && state->stem && !state->stem_null)
-        s = cun_strcpy(s, "⟨");
-    if(changes & TYPE && state->type == TYPE_DESCRIPTION)
-        *s++ = '"';
-    if(state->indicator && (changes & INDICATOR || changes & PHONOGRAPHIC))
+
+    if(s1 != NULL && !s1->stem && s2->stem && !s1->stem_null && !s2->stem_null && s1->word_no == s2->word_no)
+        *s++ = ';';
+
+    if(s1 == NULL || s1->condition != s2->condition || s1->line_no != s2->line_no)
     {
-        if(state->phonographic && !state->phonographic_null)
+        if(s2->condition == CONDITION_LOST)
+            s = cun_strcpy(s, "[");
+        else if(s2->condition == CONDITION_DAMAGED)
+            s = cun_strcpy(s, "⸢");
+        else if(s2->condition == CONDITION_INSERTED)
+            s = cun_strcpy(s, "‹");
+        else if(s2->condition == CONDITION_DELETED)
+            s = cun_strcpy(s, "«");
+    }
+
+    if(s2->capitalize) {
+        *s++ = '&';
+        s2->capitalize = false;
+    }
+
+    if(s2->indicator && (s1 == NULL || !s1->indicator || s1->phonographic != s2->phonographic || s1->phonographic_null || s1->line_no != s2->line_no))
+    {
+        if(s2->phonographic)
             *s++ = '<';
         else 
             *s++ = '{';
@@ -745,6 +782,7 @@ static char* open_code(char* s, int changes, const State* state)
 
     return s;
 }
+
 
 Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
 {
@@ -791,11 +829,8 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
 
     char* s = VARDATA(state->string)+string_size;
 
-    int changes = 0;
     if(string_size)
     { 
-        changes = get_changes(&state_old, state);
-
         if(state_old.compound_no != state->compound_no && compound_comment_size)  // Compound comments
         {
             *s++ = ' ';
@@ -804,24 +839,16 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
             *s++ = ')';
         }
 
-        s = close_code(s, changes, &state_old);
-        if(state_old.condition != state->condition || state_old.line_no != state->line_no)
-        {
-            if(state_old.condition == CONDITION_LOST)
-                s = cun_strcpy(s, "]");
-            else if(state_old.condition == CONDITION_DAMAGED)
-                s = cun_strcpy(s, "⸣");
-            else if(state_old.condition == CONDITION_INSERTED)
-                s = cun_strcpy(s, "›");
-            else if(state_old.condition == CONDITION_DELETED)
-                s = cun_strcpy(s, "»");
-        }
+        s = close_code(s, &state_old, state);
+        
 
         // Connectors
         char connector = 0;
 
         if(state_old.indicator && state->indicator && state_old.alignment == state->alignment) {
-            if(state_old.phonographic == state->phonographic)
+            if(state_old.line_no != state->line_no)
+                connector = '~';
+            else if(state_old.phonographic == state->phonographic)
                 connector = state_old.phonographic ? '-' : '.';
         }
         else if(!(state_old.indicator && state_old.alignment == ALIGNMENT_RIGHT) && !(state->indicator && state->alignment == ALIGNMENT_LEFT))
@@ -829,7 +856,7 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
             if(state_old.word_no == state->word_no)
                 connector = inverted ? ':' : (state_old.unknown_reading && state->unknown_reading ? '.' : '-');
             else if(state_old.compound_no == state->compound_no)
-                connector = '~';
+                connector = '*';
             else if(state_old.line_no == state->line_no)
                 connector = ' ';
         }
@@ -853,7 +880,7 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
         {
             if(connector == ' ')
                 s = cun_strcpy(s, ": ");
-            else if(connector == '~')
+            else if(connector == '*')
                 s = cun_strcpy(s, ":");
         }
         else if(state_old.line_no != state->line_no)    // Newline
@@ -867,33 +894,20 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
             SET_VARSIZE(state->string, VARHDRSZ);
             s = VARDATA(state->string);
         }
-    }
-    else
-        changes = INT_MAX;     
+    }    
 
-    if(PG_ARGISNULL(0) || state_old.condition != state->condition || state_old.line_no != state->line_no)
-    {
-        if(state->condition == CONDITION_LOST)
-            s = cun_strcpy(s, "[");
-        else if(state->condition == CONDITION_DAMAGED)
-            s = cun_strcpy(s, "⸢");
-        else if(state->condition == CONDITION_INSERTED)
-            s = cun_strcpy(s, "‹");
-        else if(state->condition == CONDITION_DELETED)
-            s = cun_strcpy(s, "«");
-    }
-    s = open_code(s, changes, state);
+    
+    s = open_code(s, &state_old, state);
 
     if(!state->unknown_reading)
     {
         if(value)
         {
-            char* s_ = s;
+            if(state->type == TYPE_DESCRIPTION)
+                *s++ = '"';
             s = cun_memcpy(s, VARDATA_ANY(value), value_size);
-            if(state->capitalize && !state->indicator) {
-                cun_capitalize(s_);
-                state->capitalize = false;
-            }
+            if(state->type == TYPE_DESCRIPTION)
+                *s++ = '"';
 
             if(variant_type == VARIANT_TYPE_REDUCED)
                 s = cun_strcpy(s, "⁻");
@@ -918,7 +932,12 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     }
     else if(sign)
     {
+        const bool complex = cun_has_char(VARDATA_ANY(sign), '.', sign_size);
+        if(complex)
+            *s++= '|';
         s = cun_memcpy(s, VARDATA_ANY(sign), sign_size);
+        if(complex)
+            *s++= '|';
         if(critics_size)
             s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
     }
@@ -974,7 +993,7 @@ Datum cuneiform_cun_agg_finalfunc(PG_FUNCTION_ARGS)
         *s++ = ')';
     }
 
-    s = close_code(s, INT_MAX, state);
+    s = close_code(s, state, NULL);
 
     SET_VARSIZE(string, s-VARDATA(string)+VARHDRSZ);
        

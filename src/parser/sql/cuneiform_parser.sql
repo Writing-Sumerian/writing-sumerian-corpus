@@ -23,7 +23,7 @@ from cuneiformparser import parseText
 import pandas as pd
 
 corpus_plan = plpy.prepare(
-    f"INSERT INTO {schema}.corpus VALUES ($1, $2, $3, $4, NULL, NULL, $5, ($6, $7, $8, $9)::sign_properties, $10, $11, $12, $13, $14, $15, $16)", 
+    f"INSERT INTO {schema}.corpus VALUES ($1, $2, $3, $4, NULL, NULL, CASE WHEN $6 = 'value' OR $6 = 'sign' THEN NULL ELSE $5 END, ($6, $7, $8, $9)::sign_properties, $10, $11, $12, $13, $14, $15, $16)", 
     ['integer', 'integer', 'integer', 'integer', 'text', 'sign_type', 'boolean', 'alignment', 'boolean', 'boolean', 'sign_condition', 'text', 'text', 'boolean', 'boolean', 'boolean']
 )
 
@@ -96,7 +96,6 @@ for ix, row in errors.iterrows():
 
 plpy.execute(f"""
     UPDATE {schema}.corpus SET 
-        custom_value = NULL,
         value_id = a.value_id, 
         sign_variant_id = a.sign_variant_id 
     FROM 
@@ -115,6 +114,17 @@ plpy.execute(f"""
         corpus.transliteration_id = {id} AND
         corpus.sign_no = corpus_parsed_unencoded.sign_no AND
         sign_variant_id IS NOT NULL
+    """)
+
+plpy.execute(f"""
+    UPDATE {schema}.corpus SET 
+        custom_value = corpus_parsed_unencoded.value  || COALESCE('(' || corpus_parsed_unencoded.sign_spec || ')', '')
+    FROM
+        corpus_parsed_unencoded
+    WHERE
+        corpus.transliteration_id = corpus_parsed_unencoded.transliteration_id AND
+        corpus.transliteration_id = {id} AND
+        corpus.sign_no = corpus_parsed_unencoded.sign_no;
     """)
 
 

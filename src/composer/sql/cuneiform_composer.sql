@@ -458,7 +458,7 @@ c AS (
 SELECT
     transliteration_id,
     surface_no,
-    string_agg('@' || block_type::text || COALESCE(' '||block_data, '') || E'\n' || content || COALESCE(E'\n# '|| block_comment, ''), E'\n' ORDER BY block_no) AS content
+    string_agg('@' || block_type::text || COALESCE(' '||block_data, '') || COALESCE(E'\n# '|| block_comment, '') || E'\n' || content, E'\n' ORDER BY block_no) AS content
 FROM
     b
     LEFT JOIN blocks USING (transliteration_id, block_no)
@@ -470,7 +470,7 @@ d AS (
 SELECT
     transliteration_id,
     object_no,
-    string_agg('@' || surface_type::text || COALESCE(' '||surface_data, '') || E'\n' || content || COALESCE(E'\n# '|| surface_comment, ''), E'\n' ORDER BY surface_no) AS content
+    string_agg('@' || surface_type::text || COALESCE(' '||surface_data, '') || COALESCE(E'\n# '|| surface_comment, '') || E'\n' || content, E'\n' ORDER BY surface_no) AS content
 FROM
     c
     LEFT JOIN surfaces USING (transliteration_id, surface_no)
@@ -480,7 +480,7 @@ GROUP BY
 )
 SELECT
     transliteration_id,
-    string_agg('@' || object_type::text || COALESCE(' '||object_data, '') || E'\n' || content || COALESCE(E'\n# '|| object_comment, ''), E'\n' ORDER BY object_no) AS content
+    string_agg('@' || object_type::text || COALESCE(' '||object_data, '') || COALESCE(E'\n# '|| object_comment, '') || E'\n' || content, E'\n' ORDER BY object_no) AS content
 FROM
     d
     LEFT JOIN objects USING (transliteration_id, object_no)

@@ -374,7 +374,7 @@ WHERE
     corpus.sign_variant_id IS NOT NULL;
 
 UPDATE corpus SET 
-    custom_value = corpus_unencoded.value
+    custom_value = corpus_unencoded.value || COALESCE('(' || corpus_unencoded.sign_spec || ')', '')
 FROM
     corpus_unencoded
 WHERE
