@@ -458,6 +458,21 @@ CREATE OR REPLACE PROCEDURE add_allograph (
   END;
 $BODY$;
 
+CREATE OR REPLACE PROCEDURE add_default_grapheme (
+  v_grapheme text,
+  v_grapheme_id INOUT integer DEFAULT NULL,
+  v_glyph_id INOUT integer DEFAULT NULL,
+  v_allograph_id INOUT integer DEFAULT NULL
+  )
+  LANGUAGE PLPGSQL
+  AS $BODY$
+  BEGIN
+  INSERT INTO glyphs(glyph) VALUES (v_grapheme) RETURNING glyph_id INTO v_glyph_id;
+  INSERT INTO graphemes(grapheme) VALUES (v_grapheme) RETURNING grapheme_id INTO v_grapheme_id;
+  CALL add_allograph(v_grapheme_id, v_glyph_id, 'default', true, v_allograph_id);
+  END;
+$BODY$;
+
 CREATE OR REPLACE PROCEDURE add_allomorph (
   sign_id integer,
   graphemes text,
