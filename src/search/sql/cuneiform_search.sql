@@ -251,6 +251,11 @@ CREATE OR REPLACE FUNCTION sort_uniq_remove_null (VARIADIC integer[])
     COST 10;
 
 
+CREATE TYPE search_wildcard AS (
+    wildcard_id integer,
+    sign_nos integer[]
+);
+
 --CREATE VIEW signs_search AS
 --SELECT
 --    composition,

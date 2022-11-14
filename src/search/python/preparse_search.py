@@ -3,7 +3,7 @@ from typing import List
 from py2plpy import plpy, Out, sql_properties
 
 @sql_properties(volatility='stable', cost=1000)
-def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]]):
+def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wildcards_explicit:Out[List[int]]):
      
     from lark import Lark, Transformer, v_args
     from collections import Counter
@@ -266,7 +266,7 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]]):
         
         code = re.sub(r'@([0-9]+)', lambda m: f'@{d[int(m.group(1))]}' if int(m.group(1)) in d else '', code)
 
-        wildcardsNew = {}
+        wildcardsNew = ['']*len(wildcards)
         wildcardsExplicit = []
         c = Counter([x[2] for x in wildcards])
         c = {key: c[key] for key in c if c[key] != 1}
@@ -274,21 +274,23 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]]):
             _, _, key, explicit = wildcards[id]
             n = c.get(key, 0)
             if n:
-                key = f'{key}[{n}]'
                 c[key] = n-1
+                key = f'{key}[{n}]'
             if explicit:
                 wildcardsExplicit.append(id)
-            wildcardsNew[key] = id
+            wildcardsNew[id] = key
 
-        for i, id in enumerate(reversed(wildcardsExplicit)):
-            wildcardsNew[str(i)] = id
+        #for i, id in enumerate(reversed(wildcardsExplicit)):
+        #    wildcardsNew[str(i)] = id
 
-        return code, wildcardsNew
+        wildcardsExplicit.reverse()
+
+        return code, wildcardsNew, wildcardsExplicit
 
         
 
     l = Lark(grammar, lexer='standard', propagate_positions=True)
     tree = l.parse(search_term.translate(search_term.maketrans('cjvCJV', 'šĝřŠĜŘ')))
     code, wildcards = T().transform(tree)
-    code, wildcards = processWildcards(code, wildcards)
-    return code, list(wildcards.items())
+    code, wildcards, wildcardsExplicit = processWildcards(code, wildcards)
+    return code, wildcards, wildcardsExplicit

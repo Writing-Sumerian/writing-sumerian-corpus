@@ -376,6 +376,20 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             return ComplexTable(tables), i+1
 
 
+        def wildcards(self, table):
+            wildcards = {table.wildcard: table.ids} if table.wildcard is not None else {}
+            if isinstance(table, ComplexTable):
+                for table in table.tables:
+                    wildcards.update(self.wildcards(table))
+            return wildcards
+
+
+        def translateWildcards(self):
+            wildcards = self.wildcards(self.table)
+            wildcards = [(wc, ', '.join(f"c{id}.sign_no" for id in signNos)) for wc, signNos in wildcards.items()]
+            return 'ARRAY['+', '.join(f"({wc}, sort_uniq_remove_null({signNos}))" for wc, signNos in wildcards)+']::search_wildcard[]'
+
+
         def translate(self, targetTable, targetKey):
             conditions = Translator.join(self.table)
             for col in targetKey:
@@ -388,20 +402,13 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             fromClause = ', '.join(f"{targetTable} c{id}" for id in self.table.ids)
             whereClause = ' AND '.join(conditions)
             keyCols = ', '.join(f"c{self.table.ids[0]}.{col}" for col in targetKey)
-            matchClause = ', '.join(f"c{id}.sign_no" for id in self.table.ids)
+            matchClause = 'sort_uniq_remove_null('+', '.join(f"c{id}.sign_no" for id in self.table.ids)+')'
+            wordMatchClause = 'sort_uniq_remove_null('+', '.join(f"c{id}.word_no" for id in self.table.ids)+')'
+            lineMatchClause = 'sort_uniq_remove_null('+', '.join(f"c{id}.line_no" for id in self.table.ids)+')'
+            wildcardClause = self.translateWildcards()
 
-            return f'SELECT {keyCols}, sort_uniq_remove_null({matchClause}) AS signs FROM {fromClause} WHERE {whereClause}'
+            return f'SELECT {keyCols}, {matchClause} AS signs, {wordMatchClause} AS words, {lineMatchClause} AS lines, {wildcardClause} AS wildcards FROM {fromClause} WHERE {whereClause}'
 
-        def wildcards(self, table):
-            wildcards = {table.wildcard: table.ids} if table.wildcard is not None else {}
-            if isinstance(table, ComplexTable):
-                for table in table.tables:
-                    wildcards.update(self.wildcards(table))
-            return wildcards
-
-        def translateWildcards(self):
-            wildcards = self.wildcards(self.table)
-            return wildcards
 
     l = Lark(grammar, lexer='standard', maybe_placeholders=True)
     #try:
@@ -412,7 +419,6 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
 
     translator = Translator(tokens)
 
-    plpy.info(translator.translateWildcards())
 
     return translator.translate(target_table, target_key)
 
