@@ -38,8 +38,13 @@ words_plan = plpy.prepare(
 )
 
 compounds_plan = plpy.prepare(
-    f'INSERT INTO {schema}.compounds VALUES ($1, $2, $3, $4, $5)',
-    ['integer', 'integer', 'pn_type', 'language', 'text']
+    f'INSERT INTO {schema}.compounds VALUES ($1, $2, $3, $4, $5, $6)',
+    ['integer', 'integer', 'pn_type', 'language', 'integer', 'text']
+)
+
+sections_plan = plpy.prepare(
+    f'INSERT INTO {schema}.sections SELECT $1, $2, $3, composition_id, $5 FROM compositions WHERE composition_name = $4',
+    ['integer', 'integer', 'text', 'text', 'witness_type']
 )
 
 objects_plan = plpy.prepare(
@@ -67,12 +72,14 @@ errors_plan = plpy.prepare(
     ['integer', 'integer', 'integer', 'text', 'text']
 )
 
-objects, surfaces, blocks, lines, signs, compounds, words, errors = parseText(code, language, stemmed)
+objects, surfaces, blocks, lines, signs, compounds, words, sections, errors = parseText(code, language, stemmed)
 
 plpy.execute(f"DELETE FROM corpus_parsed_unencoded WHERE transliteration_id = {id}")
 
+for ix, row in sections.iterrows():
+    plpy.execute(sections_plan, [id, ix]+[row[key] for key in ['section_name', 'composition', 'witness_type']])
 for ix, row in compounds.iterrows():
-    plpy.execute(compounds_plan, [id, ix]+[row[key] for key in ['pn_type', 'language', 'comment']])
+    plpy.execute(compounds_plan, [id, ix]+[row[key] if row[key] is not pd.NA else None for key in ['pn_type', 'language', 'section_no', 'comment']])
 for ix, row in words.iterrows():
     plpy.execute(words_plan, [id, ix]+[row[key] for key in ['compound_no', 'capitalized']])
 

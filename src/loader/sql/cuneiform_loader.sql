@@ -135,6 +135,34 @@ FROM
     JOIN corpora ON corpus_identifier = name_short;
 
 
+-- sections
+
+CREATE TEMPORARY TABLE sections_tmp_ (
+    transliteration_identifier text,
+    section_no integer,
+    section_name text,
+    composition_name text,
+    witness_type witness_type
+)
+ON COMMIT DROP;
+
+EXECUTE format('COPY sections_tmp_ FROM %L CSV NULL ''\N''', path || 'sections.csv');
+
+INSERT INTO compositions (composition_name) SELECT DISTINCT composition_name FROM sections_tmp_ ON CONFLICT DO NOTHING;
+
+INSERT INTO sections
+SELECT
+    transliteration_id,
+    section_no,
+    section_name,
+    composition_id,
+    witness_type
+FROM
+    sections_tmp_
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier)
+    LEFT JOIN compositions USING (composition_name);
+
+
 -- compounds
 
 CREATE TEMPORARY TABLE compounds_tmp_ (
@@ -142,7 +170,7 @@ CREATE TEMPORARY TABLE compounds_tmp_ (
     compound_no integer,
     pn_type pn_type,
     language language,
-    section text,
+    section_no integer,
     comment text
 )
 ON COMMIT DROP;
@@ -155,6 +183,7 @@ SELECT
     compound_no,
     pn_type,
     language,
+    section_no,
     comment
 FROM
     compounds_tmp_

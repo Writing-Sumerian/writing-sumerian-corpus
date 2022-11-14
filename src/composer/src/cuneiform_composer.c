@@ -22,8 +22,8 @@
 #define  CONDITION           1
 
 
-#define EXP_LINE_SIZE_CODE 100
-#define MAX_EXTRA_SIZE_CODE 20
+#define EXP_LINE_SIZE_CODE  100
+#define MAX_EXTRA_SIZE_CODE  50
 #define EXP_LINE_SIZE_HTML 1000
 #define MAX_EXTRA_SIZE_HTML 200
 
@@ -64,6 +64,7 @@ Oid PN_PLACE;
 Oid PN_WATER;
 Oid PN_FIELD;
 Oid PN_TEMPLE;
+Oid PN_MONTH;
 Oid PN_OBJECT;
 
 bool ENUMS_SET = false;
@@ -140,7 +141,7 @@ static void set_enums()
         VARIANT_TYPE_NONSTANDARD = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 5, &isnull));
     }
     SPI_execute("SELECT 'person'::pn_type, 'god'::pn_type, 'place'::pn_type, 'water'::pn_type,"
-                "       'field'::pn_type, 'temple'::pn_type, 'object'::pn_type", true, 1);
+                "       'field'::pn_type, 'temple'::pn_type, 'month'::pn_type, 'object'::pn_type", true, 1);
     if(SPI_tuptable != NULL && SPI_processed == 1)
     {
         const HeapTuple tuple = SPI_tuptable->vals[0];
@@ -152,7 +153,8 @@ static void set_enums()
         PN_WATER = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 4, &isnull));
         PN_FIELD = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 5, &isnull));
         PN_TEMPLE = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 6, &isnull));
-        PN_OBJECT = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 7, &isnull));
+        PN_MONTH = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 7, &isnull));
+        PN_OBJECT = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 8, &isnull));
     }
     
     SPI_finish();
@@ -224,20 +226,22 @@ static bool cun_has_char(const char* s, char c, size_t n)
 #define ARG_SIGN_NO              4
 #define ARG_WORD_NO              5
 #define ARG_COMPOUND_NO          6
-#define ARG_LINE_NO              7
-#define ARG_PROPERITIES          8
-#define ARG_STEM                 9
-#define ARG_CONDITION           10
-#define ARG_LANGUAGE            11
-#define ARG_INVERTED            12
-#define ARG_NEWLINE             13
-#define ARG_LIGATURE            14
-#define ARG_CRITICS             15
-#define ARG_COMMENT             16
-#define ARG_CAPITALIZED         17
-#define ARG_PN_TYPE             18
-#define ARG_COMPOUND_COMMENT    19
-#define ARG_HIGHLIGHT           20
+#define ARG_SECTION_NO           7
+#define ARG_LINE_NO              8
+#define ARG_PROPERITIES          9
+#define ARG_STEM                10
+#define ARG_CONDITION           11
+#define ARG_LANGUAGE            12
+#define ARG_INVERTED            13
+#define ARG_NEWLINE             14
+#define ARG_LIGATURE            15
+#define ARG_CRITICS             16
+#define ARG_COMMENT             17
+#define ARG_CAPITALIZED         18
+#define ARG_PN_TYPE             19
+#define ARG_SECTION             20
+#define ARG_COMPOUND_COMMENT    21
+#define ARG_HIGHLIGHT           22
 
 typedef struct State
 {
@@ -253,6 +257,8 @@ typedef struct State
     int32 word_no;
     int32 compound_no;
     int32 line_no;
+    int32 section_no;
+    bool section_null;
     Oid type;
     bool phonographic;
     bool indicator;
@@ -299,6 +305,8 @@ static State* init_state(FunctionCallInfo fcinfo, MemoryContext memcontext, Stat
     state->word_no = PG_GETARG_INT32(ARG_WORD_NO);
     state->compound_no = PG_GETARG_INT32(ARG_COMPOUND_NO);
     state->line_no = PG_GETARG_INT32(ARG_LINE_NO);
+    state->section_no = PG_GETARG_INT32(ARG_SECTION_NO);
+    state->section_null = PG_ARGISNULL(ARG_SECTION_NO);
     const HeapTupleHeader properties = PG_GETARG_HEAPTUPLEHEADER(ARG_PROPERITIES);
     state->type = DatumGetObjectId(GetAttributeByName(properties, "type", &isnull));
     state->phonographic = DatumGetBool(GetAttributeByName(properties, "phonographic", &state->phonographic_null));
@@ -343,39 +351,59 @@ static int get_changes(const State* s1, const State* s2)
 }
 
 
-static char* write_connector(char* s, char connector)
-{
-    if(connector == '*')
-        s = cun_strcpy(s, "--");
-    else
-        *s++ = connector;
-    return s;
-}
+#define SEP_DASH            0
+#define SEP_DOT             1
+#define SEP_NUMBER          2
+#define SEP_INDICATOR_P     3
+#define SEP_INDICATOR_L     4
+#define SEP_INDICATOR_M     5
+#define SEP_INDICATOR_0     6
+#define SEP_WORD            7
+#define SEP_COMPOUND        8
 
+#define SEP_EXT_NEWLINE     1
+#define SEP_EXT_LINEBREAK   2
+#define SEP_EXT_LIGATURE    3
+#define SEP_EXT_INVERSION   4
+
+typedef struct Connector
+{
+    int connector;
+    int modifier;
+    bool ellipsis;
+} Connector;
+
+static Connector determine_connector(const State* s1, const State* s2, bool inverted, bool newline, bool ligature)
+{
+    Connector res = {SEP_DASH, 0, s1->sign_no + 1 != s2->sign_no};
+
+    if(inverted)
+        res.modifier = SEP_EXT_INVERSION;
+    else if(newline)
+        res.modifier = SEP_EXT_NEWLINE;
+    else if(ligature)
+        res.modifier = SEP_EXT_LIGATURE;
+    else if(s1->line_no != s2->line_no)
+        res.modifier = SEP_EXT_LINEBREAK;
+
+    if(s1->indicator && s2->indicator && s1->alignment == s2->alignment)
+        res.connector = s1->phonographic == s2->phonographic ? (s1->phonographic ? SEP_INDICATOR_P : SEP_INDICATOR_L) : SEP_INDICATOR_M;
+    else if((s1->indicator && s1->alignment == ALIGNMENT_RIGHT) || (s2->indicator && s2->alignment == ALIGNMENT_LEFT))
+        res.connector = SEP_INDICATOR_0;
+    else if(s1->compound_no != s2->compound_no)
+        res.connector = SEP_COMPOUND;
+    else if(s1->word_no != s2->word_no)
+        res.connector = SEP_WORD;
+    else if(s1->type == TYPE_NUMBER && s2->type == TYPE_NUMBER)
+        res.connector = SEP_NUMBER;
+    else if(s1->unknown_reading && s2->unknown_reading && s1->stem == s2->stem && s1->stem_null == s2->stem_null)
+        res.connector = SEP_DOT;
+
+    return res;
+}
 
 
 // HTML
-
-static char* close_html(char* s, int changes, const State* state)
-{
-    if(changes >= CONDITION && state->condition != CONDITION_INTACT)
-        s = cun_strcpy(s, "</span>");
-    if(changes >= INDICATOR && state->indicator)
-        s = cun_strcpy(s, "</span>");
-    if(changes >= TYPE && (state->type != TYPE_VALUE || state->unknown_reading) && state->type != TYPE_PUNCTUATION)
-        s = cun_strcpy(s, "</span>");
-    if(changes >= PHONOGRAPHIC && !state->phonographic_null && (state->phonographic == (state->language == LANGUAGE_SUMERIAN)))
-        s = cun_strcpy(s, "</span>");
-    if(changes >= PHONOGRAPHIC && state->phonographic && !state->phonographic_null)
-        s = cun_strcpy(s, "</span>");
-    if(changes >= HIGHLIGHT && state->highlight)
-        s = cun_strcpy(s, "</span>");
-    if(changes >= STEM && state->stem && !state->stem_null)
-        s = cun_strcpy(s, "</span>");
-    if(changes >= LANGUAGE && state->language != LANGUAGE_SUMERIAN)
-        s = cun_strcpy(s, "</span>");
-    return s;
-}
 
 static char* open_html(char* s, int changes, const State* state)
 {
@@ -430,6 +458,110 @@ static char* open_html(char* s, int changes, const State* state)
     return s;
 }
 
+static char* close_html(char* s, int changes, const State* state)
+{
+    if(changes >= CONDITION && state->condition != CONDITION_INTACT)
+        s = cun_strcpy(s, "</span>");
+    if(changes >= INDICATOR && state->indicator)
+        s = cun_strcpy(s, "</span>");
+    if(changes >= TYPE && (state->type != TYPE_VALUE || state->unknown_reading) && state->type != TYPE_PUNCTUATION)
+        s = cun_strcpy(s, "</span>");
+    if(changes >= PHONOGRAPHIC && !state->phonographic_null && (state->phonographic == (state->language == LANGUAGE_SUMERIAN)))
+        s = cun_strcpy(s, "</span>");
+    if(changes >= PHONOGRAPHIC && state->phonographic && !state->phonographic_null)
+        s = cun_strcpy(s, "</span>");
+    if(changes >= HIGHLIGHT && state->highlight)
+        s = cun_strcpy(s, "</span>");
+    if(changes >= STEM && state->stem && !state->stem_null)
+        s = cun_strcpy(s, "</span>");
+    if(changes >= LANGUAGE && state->language != LANGUAGE_SUMERIAN)
+        s = cun_strcpy(s, "</span>");
+    return s;
+}
+
+
+static char* open_condition_html(char* s, Oid condition)
+{
+    if(condition == CONDITION_LOST)
+        s = cun_strcpy(s, "<span class='open-lost'></span>");
+    else if(condition == CONDITION_DAMAGED)
+        s = cun_strcpy(s, "<span class='open-damaged'></span>");
+    else if(condition == CONDITION_INSERTED)
+        s = cun_strcpy(s, "<span class='open-inserted'></span>");
+    else if(condition == CONDITION_DELETED)
+        s = cun_strcpy(s, "<span class='open-deleted'></span>");
+    else if(condition == CONDITION_ERASED)
+        s = cun_strcpy(s, "<span class='open-erased'></span>");
+    return s;
+}
+
+static char* close_condition_html(char* s, Oid condition)
+{
+    if(condition == CONDITION_LOST)
+        s = cun_strcpy(s, "<span class='close-lost'></span>");
+    else if(condition == CONDITION_DAMAGED)
+        s = cun_strcpy(s, "<span class='close-damaged'></span>");
+    else if(condition == CONDITION_INSERTED)
+        s = cun_strcpy(s, "<span class='close-inserted'></span>");
+    else if(condition == CONDITION_DELETED)
+        s = cun_strcpy(s, "<span class='close-deleted'></span>");
+    else if(condition == CONDITION_ERASED)
+        s = cun_strcpy(s, "<span class='close-erased'></span>");
+    return s;
+}
+
+
+static char* write_simple_connector_html(char* s, int connector)
+{
+    if(connector == SEP_INDICATOR_L || connector == SEP_DOT || connector == SEP_NUMBER)
+        *s++ = '.';
+    else if(connector == SEP_INDICATOR_M)
+        s = cun_strcpy(s, "<span class='indicator'>.</span>");
+    else if(connector == SEP_INDICATOR_P || connector == SEP_DASH)
+        *s++ = '-';
+    else if(connector == SEP_WORD)
+        s = cun_strcpy(s, "–");
+    else if(connector == SEP_COMPOUND)
+        *s++ = ' ';
+    return s;
+}
+
+static char* write_modified_connector_html(char* s, const Connector c)
+{   
+    if(c.ellipsis)
+    {
+        s = write_simple_connector_html(s, c.connector);
+        s = cun_strcpy(s, "…");
+        s = write_simple_connector_html(s, c.connector);
+    }
+    else if(c.modifier == SEP_EXT_LIGATURE)
+    {
+        if(c.modifier == SEP_INDICATOR_M)
+            s = cun_strcpy(s, "<span class='indicator'>+</span>");
+        else
+            *s++ = '+';
+    }
+    else if(c.modifier == SEP_EXT_LINEBREAK || c.modifier == SEP_EXT_NEWLINE)
+    {
+        if(c.connector != SEP_COMPOUND && c.connector != SEP_INDICATOR_L && c.connector != SEP_INDICATOR_P && c.connector != SEP_INDICATOR_M && c.connector != SEP_INDICATOR_0)
+            s = write_simple_connector_html(s, c.connector);
+    }
+    else if(c.modifier == SEP_EXT_INVERSION)
+    {
+        if(c.connector == SEP_WORD)
+            s = cun_strcpy(s, "—:");
+        else if(c.connector == SEP_COMPOUND)
+            s = cun_strcpy(s, " : ");
+        else if(c.modifier == SEP_INDICATOR_M)
+            s = cun_strcpy(s, "<span class='indicator'>:</span>");
+        else
+            *s++ = ':';
+    }
+    else
+        s = write_simple_connector_html(s, c.connector);
+
+    return s;
+}
 
 Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 {
@@ -459,13 +591,16 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     const text* critics = PG_ARGISNULL(ARG_CRITICS) ? NULL : PG_GETARG_TEXT_PP(ARG_CRITICS);
     const text* comment = PG_ARGISNULL(ARG_COMMENT) ? NULL : PG_GETARG_TEXT_PP(ARG_COMMENT);
 
+    const text* section = PG_ARGISNULL(ARG_SECTION) ? NULL : PG_GETARG_TEXT_PP(ARG_SECTION);
+
     const int32 string_size = VARSIZE_ANY_EXHDR(state->string);
     const int32 value_size = value ? VARSIZE_ANY_EXHDR(value) : 0;
     const int32 sign_size = sign ? VARSIZE_ANY_EXHDR(sign) : 0;
     const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
     const int32 comment_size = comment ? VARSIZE_ANY_EXHDR(comment) : 0;
     const int32 compound_comment_size = state_old.compound_comment ? VARSIZE_ANY_EXHDR(state_old.compound_comment) : 0;
-    const int32 size = value_size + sign_size + critics_size + comment_size + compound_comment_size;
+    const int32 section_size = section ? VARSIZE_ANY_EXHDR(section) : 0;
+    const int32 size = value_size + sign_size + critics_size + comment_size + compound_comment_size + section_size;
     if(state->string_capacity < string_size + size + MAX_EXTRA_SIZE_HTML)
     {
         state->string = (text*)repalloc(state->string, string_size + size + EXP_LINE_SIZE_HTML + VARHDRSZ);
@@ -491,54 +626,10 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
         s = close_html(s, changes, &state_old);
         if(state->condition != state_old.condition || state_old.line_no != state->line_no)
-        {
-            if(state_old.condition == CONDITION_LOST)
-                s = cun_strcpy(s, "<span class='close-lost'></span>");
-            else if(state_old.condition == CONDITION_DAMAGED)
-                s = cun_strcpy(s, "<span class='close-damaged'></span>");
-            else if(state_old.condition == CONDITION_INSERTED)
-                s = cun_strcpy(s, "<span class='close-inserted'></span>");
-            else if(state_old.condition == CONDITION_DELETED)
-                s = cun_strcpy(s, "<span class='close-deleted'></span>");
-            else if(state_old.condition == CONDITION_ERASED)
-                s = cun_strcpy(s, "<span class='close-erased'></span>");
-        }
-
-        // Connectors
-        char connector = 0;
-
-        if(inverted)
-            connector = ':';
-        else if(state_old.indicator && state->indicator && state_old.alignment == state->alignment)
-            connector = state_old.phonographic && state->phonographic ? '-' : '.';
-        else if(!(state_old.indicator && state_old.alignment == ALIGNMENT_RIGHT) && !(state->indicator && state->alignment == ALIGNMENT_LEFT))
-        {       
-            if(state_old.compound_no == state->compound_no)
-                connector = state->unknown_reading && state_old.unknown_reading ? '.' : '-';
-            else if(state_old.line_no == state->line_no)
-                connector = ' ';
-        }
-
-        if(connector)
-        {
-            // Wrap connector between indicators in indicator span, if it isn't already
-            if(state_old.indicator && state->indicator && state_old.alignment == state->alignment && changes > INDICATOR)
-            {
-                s = cun_strcpy(s, "<span class='indicator'>");
-                s = write_connector(s, connector);
-                s = cun_strcpy(s, "</span>");
-            }
-            else
-                s = write_connector(s, connector);
-        }
+            s = close_condition_html(s,state_old.condition);
+        s = write_modified_connector_html(s, determine_connector(&state_old, state, inverted, newline, ligature));
         
-        if(state_old.sign_no+1 != state->sign_no)        // Ellipsis
-        {
-            s = cun_strcpy(s, "…");
-            if(connector)
-                s = write_connector(s, connector);
-        }
-        else if (state_old.line_no != state->line_no)    // Newline
+        if (state_old.line_no != state->line_no)    // Newline
         {
             state->line_count += 1;
             state->lines = (Datum*) repalloc(state->lines, state->line_count * sizeof(Datum));
@@ -558,18 +649,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         s = cun_strcpy(s, "<br class='internal-linebreak'>");   
 
     if(PG_ARGISNULL(0) || state->condition != state_old.condition || state_old.line_no != state->line_no)
-    {
-        if(state->condition == CONDITION_LOST)
-            s = cun_strcpy(s, "<span class='open-lost'></span>");
-        else if(state->condition == CONDITION_DAMAGED)
-            s = cun_strcpy(s, "<span class='open-damaged'></span>");
-        else if(state->condition == CONDITION_INSERTED)
-            s = cun_strcpy(s, "<span class='open-inserted'></span>");
-        else if(state->condition == CONDITION_DELETED)
-            s = cun_strcpy(s, "<span class='open-deleted'></span>");
-        else if(state->condition == CONDITION_ERASED)
-            s = cun_strcpy(s, "<span class='open-erased'></span>");
-    }
+        s = open_condition_html(s, state->condition);
     s = open_html(s, changes, state);
 
     if(!state->unknown_reading && value)
@@ -680,6 +760,7 @@ Datum cuneiform_cun_agg_html_finalfunc(PG_FUNCTION_ARGS)
     }
 
     s = close_html(s, INT_MAX, state);
+    s = close_condition_html(s, state->condition);
 
     SET_VARSIZE(string, s-VARDATA(string)+VARHDRSZ);
        
@@ -692,38 +773,9 @@ Datum cuneiform_cun_agg_html_finalfunc(PG_FUNCTION_ARGS)
 
 // Code
 
-static char* close_code(char* s, const State* s1, const State* s2)
-{
-    if(s1->indicator && (s2 == NULL || !s2->indicator || s1->phonographic != s2->phonographic || s2->phonographic_null || s1->line_no != s2->line_no))
-    {
-        if(s1->phonographic)
-            *s++ = '>';
-        else 
-            *s++ = '}';
-    }
-
-    if(s2 == NULL || s1->condition != s2->condition || s1->line_no != s2->line_no)
-    {
-        if(s1->condition == CONDITION_LOST)
-            s = cun_strcpy(s, "]");
-        else if(s1->condition == CONDITION_DAMAGED)
-            s = cun_strcpy(s, "⸣");
-        else if(s1->condition == CONDITION_INSERTED)
-            s = cun_strcpy(s, "›");
-        else if(s1->condition == CONDITION_DELETED)
-            s = cun_strcpy(s, "»");
-    }
-
-    if(s2 != NULL && s1->stem && !s2->stem && !s1->stem_null && !s2->stem_null && s1->word_no == s2->word_no)
-        *s++ = ';';
-        
-    return s;
-}
-
-
 static char* open_code(char* s, const State* s1, State* s2)
 {
-    if(s1->language != s2->language || (s1 == NULL && s2->language != LANGUAGE_SUMERIAN))
+    if((s1 != NULL && s1->language != s2->language) || (s1 == NULL && s2->language != LANGUAGE_SUMERIAN))
     {
         if(s2->language == LANGUAGE_AKKADIAN)
             s = cun_strcpy(s, "%a ");
@@ -748,6 +800,8 @@ static char* open_code(char* s, const State* s1, State* s2)
             s = cun_strcpy(s, "%field ");
         else if(s2->pn_type == PN_TEMPLE)
             s = cun_strcpy(s, "%temple ");
+        else if(s2->pn_type == PN_MONTH)
+            s = cun_strcpy(s, "%month ");
         else if(s2->pn_type == PN_OBJECT)
             s = cun_strcpy(s, "%object ");
     }
@@ -772,13 +826,105 @@ static char* open_code(char* s, const State* s1, State* s2)
         s2->capitalize = false;
     }
 
-    if(s2->indicator && (s1 == NULL || !s1->indicator || s1->phonographic != s2->phonographic || s1->phonographic_null || s1->line_no != s2->line_no))
+    if(s2->indicator && (s1 == NULL || !s1->indicator || s1->alignment != s2->alignment || s1->phonographic != s2->phonographic || s1->phonographic_null || s1->line_no != s2->line_no))
     {
         if(s2->phonographic)
             *s++ = '<';
         else 
             *s++ = '{';
     }
+
+    return s;
+}
+
+
+static char* close_code(char* s, const State* s1, const State* s2)
+{
+    if(s1->indicator && (s2 == NULL || !s2->indicator || s1->alignment != s2->alignment || s1->phonographic != s2->phonographic || s2->phonographic_null || s1->line_no != s2->line_no))
+    {
+        if(s1->phonographic)
+            *s++ = '>';
+        else 
+            *s++ = '}';
+    }
+
+    if((s2 == NULL || s1->compound_no != s2->compound_no) && s1->compound_comment && VARSIZE_ANY_EXHDR(s1->compound_comment))
+    {
+        *s++ = ' ';
+        *s++ = '(';
+        s = cun_memcpy(s, VARDATA_ANY(s1->compound_comment), VARSIZE_ANY_EXHDR(s1->compound_comment));
+        *s++ = ')';
+    }
+
+    if(s2 == NULL || s1->condition != s2->condition || s1->line_no != s2->line_no)
+    {
+        if(s1->condition == CONDITION_LOST)
+            s = cun_strcpy(s, "]");
+        else if(s1->condition == CONDITION_DAMAGED)
+            s = cun_strcpy(s, "⸣");
+        else if(s1->condition == CONDITION_INSERTED)
+            s = cun_strcpy(s, "›");
+        else if(s1->condition == CONDITION_DELETED)
+            s = cun_strcpy(s, "»");
+    }
+
+    if(s2 != NULL && s1->stem && !s2->stem && !s1->stem_null && !s2->stem_null && s1->word_no == s2->word_no)
+        *s++ = ';';
+        
+    return s;
+}
+
+
+static char* write_simple_connector_code(char* s, int connector)
+{
+    if(connector == SEP_INDICATOR_L || connector == SEP_DOT || connector == SEP_NUMBER)
+        *s++ = '.';
+    else if(connector == SEP_INDICATOR_P || connector == SEP_DASH)
+        *s++ = '-';
+    else if(connector == SEP_WORD)
+        s = cun_strcpy(s, "--");
+    else if(connector == SEP_COMPOUND)
+        *s++ = ' ';
+    return s;
+}
+
+static char* write_modified_connector_code(char* s, const Connector c)
+{   
+    if(c.ellipsis)
+    {
+        s = write_simple_connector_code(s, c.connector);
+        s = cun_strcpy(s, "…");
+        s = write_simple_connector_code(s, c.connector);
+    }
+    else if(c.modifier == SEP_EXT_LIGATURE)
+    {
+        *s++ = '+';
+    }
+    else if(c.modifier == SEP_EXT_LINEBREAK)
+    {
+        if(c.connector == SEP_INDICATOR_L || c.connector == SEP_INDICATOR_P || c.connector == SEP_INDICATOR_M || c.connector == SEP_INDICATOR_0)
+            *s++ = '~';
+        else if(c.connector != SEP_COMPOUND)
+            s = write_simple_connector_code(s, c.connector);
+    }
+    else if(c.modifier == SEP_EXT_INVERSION)
+    {
+        if(c.connector == SEP_WORD)
+            s = cun_strcpy(s, "--:");
+        else if(c.connector == SEP_COMPOUND)
+            s = cun_strcpy(s, " : ");
+        else
+            *s++ = ':';
+    }
+    else if(c.modifier == SEP_EXT_NEWLINE)
+    {
+        s = write_simple_connector_code(s, c.connector);
+        *s++ = '/';
+        if(c.connector == SEP_COMPOUND)
+            *s++ = ' ';
+    }
+    else
+        s = write_simple_connector_code(s, c.connector);
 
     return s;
 }
@@ -812,13 +958,16 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     const text* critics = PG_ARGISNULL(ARG_CRITICS) ? NULL : PG_GETARG_TEXT_PP(ARG_CRITICS);
     const text* comment = PG_ARGISNULL(ARG_COMMENT) ? NULL : PG_GETARG_TEXT_PP(ARG_COMMENT);
 
+    const text* section = PG_ARGISNULL(ARG_SECTION) ? NULL : PG_GETARG_TEXT_PP(ARG_SECTION);
+
     const int32 string_size = VARSIZE_ANY_EXHDR(state->string);
     const int32 value_size = value ? VARSIZE_ANY_EXHDR(value) : 0;
     const int32 sign_size = sign ? VARSIZE_ANY_EXHDR(sign) : 0;
     const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
     const int32 comment_size = comment ? VARSIZE_ANY_EXHDR(comment) : 0;
     const int32 compound_comment_size = state_old.compound_comment ? VARSIZE_ANY_EXHDR(state_old.compound_comment) : 0;
-    const int32 size = value_size + sign_size + critics_size + comment_size;
+    const int32 section_size = section ? VARSIZE_ANY_EXHDR(section) : 0;
+    const int32 size = value_size + sign_size + critics_size + comment_size + compound_comment_size + section_size;
     if(state->string_capacity < string_size + size + MAX_EXTRA_SIZE_CODE)
     {
         state->string = (text*)repalloc(state->string, string_size + size + EXP_LINE_SIZE_CODE + VARHDRSZ);
@@ -831,59 +980,10 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
 
     if(string_size)
     { 
-        if(state_old.compound_no != state->compound_no && compound_comment_size)  // Compound comments
-        {
-            *s++ = ' ';
-            *s++ = '(';
-            s = cun_memcpy(s, VARDATA_ANY(state_old.compound_comment), compound_comment_size);
-            *s++ = ')';
-        }
-
         s = close_code(s, &state_old, state);
-        
+        s = write_modified_connector_code(s, determine_connector(&state_old, state, inverted, newline, ligature));        
 
-        // Connectors
-        char connector = 0;
-
-        if(state_old.indicator && state->indicator && state_old.alignment == state->alignment) {
-            if(state_old.line_no != state->line_no)
-                connector = '~';
-            else if(state_old.phonographic == state->phonographic)
-                connector = state_old.phonographic ? '-' : '.';
-        }
-        else if(!(state_old.indicator && state_old.alignment == ALIGNMENT_RIGHT) && !(state->indicator && state->alignment == ALIGNMENT_LEFT))
-        {       
-            if(state_old.word_no == state->word_no)
-                connector = inverted ? ':' : (state_old.unknown_reading && state->unknown_reading ? '.' : '-');
-            else if(state_old.compound_no == state->compound_no)
-                connector = '*';
-            else if(state_old.line_no == state->line_no)
-                connector = ' ';
-        }
-
-        if(connector)
-            s = write_connector(s, connector);
-
-        if(state_old.sign_no+1 != state->sign_no)        // Ellipsis
-        {
-            s = cun_strcpy(s, "…");
-            if(connector)
-                s = write_connector(s, connector);
-        }
-        else if(newline)
-        {
-            s = cun_strcpy(s, "/");
-            if(connector == ' ')
-                *s++ = ' ';
-        }
-        else if(inverted)
-        {
-            if(connector == ' ')
-                s = cun_strcpy(s, ": ");
-            else if(connector == '*')
-                s = cun_strcpy(s, ":");
-        }
-        else if(state_old.line_no != state->line_no)    // Newline
+        if(state_old.line_no != state->line_no)    // Newline
         {
             state->line_count += 1;
             state->lines = (Datum*) repalloc(state->lines, state->line_count * sizeof(Datum));
@@ -896,50 +996,44 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
         }
     }    
 
-    
-    s = open_code(s, &state_old, state);
-
-    if(!state->unknown_reading)
+    if(!state->section_null && (!string_size || state_old.section_null || state_old.section_no != state->section_no))
     {
-        if(value)
-        {
-            if(state->type == TYPE_DESCRIPTION)
-                *s++ = '"';
-            s = cun_memcpy(s, VARDATA_ANY(value), value_size);
-            if(state->type == TYPE_DESCRIPTION)
-                *s++ = '"';
-
-            if(variant_type == VARIANT_TYPE_REDUCED)
-                s = cun_strcpy(s, "⁻");
-            if(variant_type == VARIANT_TYPE_AUGMENTED)
-                s = cun_strcpy(s, "⁺");
-        }
-
-        if(critics_size)
-            s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
-        if(variant_type == VARIANT_TYPE_NONSTANDARD)
-            s = cun_strcpy(s, "!");
-
-        if(sign && (variant_type == VARIANT_TYPE_NONSTANDARD || 
-                    variant_type == VARIANT_TYPE_NONDEFAULT || 
-                    state->type == TYPE_NUMBER ||
-                    x_value))
-        {
-            *s++ = '(';
-            s = cun_memcpy(s, VARDATA_ANY(sign), sign_size);
-            *s++ = ')';
-        }
+        s = cun_strcpy(s, "%sec=");
+        s = cun_memcpy(s, VARDATA_ANY(section), section_size);
+        *s++ = ' ';
     }
-    else if(sign)
+    
+    s = open_code(s, string_size ? &state_old : NULL, state);
+
+    if(value)
     {
-        const bool complex = cun_has_char(VARDATA_ANY(sign), '.', sign_size);
-        if(complex)
+        const bool complex = state->unknown_reading && cun_has_char(VARDATA_ANY(sign), '.', sign_size);
+        if(state->type == TYPE_DESCRIPTION)
+            *s++ = '"';
+        else if(complex)
             *s++= '|';
+        s = cun_memcpy(s, VARDATA_ANY(value), value_size);
+        if(state->type == TYPE_DESCRIPTION)
+            *s++ = '"';
+        else if(complex)
+            *s++= '|';
+    }
+
+    if(variant_type == VARIANT_TYPE_NONSTANDARD)
+        s = cun_strcpy(s, "!");
+    if(critics_size)
+        s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
+
+    if(sign && (variant_type == VARIANT_TYPE_NONSTANDARD || 
+                variant_type == VARIANT_TYPE_NONDEFAULT || 
+                variant_type == VARIANT_TYPE_REDUCED ||
+                variant_type == VARIANT_TYPE_AUGMENTED ||
+                state->type == TYPE_NUMBER ||
+                x_value))
+    {
+        *s++ = '(';
         s = cun_memcpy(s, VARDATA_ANY(sign), sign_size);
-        if(complex)
-            *s++= '|';
-        if(critics_size)
-            s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
+        *s++ = ')';
     }
 
     if(comment_size)
@@ -984,14 +1078,6 @@ Datum cuneiform_cun_agg_finalfunc(PG_FUNCTION_ARGS)
     Datum* lines = (Datum*) palloc0((state->line_count+1) * sizeof(Datum));
     memcpy(lines, state->lines, state->line_count * sizeof(Datum));
     lines[state->line_count] = PointerGetDatum(string);
-
-    if(VARSIZE_ANY_EXHDR(state->compound_comment))  // Compound comments
-    {
-        *s++ = ' ';
-        *s++ = '(';
-        s = cun_memcpy(s, VARDATA_ANY(state->compound_comment), VARSIZE_ANY_EXHDR(state->compound_comment));
-        *s++ = ')';
-    }
 
     s = close_code(s, state, NULL);
 

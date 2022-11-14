@@ -35,20 +35,18 @@ CREATE TABLE transliterations (
 
 CREATE TABLE compositions (
     composition_id SERIAL PRIMARY KEY,
-    name text
+    composition_name text UNIQUE NOT NULL
 );
 
-CREATE TABLE sections (
-    transliteration_id integer REFERENCES transliterations DEFERRABLE INITIALLY IMMEDIATE,
-    section_no integer,
-    compound_no integer NOT NULL,
-    composition_id integer REFERENCES compositions  DEFERRABLE INITIALLY IMMEDIATE,
-    PRIMARY KEY (transliteration_id, section_no)
+CREATE TYPE witness_type AS ENUM (
+    'original',
+    'print',
+    'copy',
+    'variant'
 );
 
 
 -- Corpus
-
 
 CREATE TYPE object_type AS ENUM (
     'tablet',
@@ -89,13 +87,28 @@ BEGIN
 
 EXECUTE format(
     $$
+    CREATE TABLE %1$I.sections (
+        transliteration_id integer,
+        section_no integer NOT NULL,
+        section_name text NOT NULL,
+        composition_id integer NOT NULL REFERENCES compositions (composition_id) DEFERRABLE INITIALLY IMMEDIATE,
+        witness_type witness_type NOT NULL,
+        PRIMARY KEY (transliteration_id, section_no)
+    )
+    $$,
+    schema);
+
+EXECUTE format(
+    $$
     CREATE TABLE %1$I.compounds (
         transliteration_id integer,
         compound_no integer,
         pn_type pn_type,
         language LANGUAGE,
+        section_no integer,
         compound_comment text,
-        PRIMARY KEY (transliteration_id, compound_no)
+        PRIMARY KEY (transliteration_id, compound_no),
+        FOREIGN KEY (transliteration_id, section_no) REFERENCES %1$I.sections (transliteration_id, section_no) DEFERRABLE INITIALLY IMMEDIATE
     )
     $$,
     schema);
