@@ -175,7 +175,7 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
                 for i, variant in enumerate(grapheme_ids):
                     if i or glyph_id is not None:
                         s += '|'
-                    v = '|'.join([grapheme(grapheme_id) for grapheme_id in variant])
+                    v = '~'.join([grapheme(grapheme_id) for grapheme_id in variant])
                     s += f'({v})' if len(variant) > 1 else v
             self.wildcardId += 1
             self.wildcards.append((meta.start_pos, self.wildcardId, w, False))
@@ -217,7 +217,6 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
     
         def nullsep(self, args):
             r = ''.join(sorted(set(args)))
-            plpy.info('nullsep')
             return r or ' ', r
 
         def wordbreak(self, args):
@@ -259,8 +258,6 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
         wildcards.sort()
 
         wildcards = [w2 for w1, w2 in zip([None]+wildcards[:-1], wildcards) if w1 is None or w1[2] != w2[2] or w1[0]+1 != w2[0]]
-
-        plpy.info(wildcards)
 
         d = {x[1]: i for i, x in enumerate(wildcards)}
         

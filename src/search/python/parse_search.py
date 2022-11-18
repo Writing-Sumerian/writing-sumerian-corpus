@@ -26,6 +26,7 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
         BAR = 8
         CON = 9
         WC = 10
+        INHERITCON = 11
 
 
     class Token:
@@ -148,6 +149,9 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
 
         def con(self, args):
             return [Token(TokenType.CON)]
+
+        def inheritcon(self, args):
+            return [Token(TokenType.INHERITCON)]
         
         def bar(self, args):
             return [Token(TokenType.BAR)]
@@ -305,8 +309,7 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             res = ComplexTable(tables[0:ixs[0]])
             for i, j in zip(ixs, ixs[1:]+[len(tables)]):
                 res = AlternativeTable(res, ComplexTable(tables[i:j]))
-            return [res]
-            
+            return [res]                                
 
 
         def join(table):
@@ -344,29 +347,31 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             return conditions
 
 
-        def process(self, tokens):
+        def process(self, tokens, outerOps = []):
             tables = []
             ops = []
             i = 0
             while i < len(tokens):
-                if tokens[i].type == TokenType.CHAR:
+                if tokens[i].type in [TokenType.CHAR,TokenType.LPAREN]:
                     if len(tables):
+                        if TokenType.BAR not in ops:
+                            outerOps = [x for x in ops if x in [TokenType.CON]]
                         tables[-1].ops = ops
                         ops = []
-                    tables.append(SingleTable(tokens[i]))
-                    if tokens[i].lineId is not None:
-                        self.lines.setdefault(tokens[i].lineId, []).append(tables[-1])
-                elif tokens[i].type == TokenType.LPAREN:
-                    if len(tables):
-                        tables[-1].ops = ops
-                        ops = []
-                    t, n = self.process(tokens[i+1:])
-                    tables.append(t)
-                    i += n 
+                    if tokens[i].type == TokenType.CHAR:
+                        tables.append(SingleTable(tokens[i]))
+                        if tokens[i].lineId is not None:
+                            self.lines.setdefault(tokens[i].lineId, []).append(tables[-1])
+                    else:
+                        t, n = self.process(tokens[i+1:], outerOps)
+                        tables.append(t)
+                        i += n 
                 elif tokens[i].type == TokenType.RPAREN:
                     break
                 elif tokens[i].type == TokenType.WC:
                     tables[-1].wildcard = tokens[i].id
+                elif tokens[i].type == TokenType.INHERITCON:
+                    ops += outerOps
                 else:
                     ops.append(tokens[i].type)
                 i += 1
