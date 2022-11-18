@@ -207,7 +207,11 @@ Datum position_construct(PG_FUNCTION_ARGS)
     uint32 component_no = PG_GETARG_UINT32(1);
     bool final = PG_GETARG_BOOL(2);
 
-    if(sign_no > 9999999 || component_no > 99)
+    if(sign_no > 9999999 || sign_no < 0)
+        ereport(ERROR,
+            (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+             errmsg("invalid value for sign no: %d", sign_no)));
+    if(component_no > 99)
         ereport(ERROR,
             (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
              errmsg("invalid value for component no: %d", component_no)));
