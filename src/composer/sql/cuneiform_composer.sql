@@ -155,7 +155,7 @@ AS $BODY$
     import re
 
     precedence = {'.': 0, '×': 1, '&': 2, '%': 3, '@': 3, '+': 4}
-    modifiers = {'g': 'gunû', 'š': 'šeššig', 't': 'tenû', 'n': 'nutillû', 'k': 'kabatenû', 'z': 'zidatenû', 'i': 'inversum', 'v': 'inversum'}
+    modifiers = {'g': 'gunû', 'š': 'šeššig', 't': 'tenû', 'n': 'nutillû', 'k': 'kabatenû', 'z': 'zidatenû', 'i': 'inversum', 'v': 'inversum', 'c': 'rounded'}
 
     def stack(a, b):
         return f'<span class="stack">{a}<br/>{b}</span>'
@@ -473,7 +473,17 @@ c AS (
 SELECT
     transliteration_id,
     surface_no,
-    string_agg('@' || block_type::text || COALESCE(' '||block_data, '') || COALESCE(E'\n# '|| block_comment, '') || E'\n' || content, E'\n' ORDER BY block_no) AS content
+    string_agg(
+        CASE 
+            WHEN block_type != 'block' OR block_data IS NOT NULL THEN
+                '@' || block_type::text || COALESCE(' '||block_data, '') || COALESCE(E'\n# '|| block_comment, '') || E'\n'
+            ELSE
+                ''
+        END
+        || content,
+        E'\n' 
+        ORDER BY block_no
+    ) AS content
 FROM
     b
     LEFT JOIN blocks USING (transliteration_id, block_no)
@@ -485,7 +495,17 @@ d AS (
 SELECT
     transliteration_id,
     object_no,
-    string_agg('@' || surface_type::text || COALESCE(' '||surface_data, '') || COALESCE(E'\n# '|| surface_comment, '') || E'\n' || content, E'\n' ORDER BY surface_no) AS content
+    string_agg(
+        CASE 
+            WHEN surface_type != 'surface' OR surface_data IS NOT NULL THEN
+                '@' || surface_type::text || COALESCE(' '||surface_data, '') || COALESCE(E'\n# '|| surface_comment, '') || E'\n' 
+            ELSE
+                ''
+        END 
+        || content, 
+        E'\n' 
+        ORDER BY surface_no
+    ) AS content
 FROM
     c
     LEFT JOIN surfaces USING (transliteration_id, surface_no)
@@ -495,7 +515,17 @@ GROUP BY
 )
 SELECT
     transliteration_id,
-    string_agg('@' || object_type::text || COALESCE(' '||object_data, '') || COALESCE(E'\n# '|| object_comment, '') || E'\n' || content, E'\n' ORDER BY object_no) AS content
+    string_agg(
+        CASE 
+            WHEN object_type != 'object' OR object_data IS NOT NULL THEN
+                '@' || object_type::text || COALESCE(' '||object_data, '') || COALESCE(E'\n# '|| object_comment, '') || E'\n' 
+            ELSE
+                ''
+        END
+        || content, 
+        E'\n' 
+        ORDER BY object_no
+    ) AS content
 FROM
     d
     LEFT JOIN objects USING (transliteration_id, object_no)
