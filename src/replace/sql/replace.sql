@@ -62,16 +62,16 @@ BEGIN
             )_;
                 
             IF v_invalid_sign_nos IS NOT NULL THEN
-                RAISE NOTICE 'Skipping %s: Invalid replacement near %s', v_transliteration_id, v_invalid_sign_nos;
+                RAISE NOTICE 'Skipping %: Invalid replacement near %', v_transliteration_id, v_invalid_sign_nos;
             ELSIF v_invalid_compound_nos IS NOT NULL THEN
-                RAISE NOTICE 'Skipping %s: Cannot remove compounds %s', v_transliteration_id, v_invalid_compound_nos;
+                RAISE NOTICE 'Skipping %: Cannot remove compounds %', v_transliteration_id, v_invalid_compound_nos;
             ELSE
-                RAISE NOTICE 'Replacing signs %s in %s', v_sign_nos, v_transliteration_id;
                 CALL edit('replace', v_transliteration_id);
+                RAISE NOTICE 'Replacing signs % in %', v_sign_nos, v_transliteration_id;
             END IF;
             DELETE FROM replace.corpus WHERE transliteration_id = v_transliteration_id;
         EXCEPTION
-            WHEN not_null_violation THEN RAISE NOTICE 'Skipping %s: Signs missing in replacement', v_transliteration_id;
+            WHEN not_null_violation THEN RAISE NOTICE 'Skipping %: Signs missing in replacement', v_transliteration_id;
         END;
     END LOOP;
 END;

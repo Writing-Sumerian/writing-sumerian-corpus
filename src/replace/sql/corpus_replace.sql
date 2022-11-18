@@ -134,8 +134,8 @@ retained_values AS (
         min(word_no) AS word_no_old,
         min(compound_no) AS compound_no_old,
         bool_and_ex_last(NOT inverted AND NOT ligature)     -- cannot automatically merge inverted, ligatured oder commented on signs
-            AND bool_and(sign_no_old IS NOT NULL)                               -- all components have a correspondence in the old text
-            AND bool_and(gap <= 1)                                              -- no gaps within a new sign
+        AND bool_and(sign_no_old IS NOT NULL)               -- all components have a correspondence in the old text
+            AND bool_and(gap <= 1)                          -- no gaps within a new sign
             AS valid         
     FROM
         original
@@ -170,7 +170,7 @@ patched_ AS (
         valid
     FROM
         replacement
-        LEFT JOIN retained_values USING (sign_no)
+        FULL JOIN retained_values USING (sign_no)
     UNION ALL
     SELECT
         line_no,
