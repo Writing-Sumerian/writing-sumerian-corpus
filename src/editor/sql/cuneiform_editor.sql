@@ -136,7 +136,9 @@ CREATE OR REPLACE PROCEDURE split_merge_all_entries(
     key_col text,
     child_key_col text,
     special_cols text[],
-    normal_cols text[]
+    normal_cols text[],
+    source_schema text, 
+    target_schema text
     )
     LANGUAGE 'plpgsql'
 AS $BODY$
@@ -169,8 +171,8 @@ LOOP
             a.%2$I,
             a.%2$I > b.%2$I
         FROM 
-            editor.%3$I a 
-            JOIN %3$I b USING (transliteration_id, %1$I)
+            %6$I.%3$I a 
+            JOIN %5$I.%3$I b USING (transliteration_id, %1$I)
         WHERE 
             a.transliteration_id = %4$s
             AND a.%2$I != b.%2$I
@@ -179,7 +181,9 @@ LOOP
         child_key_col,
         key_col,
         child_target,
-        transliteration_id)
+        transliteration_id,
+        target_schema,
+        source_schema)
     INTO
         child_entry_no,
         entry_no,
@@ -197,8 +201,8 @@ LOOP
                 %5$s
                 %6$s
             FROM 
-                editor.%1$I a
-                LEFT JOIN %1$I b ON a.transliteration_id = b.transliteration_id AND b.%3$I = %4$s-1
+                %8$s.%1$I a
+                LEFT JOIN %7$s.%1$I b ON a.transliteration_id = b.transliteration_id AND b.%3$I = %4$s-1
             WHERE
                 a.transliteration_id = %2$s 
                 AND a.%3$I = %4$s-1
@@ -208,12 +212,14 @@ LOOP
             key_col,
             entry_no,
             COALESCE(NULLIF(array_to_string(special_cols_t, ','), '') || ',', ''),
-            array_to_string(normal_cols_t, ',')
+            array_to_string(normal_cols_t, ','),
+            target_schema,
+            source_schema
             )
             INTO STRICT rec;
-        CALL split_entry(transliteration_id, child_entry_no, child_target, child_key_col, target, key_col, rec, 'public', true);
+        CALL split_entry(transliteration_id, child_entry_no, child_target, child_key_col, target, key_col, rec, target_schema, true);
     ELSE
-        CALL merge_entries(transliteration_id, entry_no, target, key_col, child_target, 'public', true);
+        CALL merge_entries(transliteration_id, entry_no, target, key_col, child_target, target_schema, true);
     END IF;
 END LOOP;
 
@@ -225,7 +231,8 @@ CREATE OR REPLACE PROCEDURE delete_empty_entries(
     transliteration_id integer,
     target text,
     child_target text,
-    key_col text
+    key_col text,
+    target_schema text
     )
     LANGUAGE 'plpgsql'
 AS $BODY$
@@ -239,17 +246,18 @@ FOR entry_no IN
     EXECUTE format(
         $$
         SELECT %1$I FROM (
-            SELECT %1$I FROM %2$I WHERE transliteration_id = %4$s
-            EXCEPT SELECT %1$I FROM %3$I WHERE transliteration_id = %4$s) _
+            SELECT %1$I FROM %5$I.%2$I WHERE transliteration_id = %4$s
+            EXCEPT SELECT %1$I FROM %5$I.%3$I WHERE transliteration_id = %4$s) _
             ORDER BY %1$I DESC
         $$,
         key_col,
         target,
         child_target,
-        transliteration_id)
+        transliteration_id,
+        target_schema)
     LOOP
-    CALL adjust_key_col(transliteration_id, entry_no+1, child_target, key_col, key_col, -1, 'public', true);
-    CALL delete_entry(transliteration_id, entry_no, target, key_col, 'public', true);
+    CALL adjust_key_col(transliteration_id, entry_no+1, child_target, key_col, key_col, -1, target_schema, true);
+    CALL delete_entry(transliteration_id, entry_no, target, key_col, target_schema, true);
 END LOOP;
 
 END;
@@ -315,7 +323,7 @@ BEGIN
                 $$
                 SELECT 
                     a.transliteration_id,
-                    (op).pos-1,
+                    %1$s-1,
                     COALESCE(b.line_no, 0),
                     COALESCE(b.word_no, 0),
                     a.custom_value,
@@ -330,18 +338,19 @@ BEGIN
                     a.inverted,
                     a.ligature
                 FROM 
-                    %I.corpus a
-                    LEFT JOIN corpus b ON a.transliteration_id = b.transliteration_id AND b.sign_no = (op).pos-2
+                    %2$I.corpus a
+                    LEFT JOIN corpus b ON a.transliteration_id = b.transliteration_id AND b.sign_no = %1$s-2
                 WHERE
-                    a.transliteration_id = %s AND a.sign_no = (op).pos-1
+                    a.transliteration_id = %3$s AND a.sign_no = %1$s-1
                 $$,
+                (op).pos,
                 v_schema,
-                v_transliteration_id),
+                v_transliteration_id)
                 INTO rec;
 
-            CALL insert_sign(transliteration_id, (op).pos-1, rec, 'public', true);
+            CALL insert_sign(v_transliteration_id, (op).pos-1, rec, 'public', true);
         ELSIF (op).op = 'DELETE' THEN
-            CALL delete_sign(transliteration_id, (op).pos-1, 'public', true);
+            CALL delete_sign(v_transliteration_id, (op).pos-1, 'public', true);
         END IF;
     END LOOP;
 
@@ -350,38 +359,36 @@ BEGIN
         CALL update_all_entries(v_transliteration_id, 'corpus', 'sign_no', col, v_schema, 'public');
     END LOOP;
 
-    CALL delete_empty_entries(v_transliteration_id, 'words', 'corpus', 'word_no');
-    CALL split_merge_all_entries(v_transliteration_id, 'words', 'corpus', 'word_no', 'sign_no', array['compound_no'], array['capitalized']);
-    CALL update_all_entries(v_transliteration_id, 'words', 'word_no', 'capitalized', v_schema, 'public');
+    CALL delete_empty_entries(v_transliteration_id, 'words', 'corpus', 'word_no', 'public');
+    CALL split_merge_all_entries(v_transliteration_id, 'words', 'corpus', 'word_no', 'sign_no', array['compound_no'], array['capitalized'], v_schema, 'public');
+    CALL update_all_entries(v_transliteration_id, 'words', 'word_no', 'capitalized', v_schema, 'public');   
 
-    
-
-    CALL delete_empty_entries(v_transliteration_id, 'compounds', 'words', 'compound_no');
-    CALL split_merge_all_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', 'word_no', array[]::text[], array['pn_type', 'language', 'compound_comment']);
-    FOREACH col IN ARRAY array['pn_type', 'language', 'compound_comment'] LOOP
+    CALL delete_empty_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', 'public');
+    CALL split_merge_all_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', 'word_no', array[]::text[], array['pn_type', 'language', 'section_no', 'compound_comment'], v_schema, 'public');
+    FOREACH col IN ARRAY array['pn_type', 'language', 'section_no', 'compound_comment'] LOOP
         CALL update_all_entries(v_transliteration_id, 'compounds', 'compound_no', col, v_schema, 'public');
     END LOOP;
 
-    CALL delete_empty_entries(v_transliteration_id, 'lines', 'corpus', 'line_no');
-    CALL split_merge_all_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', 'sign_no', array['block_no'], array['line', 'line_comment']);
+    CALL delete_empty_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', 'public');
+    CALL split_merge_all_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', 'sign_no', array['block_no'], array['line', 'line_comment'], v_schema, 'public');
     FOREACH col IN ARRAY array['line', 'line_comment'] LOOP
         CALL update_all_entries(v_transliteration_id, 'lines', 'line_no', col, v_schema, 'public');
     END LOOP;
 
-    CALL delete_empty_entries(v_transliteration_id, 'blocks', 'lines', 'block_no');
-    CALL split_merge_all_entries(v_transliteration_id, 'blocks', 'lines', 'block_no', 'line_no', array['surface_no'], array['block_type', 'block_data', 'block_comment']);
+    CALL delete_empty_entries(v_transliteration_id, 'blocks', 'lines', 'block_no', 'public');
+    CALL split_merge_all_entries(v_transliteration_id, 'blocks', 'lines', 'block_no', 'line_no', array['surface_no'], array['block_type', 'block_data', 'block_comment'], v_schema, 'public');
     FOREACH col IN ARRAY array['block_type', 'block_data', 'block_comment'] LOOP
         CALL update_all_entries(v_transliteration_id, 'blocks', 'block_no', col, v_schema, 'public');
     END LOOP;
 
-    CALL delete_empty_entries(v_transliteration_id, 'surfaces', 'blocks', 'surface_no');
-    CALL split_merge_all_entries(v_transliteration_id, 'surfaces', 'blocks', 'surface_no', 'block_no', array['object_no'], array['surface_type', 'surface_data', 'surface_comment']);
+    CALL delete_empty_entries(v_transliteration_id, 'surfaces', 'blocks', 'surface_no', 'public');
+    CALL split_merge_all_entries(v_transliteration_id, 'surfaces', 'blocks', 'surface_no', 'block_no', array['object_no'], array['surface_type', 'surface_data', 'surface_comment'], v_schema, 'public');
     FOREACH col IN ARRAY array['surface_type', 'surface_data', 'surface_comment'] LOOP
         CALL update_all_entries(v_transliteration_id, 'surfaces', 'surface_no', col, v_schema, 'public');
     END LOOP;
 
-    CALL delete_empty_entries(v_transliteration_id, 'objects', 'surfaces', 'object_no');
-    CALL split_merge_all_entries(v_transliteration_id, 'objects', 'surfaces', 'object_no', 'surface_no', array[]::text[], array['object_type', 'object_data', 'object_comment']);
+    CALL delete_empty_entries(v_transliteration_id, 'objects', 'surfaces', 'object_no', 'public');
+    CALL split_merge_all_entries(v_transliteration_id, 'objects', 'surfaces', 'object_no', 'surface_no', array[]::text[], array['object_type', 'object_data', 'object_comment'], v_schema, 'public');
     FOREACH col IN ARRAY array['object_type', 'object_data', 'object_comment'] LOOP
         CALL update_all_entries(v_transliteration_id, 'objects', 'object_no', col, v_schema, 'public');
     END LOOP;
