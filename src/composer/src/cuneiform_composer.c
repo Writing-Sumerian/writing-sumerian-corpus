@@ -786,7 +786,7 @@ static char* open_code(char* s, const State* s1, State* s2)
         else if(s2->language == LANGUAGE_SUMERIAN)
             s = cun_strcpy(s, "%s ");
     }
-    if(!s2->pn_type_null && (s1 == NULL || s1->pn_type != s2->pn_type || s2->pn_type_null || s1->word_no != s2->word_no))
+    if(!s2->pn_type_null && (s1 == NULL || s1->pn_type != s2->pn_type || s2->pn_type_null || s1->compound_no != s2->compound_no))
     {
         if(s2->pn_type == PN_PERSON)
             s = cun_strcpy(s, "%person ");
