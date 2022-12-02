@@ -95,7 +95,7 @@ FROM
     texts_tmp_
     JOIN text_ids_tmp_ USING (identifier)
     LEFT JOIN periods ON (period = periods.name)
-    LEFT JOIN proveniences ON (provenience = proveniences.name)
+    LEFT JOIN proveniences ON (provenience = proveniences.site_id)
     LEFT JOIN genres ON (genre = genres.name);
 
 

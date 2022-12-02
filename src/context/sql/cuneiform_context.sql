@@ -19,7 +19,7 @@ CREATE TABLE periods (
 
 CREATE TABLE proveniences (
     provenience_id serial PRIMARY KEY,
-    cigs_id text UNIQUE,
+    site_id text UNIQUE,
     name text,
     modern_name text,
     latitude real,
