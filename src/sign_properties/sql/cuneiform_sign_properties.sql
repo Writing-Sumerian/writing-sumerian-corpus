@@ -38,6 +38,7 @@ CREATE TYPE sign_properties AS (
 );
 
 CREATE TYPE pn_type AS ENUM (
+    'none',
     'person', 
     'god',
     'place',   
@@ -45,5 +46,6 @@ CREATE TYPE pn_type AS ENUM (
     'field', 
     'temple', 
     'month',
-    'object'
+    'object',
+    'ethnicity'
 );

@@ -66,6 +66,7 @@ Oid PN_FIELD;
 Oid PN_TEMPLE;
 Oid PN_MONTH;
 Oid PN_OBJECT;
+Oid PN_ETHNICITY;
 
 bool ENUMS_SET = false;
 
@@ -140,8 +141,8 @@ static void set_enums()
         VARIANT_TYPE_AUGMENTED = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 4, &isnull));
         VARIANT_TYPE_NONSTANDARD = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 5, &isnull));
     }
-    SPI_execute("SELECT 'person'::pn_type, 'god'::pn_type, 'place'::pn_type, 'water'::pn_type,"
-                "       'field'::pn_type, 'temple'::pn_type, 'month'::pn_type, 'object'::pn_type", true, 1);
+    SPI_execute("SELECT 'person'::pn_type, 'god'::pn_type, 'place'::pn_type, 'water'::pn_type, 'field'::pn_type,"
+                "       'temple'::pn_type, 'month'::pn_type, 'object'::pn_type, 'ethnicity'::pn_type", true, 1);
     if(SPI_tuptable != NULL && SPI_processed == 1)
     {
         const HeapTuple tuple = SPI_tuptable->vals[0];
@@ -155,6 +156,7 @@ static void set_enums()
         PN_TEMPLE = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 6, &isnull));
         PN_MONTH = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 7, &isnull));
         PN_OBJECT = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 8, &isnull));
+        PN_ETHNICITY = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 9, &isnull));
     }
     
     SPI_finish();
@@ -923,6 +925,8 @@ static char* open_code(char* s, const State* s1, State* s2)
             s = cun_strcpy(s, "%month ");
         else if(s2->pn_type == PN_OBJECT)
             s = cun_strcpy(s, "%object ");
+        else if(s2->pn_type == PN_ETHNICITY)
+            s = cun_strcpy(s, "%ethnicity ");
     }
 
     if(s1 != NULL && !s1->stem && s2->stem && !s1->stem_null && !s2->stem_null && s1->word_no == s2->word_no)
