@@ -50,7 +50,17 @@ CREATE TABLE replace.corpus (
     valid boolean
 );
 
-CREATE VIEW replace.words AS 
+CREATE TABLE replace.words (LIKE words);
+CREATE TABLE replace.compounds (LIKE compounds);
+
+CREATE VIEW replace.lines AS SELECT * FROM lines;
+CREATE VIEW replace.blocks AS SELECT * FROM blocks;
+CREATE VIEW replace.surfaces AS SELECT * FROM surfaces;
+CREATE VIEW replace.objects AS SELECT * FROM objects;
+CREATE VIEW replace.sections AS SELECT * FROM sections;
+
+
+CREATE VIEW words_replace AS 
 WITH x AS (
     SELECT
         transliteration_id,
@@ -75,7 +85,7 @@ FROM
     LEFT JOIN replace.words_pattern b ON (pattern_word AND x.pattern_id = b.pattern_id AND x.word_no_ref = b.word_no);
 
 
-CREATE VIEW replace.compounds AS
+CREATE VIEW compounds_replace AS
 WITH x AS (
     SELECT
         transliteration_id,
@@ -99,9 +109,3 @@ FROM
     x
     LEFT JOIN compounds a ON (NOT pattern_compound AND x.transliteration_id = a.transliteration_id AND x.compound_no_ref = a.compound_no)
     LEFT JOIN replace.compounds_pattern b ON (pattern_compound AND x.pattern_id = b.pattern_id AND x.compound_no_ref = b.compound_no);
-
-
-CREATE VIEW replace.lines AS SELECT * FROM lines;
-CREATE VIEW replace.blocks AS SELECT * FROM blocks;
-CREATE VIEW replace.surfaces AS SELECT * FROM surfaces;
-CREATE VIEW replace.objects AS SELECT * FROM objects;

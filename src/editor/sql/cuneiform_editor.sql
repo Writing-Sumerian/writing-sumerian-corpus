@@ -1,3 +1,20 @@
+CREATE TABLE edits (
+    edit_id BIGSERIAL PRIMARY KEY,
+    transliteration_id integer REFERENCES transliterations(transliteration_id) ON DELETE CASCADE,
+    timestamp timestamp,
+    user_id text
+);
+
+CREATE TABLE edit_log (
+    edit_id integer REFERENCES edits (edit_id) ON DELETE CASCADE,
+    log_no integer,
+    entry_no integer,
+    target text,
+    action text,
+    query text,
+    PRIMARY KEY (edit_id, log_no)
+);
+
 CREATE SCHEMA editor;
 
 CALL create_corpus('editor');
@@ -93,7 +110,7 @@ END;
 $BODY$;
 
 
-CREATE OR REPLACE PROCEDURE update_all_entries(
+CREATE OR REPLACE FUNCTION update_all_entries (
     transliteration_id integer,
     target text,
     key_col text,
@@ -101,6 +118,8 @@ CREATE OR REPLACE PROCEDURE update_all_entries(
     source_schema text, 
     target_schema text
     )
+    RETURNS SETOF log_data
+    VOLATILE
     LANGUAGE 'plpgsql'
 AS $BODY$
 DECLARE
@@ -120,26 +139,60 @@ FOR entry_no, value IN EXECUTE format($$
     transliteration_id, target, key_col, col, source_schema, target_schema)
     LOOP
 
-    CALL update_entry(transliteration_id, entry_no, target, key_col, col, value, target_schema, TRUE);
+    RETURN QUERY SELECT * FROM update_entry(transliteration_id, entry_no, target, key_col, col, value, target_schema);
 
 END LOOP;
+
+RETURN;
 
 END;
 $BODY$;
 
 
+CREATE OR REPLACE FUNCTION update_all_entries (
+    transliteration_id integer,
+    target text,
+    key_col text,
+    columns text[],
+    special_col boolean[],
+    source_schema text, 
+    target_schema text
+    )
+    RETURNS SETOF log_data
+    VOLATILE
+    LANGUAGE 'plpgsql'
+AS $BODY$
+DECLARE
 
-CREATE OR REPLACE PROCEDURE split_merge_all_entries(
+    i integer;
+
+BEGIN
+
+FOR i IN 1..array_length(columns, 1) LOOP
+    IF NOT special_col[i] THEN
+        RETURN QUERY SELECT * FROM update_all_entries(transliteration_id, target, key_col, columns[i], source_schema, target_schema);
+    END IF;
+END LOOP;
+
+RETURN;
+
+END;
+$BODY$;
+
+
+CREATE OR REPLACE FUNCTION split_merge_all_entries (
     transliteration_id integer,
     target text,
     child_target text,
     key_col text,
     child_key_col text,
-    special_cols text[],
-    normal_cols text[],
+    columns text[],
+    special_col boolean[],
     source_schema text, 
     target_schema text
     )
+    RETURNS SETOF log_data
+    VOLATILE
     LANGUAGE 'plpgsql'
 AS $BODY$
 DECLARE
@@ -152,16 +205,17 @@ DECLARE
     row_count       integer;
 
     col             text;
-    special_cols_t  text[] := array[]::text[];
-    normal_cols_t   text[] := array[]::text[];    
+    cols_t          text[] := array[]::text[];
+    i               integer;    
 
 BEGIN
 
-FOREACH col IN ARRAY special_cols LOOP
-    special_cols_t = special_cols_t || ('COALESCE(b.' || quote_ident(col) || ', 0)');
-END LOOP;
-FOREACH col IN ARRAY normal_cols LOOP
-    normal_cols_t = normal_cols_t || ('a.' || quote_ident(col));
+FOR i IN 1..array_length(columns, 1) LOOP
+    IF special_col[i] THEN
+        cols_t = cols_t || ('b.' || quote_ident(columns[i]));
+    ELSE
+        cols_t = cols_t || ('a.' || quote_ident(columns[i]));
+    END IF;
 END LOOP;
 
 LOOP
@@ -199,10 +253,9 @@ LOOP
                 a.transliteration_id,
                 a.%3$I,
                 %5$s
-                %6$s
             FROM 
-                %8$s.%1$I a
-                LEFT JOIN %7$s.%1$I b ON a.transliteration_id = b.transliteration_id AND b.%3$I = %4$s-1
+                %7$s.%1$I a
+                LEFT JOIN %6$s.%1$I b ON a.transliteration_id = b.transliteration_id AND b.%3$I = %4$s-1
             WHERE
                 a.transliteration_id = %2$s 
                 AND a.%3$I = %4$s-1
@@ -211,15 +264,14 @@ LOOP
             transliteration_id,
             key_col,
             entry_no,
-            COALESCE(NULLIF(array_to_string(special_cols_t, ','), '') || ',', ''),
-            array_to_string(normal_cols_t, ','),
+            array_to_string(cols_t, ','),
             target_schema,
             source_schema
             )
             INTO STRICT rec;
-        CALL split_entry(transliteration_id, child_entry_no, child_target, child_key_col, target, key_col, rec, target_schema, true);
+        RETURN QUERY SELECT * FROM split_entry(transliteration_id, child_entry_no, child_target, child_key_col, target, key_col, rec, target_schema);
     ELSE
-        CALL merge_entries(transliteration_id, entry_no, target, key_col, child_target, target_schema, true);
+        RETURN QUERY SELECT * FROM merge_entries(transliteration_id, entry_no, target, key_col, child_target, child_key_col, target_schema);
     END IF;
 END LOOP;
 
@@ -227,13 +279,15 @@ END;
 $BODY$;
 
 
-CREATE OR REPLACE PROCEDURE delete_empty_entries(
+CREATE OR REPLACE FUNCTION delete_empty_entries (
     transliteration_id integer,
     target text,
     child_target text,
     key_col text,
     target_schema text
     )
+    RETURNS SETOF log_data
+    VOLATILE
     LANGUAGE 'plpgsql'
 AS $BODY$
 DECLARE
@@ -256,31 +310,44 @@ FOR entry_no IN
         transliteration_id,
         target_schema)
     LOOP
-    CALL adjust_key_col(transliteration_id, entry_no+1, child_target, key_col, key_col, -1, target_schema, true);
-    CALL delete_entry(transliteration_id, entry_no, target, key_col, target_schema, true);
+    RETURN QUERY SELECT * FROM adjust_key_col(transliteration_id, entry_no+1, child_target, key_col, key_col, -1, target_schema);
+    RETURN QUERY SELECT * FROM delete_entry(transliteration_id, entry_no, target, key_col, target_schema);
 END LOOP;
 
 END;
 $BODY$;
 
 
-
-CREATE OR REPLACE PROCEDURE edit (
+CREATE OR REPLACE FUNCTION edit (
     v_schema text, 
     v_transliteration_id integer
     )
+    RETURNS SETOF log_data
+    VOLATILE
     LANGUAGE PLPGSQL
 AS $BODY$
 
 DECLARE
 
-    op              wagner_fischer_op;
-    ops             wagner_fischer_op[];
-    rec             record;
-    col             text;
-    entry_no        integer;
-    child_entry_no  integer;
-    split           boolean;
+    op      wagner_fischer_op;
+    ops     wagner_fischer_op[];
+    rec     record;
+    col     text;
+
+    word_columns         text[]      := '{compound_no, capitalized}';
+    word_special_col     boolean[]   := '{t,f}';
+    compound_columns     text[]      := '{pn_type, language, section_no, compound_comment}';
+    compound_special_col boolean[]   := '{f,f,t,f}';
+    line_columns         text[]      := '{block_no, line, line_comment}';
+    line_special_col     boolean[]   := '{t,f,f}';
+    block_columns        text[]      := '{surface_no, block_type, block_data, block_comment}';
+    block_special_col    boolean[]   := '{t,f,f,f}';
+    surface_columns      text[]      := '{object_no, surface_type, surface_data, surface_comment}';
+    surface_special_col  boolean[]   := '{t,f,f,f}';
+    object_columns       text[]      := '{object_type, object_data, object_comment}';
+    object_special_col   boolean[]   := '{f,f,f}';
+    section_columns      text[]      := '{section_name, composition_id, witness_type}';
+    section_special_col  boolean[]   := '{f,f,f}';
 
 BEGIN
 
@@ -348,61 +415,90 @@ BEGIN
                 v_transliteration_id)
                 INTO rec;
 
-            CALL insert_sign(v_transliteration_id, (op).pos-1, rec, 'public', true);
+            RETURN QUERY SELECT * FROM insert_entry(v_transliteration_id, (op).pos-1, 'corpus', 'sign_no', rec, 'public');
         ELSIF (op).op = 'DELETE' THEN
-            CALL delete_sign(v_transliteration_id, (op).pos-1, 'public', true);
+            RETURN QUERY SELECT * FROM delete_entry(v_transliteration_id, (op).pos-1, 'corpus', 'sign_no', 'public');
         END IF;
     END LOOP;
 
     FOREACH col IN ARRAY array['custom_value', 'value_id', 'sign_variant_id', 'properties', 'stem', 
                                'condition', 'crits', 'comment', 'newline', 'inverted', 'ligature'] LOOP
-        CALL update_all_entries(v_transliteration_id, 'corpus', 'sign_no', col, v_schema, 'public');
+        RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'corpus', 'sign_no', col, v_schema, 'public');
     END LOOP;
 
-    CALL delete_empty_entries(v_transliteration_id, 'words', 'corpus', 'word_no', 'public');
-    CALL split_merge_all_entries(v_transliteration_id, 'words', 'corpus', 'word_no', 'sign_no', array['compound_no'], array['capitalized'], v_schema, 'public');
-    CALL update_all_entries(v_transliteration_id, 'words', 'word_no', 'capitalized', v_schema, 'public');   
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'words', 'corpus', 'word_no', 'public');
+    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'words', 'corpus', 'word_no', 'sign_no', word_columns, word_special_col, v_schema, 'public');
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'words', 'word_no', word_columns, word_special_col, v_schema, 'public');   
 
-    CALL delete_empty_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', 'public');
-    CALL split_merge_all_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', 'word_no', array[]::text[], array['pn_type', 'language', 'section_no', 'compound_comment'], v_schema, 'public');
-    FOREACH col IN ARRAY array['pn_type', 'language', 'section_no', 'compound_comment'] LOOP
-        CALL update_all_entries(v_transliteration_id, 'compounds', 'compound_no', col, v_schema, 'public');
-    END LOOP;
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', 'public');
+    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', 'word_no', compound_columns, compound_special_col, v_schema, 'public');
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'compounds', 'compound_no', compound_columns, compound_special_col, v_schema, 'public');
 
-    CALL delete_empty_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', 'public');
-    CALL split_merge_all_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', 'sign_no', array['block_no'], array['line', 'line_comment'], v_schema, 'public');
-    FOREACH col IN ARRAY array['line', 'line_comment'] LOOP
-        CALL update_all_entries(v_transliteration_id, 'lines', 'line_no', col, v_schema, 'public');
-    END LOOP;
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'sections', 'compounds', 'section_no', 'public');
+    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'sections', 'compounds', 'section_no', 'compound_no', section_columns, section_special_col, v_schema, 'public');
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'sections', 'section_no', section_columns, section_special_col, v_schema, 'public');
 
-    CALL delete_empty_entries(v_transliteration_id, 'blocks', 'lines', 'block_no', 'public');
-    CALL split_merge_all_entries(v_transliteration_id, 'blocks', 'lines', 'block_no', 'line_no', array['surface_no'], array['block_type', 'block_data', 'block_comment'], v_schema, 'public');
-    FOREACH col IN ARRAY array['block_type', 'block_data', 'block_comment'] LOOP
-        CALL update_all_entries(v_transliteration_id, 'blocks', 'block_no', col, v_schema, 'public');
-    END LOOP;
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', 'public');
+    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', 'sign_no', line_columns, line_special_col, v_schema, 'public');
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'lines', 'line_no', line_columns, line_special_col, v_schema, 'public');
 
-    CALL delete_empty_entries(v_transliteration_id, 'surfaces', 'blocks', 'surface_no', 'public');
-    CALL split_merge_all_entries(v_transliteration_id, 'surfaces', 'blocks', 'surface_no', 'block_no', array['object_no'], array['surface_type', 'surface_data', 'surface_comment'], v_schema, 'public');
-    FOREACH col IN ARRAY array['surface_type', 'surface_data', 'surface_comment'] LOOP
-        CALL update_all_entries(v_transliteration_id, 'surfaces', 'surface_no', col, v_schema, 'public');
-    END LOOP;
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'blocks', 'lines', 'block_no', 'public');
+    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'blocks', 'lines', 'block_no', 'line_no', block_columns, block_special_col, v_schema, 'public');
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'blocks', 'block_no', block_columns, block_special_col, v_schema, 'public');
 
-    CALL delete_empty_entries(v_transliteration_id, 'objects', 'surfaces', 'object_no', 'public');
-    CALL split_merge_all_entries(v_transliteration_id, 'objects', 'surfaces', 'object_no', 'surface_no', array[]::text[], array['object_type', 'object_data', 'object_comment'], v_schema, 'public');
-    FOREACH col IN ARRAY array['object_type', 'object_data', 'object_comment'] LOOP
-        CALL update_all_entries(v_transliteration_id, 'objects', 'object_no', col, v_schema, 'public');
-    END LOOP;
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'surfaces', 'blocks', 'surface_no', 'public');
+    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'surfaces', 'blocks', 'surface_no', 'block_no', surface_columns, surface_special_col, v_schema, 'public');
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'surfaces', 'surface_no', surface_columns, surface_special_col, v_schema, 'public');
 
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'objects', 'surfaces', 'object_no', 'public');
+    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'objects', 'surfaces', 'object_no', 'surface_no', object_columns, object_special_col, v_schema, 'public');
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'objects', 'object_no', object_columns, object_special_col, v_schema, 'public');
+
+    RETURN;
 END;
 
 $BODY$;
 
 
-CREATE OR REPLACE PROCEDURE edit_transliteration(
+CREATE OR REPLACE PROCEDURE edit_logged (
+    v_schema text, 
+    v_transliteration_id integer,
+    v_user_id integer DEFAULT NULL
+    )
+    LANGUAGE PLPGSQL
+AS $BODY$
+DECLARE
+    v_edit_id       integer;
+BEGIN
+
+    INSERT INTO edits (transliteration_id, timestamp, user_id) 
+    SELECT 
+        v_transliteration_id, 
+        CURRENT_TIMESTAMP, 
+        v_user_id 
+    RETURNING edit_id INTO v_edit_id;
+
+    INSERT INTO edit_log 
+    SELECT
+        v_edit_id,
+        ordinality,
+        entry_no,
+        target,
+        action,
+        query
+    FROM
+        edit(v_schema, v_transliteration_id) WITH ORDINALITY;
+
+END;
+$BODY$;
+
+
+CREATE OR REPLACE PROCEDURE edit_transliteration (
     code text, 
     transliteration_id integer,
     language language,
-    stemmed boolean
+    stemmed boolean,
+    user_id integer DEFAULT NULL
     )
     LANGUAGE PLPGSQL
 AS $BODY$
@@ -410,9 +506,63 @@ AS $BODY$
 BEGIN
 
     CALL parse(code, 'editor', language, stemmed, transliteration_id);
-    CALL edit('editor', transliteration_id);
+    CALL edit_logged('editor', transliteration_id, user_id);
     CALL delete_transliteration(transliteration_id, 'editor');
 
 END;
 
+$BODY$;
+
+
+CREATE OR REPLACE PROCEDURE undo (
+    v_edit_id integer, 
+    v_schema text
+    )
+    LANGUAGE PLPGSQL
+    AS 
+$BODY$
+DECLARE
+
+v_query text;
+
+BEGIN
+FOR v_query IN 
+    SELECT query 
+    FROM edit_log 
+    WHERE 
+        edit_id = v_edit_id
+    ORDER BY log_no DESC 
+    LOOP
+    RAISE INFO USING MESSAGE = v_query;
+    DISCARD PLANS;
+    EXECUTE v_query USING v_schema;
+END LOOP;
+END;
+$BODY$;
+
+
+CREATE OR REPLACE PROCEDURE undo (
+    v_transliteration_id integer, 
+    v_timestamp timestamp, 
+    v_schema text
+    )
+    LANGUAGE PLPGSQL
+    AS 
+$BODY$
+DECLARE
+
+v_edit_id integer;
+
+BEGIN
+FOR v_edit_id IN 
+    SELECT edit_id 
+    FROM edits 
+    WHERE 
+        transliteration_id = v_transliteration_id 
+        AND timestamp >= v_timestamp
+    ORDER BY timestamp DESC 
+    LOOP
+    CALL undo(v_edit_id, v_schema);
+END LOOP;
+END;
 $BODY$;

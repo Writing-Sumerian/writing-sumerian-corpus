@@ -1,22 +1,23 @@
-CREATE TABLE corpus_log (
-    log_no bigserial PRIMARY KEY,
-    transliteration_id integer REFERENCES transliterations(transliteration_id) ON DELETE CASCADE,
-    timestamp timestamp,
+CREATE TYPE log_data AS (
+    transliteration_id integer,
+    entry_no integer,
+    target text,
+    action text,
     query text
 );
 
-
-
-CREATE OR REPLACE PROCEDURE adjust_key_col (
+CREATE OR REPLACE FUNCTION adjust_key_col (
     transliteration_id integer,
     entry_no integer,
     target text,
     key_col text,
     key_col_to_adjust text,
     val integer,
-    schema text,
-    log boolean
+    schema text
     )
+    RETURNS SETOF log_data
+    VOLATILE
+    ROWS 1
     LANGUAGE PLPGSQL
     AS 
 $BODY$
@@ -27,28 +28,25 @@ entry_no_log integer := entry_no;
 
 BEGIN
 
-IF log THEN
-
-    IF key_col = key_col_to_adjust THEN
-        entry_no_log = entry_no_log + val;
-    END IF;
-
-    EXECUTE format(
-        $$
-        INSERT INTO corpus_log (transliteration_id, timestamp, query)
-        SELECT
-            %1$s,
-            CURRENT_TIMESTAMP,
-            'CALL adjust_key_col(%1$s, %s, ''%s'', ''%s'', ''%s'', %s, $1, false)'
-        $$,
-        transliteration_id,
-        entry_no_log,
-        target,
-        key_col,
-        key_col_to_adjust,
-        -val);
+IF key_col = key_col_to_adjust THEN
+    entry_no_log = entry_no_log + val;
 END IF;
 
+RETURN QUERY EXECUTE format(
+    $$
+    SELECT
+        %1$s,
+        %2$s,
+        %3$L,
+        'adjust',
+        'SELECT adjust_key_col(%1$s, %2$s, ''%3$s'', ''%4$s'', ''%5$s'', %6$s, $1)'
+    $$,
+    transliteration_id,
+    entry_no_log,
+    target,
+    key_col,
+    key_col_to_adjust,
+    -val);
 
 SET CONSTRAINTS ALL DEFERRED;
 
@@ -82,46 +80,49 @@ EXECUTE format(
     key_col_to_adjust,
     transliteration_id);
 
+RETURN;
+
 END;
 $BODY$;
 
 
-CREATE OR REPLACE PROCEDURE update_entry (
+CREATE OR REPLACE FUNCTION update_entry (
     transliteration_id integer,
     entry_no integer,
     target text,
     key_col text,
     col text,
     value text,
-    schema text,
-    log boolean
+    schema text
     )
+    RETURNS SETOF log_data
+    VOLATILE
+    ROWS 1
     LANGUAGE PLPGSQL
     AS 
 $BODY$
 BEGIN
 
-IF log THEN
-    EXECUTE format(
-        $$
-        INSERT INTO corpus_log (transliteration_id, timestamp, query)
-        SELECT
-            %5$s,
-            CURRENT_TIMESTAMP,
-            format('CALL update_entry(%%s, %%s, %%L, %%L, %%L, %%L, $1, false)', %5$s, %6$s, %1$L, %3$L, %4$L, %4$I)
-        FROM
-            %2$I.%1$I
-        WHERE
-            transliteration_id = %5$s AND
-            %3$I = %6$s
-        $$,
-        target,
-        schema,
-        key_col,
-        col,
-        transliteration_id,
-        entry_no);
-END IF;
+RETURN QUERY EXECUTE format(
+    $$
+    SELECT
+        %5$s,
+        %6$s,
+        %1$L,
+        %4$L,
+        format('SELECT update_entry(%%s, %%s, %%L, %%L, %%L, %%L, $1)', %5$s, %6$s, %1$L, %3$L, %4$L, %4$I)
+    FROM
+        %2$I.%1$I
+    WHERE
+        transliteration_id = %5$s AND
+        %3$I = %6$s
+    $$,
+    target,
+    schema,
+    key_col,
+    col,
+    transliteration_id,
+    entry_no);
 
 EXECUTE format(
     $$
@@ -139,43 +140,46 @@ EXECUTE format(
     key_col,
     entry_no);
 
+RETURN;
+
 END;
 $BODY$;
 
 
-CREATE OR REPLACE PROCEDURE insert_entry (
+CREATE OR REPLACE FUNCTION insert_entry (
     transliteration_id integer,
     entry_no integer,
     target text,
     key_col text,
     vals record,
-    schema text,
-    log boolean
+    schema text
     )
+    RETURNS SETOF log_data
+    VOLATILE
+    ROWS 1
     LANGUAGE PLPGSQL
     AS 
 $BODY$
 
 BEGIN
 
-IF log THEN
-    EXECUTE format(
-        $$
-        INSERT INTO corpus_log (transliteration_id, timestamp, query)
-        SELECT
-            %1$s,
-            CURRENT_TIMESTAMP,
-            'CALL delete_entry(%1$s, %s, ''%s'', ''%s'', $1, false)'
-        $$,
-        transliteration_id,
-        entry_no,
-        target,
-        key_col);
-END IF;
+RETURN QUERY EXECUTE format(
+    $$
+    SELECT
+        %1$s,
+        %2$s,
+        %3$L,
+        'insert',
+        'SELECT delete_entry(%1$s, %s, ''%s'', ''%s'', $1)'
+    $$,
+    transliteration_id,
+    entry_no,
+    target,
+    key_col);
 
 SET CONSTRAINTS ALL DEFERRED;
 
-CALL adjust_key_col(transliteration_id, entry_no, target, key_col, key_col, 1, schema, false);
+PERFORM adjust_key_col(transliteration_id, entry_no, target, key_col, key_col, 1, schema);
 
 EXECUTE format(
     $$
@@ -186,49 +190,52 @@ EXECUTE format(
     target,
     vals);
 
+RETURN;
+
 END;
 $BODY$;
 
 
-CREATE OR REPLACE PROCEDURE delete_entry (
+CREATE OR REPLACE FUNCTION delete_entry (
     transliteration_id integer,
     entry_no integer,
     target text,
     key_col text,
-    schema text,
-    log boolean
+    schema text
     )
+    RETURNS SETOF log_data
+    VOLATILE
+    ROWS 1
     LANGUAGE PLPGSQL
     AS 
 $BODY$
 
 BEGIN
 
-IF log THEN
-    EXECUTE format(
-        $$
-        INSERT INTO corpus_log (transliteration_id, timestamp, query)
-        SELECT
+RETURN QUERY EXECUTE format(
+    $$
+    SELECT
+        %4$s,
+        %5$s,
+        %1$L,
+        'delete',
+        format('SELECT insert_entry(%%s, %%s, %%L, %%L, %%L::%2$I.%1$I, $1)',
             %4$s,
-            CURRENT_TIMESTAMP,
-            format('CALL insert_entry(%%s, %%s, %%L, %%L, %%L::%2$I.%1$I, $1, false)',
-                %4$s,
-                %5$s,
-                %1$L,
-                %3$L,
-                %1$I)
-        FROM
-            %2$I.%1$I
-        WHERE
-            transliteration_id = %4$s AND
-            %3$I = %5$s
-        $$,
-        target,
-        schema,
-        key_col,
-        transliteration_id,
-        entry_no);
-END IF;
+            %5$s,
+            %1$L,
+            %3$L,
+            %1$I)
+    FROM
+        %2$I.%1$I
+    WHERE
+        transliteration_id = %4$s AND
+        %3$I = %5$s
+    $$,
+    target,
+    schema,
+    key_col,
+    transliteration_id,
+    entry_no);
 
 SET CONSTRAINTS ALL DEFERRED;
 
@@ -245,13 +252,15 @@ EXECUTE format(
     key_col,
     entry_no);
 
-CALL adjust_key_col(transliteration_id, entry_no, target, key_col, key_col, -1, schema, false);
+PERFORM adjust_key_col(transliteration_id, entry_no, target, key_col, key_col, -1, schema);
+
+RETURN;
 
 END;
 $BODY$;
 
 
-CREATE OR REPLACE PROCEDURE split_entry (
+CREATE OR REPLACE FUNCTION split_entry (
     transliteration_id integer,
     entry_no integer,
     target text,
@@ -259,9 +268,11 @@ CREATE OR REPLACE PROCEDURE split_entry (
     parent_target text,
     parent_key_col text,
     vals record,
-    schema text,
-    log boolean
+    schema text
     )
+    RETURNS SETOF log_data
+    VOLATILE
+    ROWS 2
     LANGUAGE PLPGSQL
     AS 
 $BODY$
@@ -289,30 +300,58 @@ EXECUTE format(
     entry_no)
     INTO STRICT parent_entry_no;
 
-CALL insert_entry(transliteration_id, parent_entry_no, parent_target, parent_key_col, vals, schema, log);
-CALL adjust_key_col(transliteration_id, entry_no+1, target, key_col, parent_key_col, 1, schema, log);
+RETURN QUERY SELECT * FROM insert_entry(transliteration_id, parent_entry_no, parent_target, parent_key_col, vals, schema);
+RETURN QUERY SELECT * FROM adjust_key_col(transliteration_id, entry_no+1, target, key_col, parent_key_col, 1, schema);
+RETURN;
 
 END;
 $BODY$;
 
 
-CREATE OR REPLACE PROCEDURE merge_entries (
+CREATE OR REPLACE FUNCTION merge_entries (
     transliteration_id integer,
     entry_no integer,
     target text,
     key_col text,
     child_target text,
-    schema text,
-    log boolean
+    child_key_col text,
+    schema text
     )
+    RETURNS SETOF log_data
+    VOLATILE
+    ROWS 2
     LANGUAGE PLPGSQL
     AS 
 $BODY$
+DECLARE
+
+child_entry_no integer;
+
 BEGIN
 
+EXECUTE format(
+    $$
+    SELECT
+        min(%1$I)
+    FROM
+        %2$I.%3$I
+    WHERE
+        %4$I = %5$s
+        AND transliteration_id = %6$s
+    $$,
+    child_key_col,
+    schema,
+    child_target,
+    key_col,
+    entry_no+1,
+    transliteration_id
+    )
+    INTO child_entry_no;
+RAISE INFO USING MESSAGE = child_entry_no;
 SET CONSTRAINTS ALL DEFERRED;
-CALL adjust_key_col(transliteration_id, entry_no+1, child_target, key_col, key_col, -1, schema, log);
-CALL delete_entry(transliteration_id, entry_no, target, key_col, schema, log);
+RETURN QUERY SELECT * FROM adjust_key_col(transliteration_id, child_entry_no, child_target, child_key_col, key_col, -1, schema);
+RETURN QUERY SELECT * FROM delete_entry(transliteration_id, entry_no, target, key_col, schema);
+RETURN;
 
 END;
 $BODY$;
@@ -455,35 +494,6 @@ t text;
 BEGIN
 FOREACH t IN ARRAY array['corpus', 'words', 'compounds', 'lines', 'blocks', 'surfaces', 'objects'] LOOP
     EXECUTE format($$INSERT INTO %I.%I SELECT * FROM %I.%I WHERE transliteration_id = %s$$, source_schema, t, target_schema, t, transliteration_id);
-END LOOP;
-END;
-$BODY$;
-
-
-CREATE OR REPLACE PROCEDURE undo (
-    v_transliteration_id integer, 
-    v_timestamp timestamp, 
-    v_schema text
-    )
-    LANGUAGE PLPGSQL
-    AS 
-$BODY$
-DECLARE
-
-v_query text;
-
-BEGIN
-FOR v_query IN 
-    SELECT query 
-    FROM corpus_log 
-    WHERE 
-        transliteration_id = v_transliteration_id 
-        AND timestamp >= v_timestamp
-    ORDER BY log_no DESC 
-    LOOP
-    RAISE INFO USING MESSAGE = v_query;
-    DISCARD PLANS;
-    EXECUTE v_query USING v_schema;
 END LOOP;
 END;
 $BODY$;
