@@ -1,0 +1,5 @@
+comment = 'Cuneiform tests'
+default_version = '0.0.1'
+relocatable = false
+module_pathname = '$libdir/cuneiform_test'
+requires = 'pgtap,cuneiform_database'
