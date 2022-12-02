@@ -376,8 +376,7 @@ FROM
     LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier)
 WHERE
     type = 'value' OR
-    type = 'sign' OR
-    (type = 'number' AND sign_spec IS NOT NULL);
+    type = 'sign';
 
 
 CALL database_create_indexes ();
