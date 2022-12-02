@@ -19,8 +19,9 @@ CREATE TABLE periods (
 
 CREATE TABLE proveniences (
     provenience_id serial PRIMARY KEY,
-    name text UNIQUE,
-    modern_name text UNIQUE,
+    cigs_id text UNIQUE,
+    name text,
+    modern_name text,
     latitude real,
     longitude real,
     CHECK (name IS NOT NULL OR modern_name IS NOT NULL)
