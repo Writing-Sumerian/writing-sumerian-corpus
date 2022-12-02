@@ -403,6 +403,61 @@ static Connector determine_connector(const State* s1, const State* s2, bool inve
 }
 
 
+static Oid opened_condition_start(const char* s, size_t n, bool* no_condition)
+{
+    *no_condition = false;
+    while(n-- != 0)
+    {
+        if(*s == ']')
+            return CONDITION_LOST;
+        if(n+1 >= strlen("⸣") && !cun_strcmp(s, "⸣"))
+            return CONDITION_DAMAGED;
+        if(n+1 >= strlen("›") && !cun_strcmp(s, "›"))
+            return CONDITION_INSERTED;
+        if(n+1 >= strlen("»") && !cun_strcmp(s, "»"))
+            return CONDITION_DELETED;
+        if(*s == '[') 
+            return CONDITION_INTACT;
+        if(n+1 >= strlen("⸢") && !cun_strcmp(s, "⸢"))
+            return CONDITION_INTACT;
+        if(n+1 >= strlen("‹") && !cun_strcmp(s, "‹"))
+            return CONDITION_INTACT;
+        if(n+1 >= strlen("«") && !cun_strcmp(s, "«"))
+            return CONDITION_INTACT;
+        ++s;
+    }
+    *no_condition = true;
+    return CONDITION_INTACT;
+}
+
+static Oid opened_condition_end(const char* s, size_t n)
+{
+    s += n-1;
+    size_t i = 0;
+    while(i++ != n)
+    {
+        if(*s == ']')
+            return CONDITION_INTACT;
+        if(i+1 >= strlen("⸣") && !cun_strcmp(s, "⸣"))
+            return CONDITION_INTACT;
+        if(i+1 >= strlen("›") && !cun_strcmp(s, "›"))
+            return CONDITION_INTACT;
+        if(i+1 >= strlen("»") && !cun_strcmp(s, "»"))
+            return CONDITION_INTACT;
+        if(*s == '[') 
+            return CONDITION_LOST;
+        if(i+1 >= strlen("⸢") && !cun_strcmp(s, "⸢"))
+            return CONDITION_DAMAGED;
+        if(i+1 >= strlen("‹") && !cun_strcmp(s, "‹"))
+            return CONDITION_INSERTED;
+        if(i+1 >= strlen("«") && !cun_strcmp(s, "«"))
+            return CONDITION_DELETED;
+        --s;
+    }
+    return CONDITION_INTACT;
+}
+
+
 // HTML
 
 static char* open_html(char* s, int changes, const State* state)
@@ -563,6 +618,60 @@ static char* write_modified_connector_html(char* s, const Connector c)
     return s;
 }
 
+static size_t calculate_value_size_replacing_conditions_html(const char* s, size_t n)
+{
+    size_t size = 0;
+    while(n-- != 0)
+    {
+        if(*s == ']')
+            size += strlen("</span><span class='close-lost'></span>");
+        else if(n+1 >= strlen("⸣") && !cun_strcmp(s, "⸣"))
+            size += strlen("</span><span class='close-damaged'></span>");
+        else if(n+1 >= strlen("›") && !cun_strcmp(s, "›"))
+            size += strlen("</span><span class='close-inserted'></span>");
+        else if(n+1 >= strlen("»") && !cun_strcmp(s, "»"))
+            size += strlen("</span><span class='close-deleted'></span>");
+        else if(*s == '[') 
+            size += strlen("<span class='open-lost'></span><span class='lost'>");
+        else if(n+1 >= strlen("⸢") && !cun_strcmp(s, "⸢"))
+            size += strlen("<span class='close-damaged'><span class='damaged'>");
+        else if(n+1 >= strlen("‹") && !cun_strcmp(s, "‹"))
+            size += strlen("<span class='close-inserted'><span class='inserted'>");
+        else if(n+1 >= strlen("«") && !cun_strcmp(s, "«"))
+            size += strlen("<span class='close-deleted'><span class='deleted'>");
+        else
+            ++size;
+    }
+    return size;
+}
+
+static char* write_value_replacing_conditions_html(char* s, const char* v, size_t n)
+{
+    while(n-- != 0)
+    {
+        if(*s == ']')
+            s = cun_strcpy(s, "</span><span class='close-lost'></span>");
+        else if(n+1 >= strlen("⸣") && !cun_strcmp(s, "⸣"))
+            s = cun_strcpy(s, "</span><span class='close-damaged'></span>");
+        else if(n+1 >= strlen("›") && !cun_strcmp(s, "›"))
+            s = cun_strcpy(s, "</span><span class='close-inserted'></span>");
+        else if(n+1 >= strlen("»") && !cun_strcmp(s, "»"))
+            s = cun_strcpy(s, "</span><span class='close-deleted'></span>");
+        else if(*s == '[') 
+            s = cun_strcpy(s, "<span class='open-lost'></span><span class='lost'>");
+        else if(n+1 >= strlen("⸢") && !cun_strcmp(s, "⸢"))
+            s = cun_strcpy(s, "<span class='close-damaged'><span class='damaged'>");
+        else if(n+1 >= strlen("‹") && !cun_strcmp(s, "‹"))
+            s = cun_strcpy(s, "<span class='close-inserted'><span class='inserted'>");
+        else if(n+1 >= strlen("«") && !cun_strcmp(s, "«"))
+            s = cun_strcpy(s, "<span class='close-deleted'><span class='deleted'>");
+        else
+            *s++ = *v;
+        ++v;
+    }
+    return s;
+}
+
 Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 {
     MemoryContext aggcontext;
@@ -595,12 +704,13 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
     const int32 string_size = VARSIZE_ANY_EXHDR(state->string);
     const int32 value_size = value ? VARSIZE_ANY_EXHDR(value) : 0;
+    const int32 value_size_final = calculate_value_size_replacing_conditions_html(VARDATA_ANY(value), value_size);
     const int32 sign_size = sign ? VARSIZE_ANY_EXHDR(sign) : 0;
     const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
     const int32 comment_size = comment ? VARSIZE_ANY_EXHDR(comment) : 0;
     const int32 compound_comment_size = state_old.compound_comment ? VARSIZE_ANY_EXHDR(state_old.compound_comment) : 0;
     const int32 section_size = section ? VARSIZE_ANY_EXHDR(section) : 0;
-    const int32 size = value_size + sign_size + critics_size + comment_size + compound_comment_size + section_size;
+    const int32 size = value_size_final + sign_size + critics_size + comment_size + compound_comment_size + section_size;
     if(state->string_capacity < string_size + size + MAX_EXTRA_SIZE_HTML)
     {
         state->string = (text*)repalloc(state->string, string_size + size + EXP_LINE_SIZE_HTML + VARHDRSZ);
@@ -610,6 +720,11 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     const bool x_value = value_size >= 8 ? *((char*)VARDATA_ANY(value) + value_size - 8) == 'x' : false;
 
     char* s = VARDATA(state->string)+string_size;
+
+    bool no_condition;
+    const Oid inner_condition = opened_condition_start((char*)VARDATA_ANY(value), value_size, &no_condition);
+    if(!no_condition)
+        state->condition = inner_condition;
 
     int changes = 0;
     if(!PG_ARGISNULL(0))
@@ -665,7 +780,8 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         else
         {
             char* s_ = s;
-            s = cun_memcpy(s, VARDATA_ANY(value), value_size);
+            //s = cun_memcpy(s, VARDATA_ANY(value), value_size);
+            s = write_value_replacing_conditions_html(s, VARDATA_ANY(value), value_size);
             if(state->capitalize && !state->indicator) {
                 cun_capitalize(s_);
                 state->capitalize = false;
@@ -730,6 +846,9 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     }
     else
         SET_VARSIZE(state->compound_comment, VARHDRSZ);
+
+    if(!no_condition)
+        state->condition = opened_condition_end((char*)VARDATA_ANY(value), value_size);
 
     SET_VARSIZE(state->string, s-VARDATA(state->string)+VARHDRSZ); 
 
@@ -978,6 +1097,11 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
 
     char* s = VARDATA(state->string)+string_size;
 
+    bool no_condition;
+    const Oid inner_condition = opened_condition_start((char*)VARDATA_ANY(value), value_size, &no_condition);
+    if(!no_condition)
+        state->condition = inner_condition;
+
     if(string_size)
     { 
         s = close_code(s, &state_old, state);
@@ -1058,6 +1182,9 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     }
     else
         SET_VARSIZE(state->compound_comment, VARHDRSZ);
+
+    if(!no_condition)
+        state->condition = opened_condition_end((char*)VARDATA_ANY(value), value_size);
 
     SET_VARSIZE(state->string, s-VARDATA(state->string)+VARHDRSZ); 
 
