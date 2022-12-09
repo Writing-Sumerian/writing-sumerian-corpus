@@ -475,7 +475,7 @@ FROM
 
 DROP TABLE periods_tmp_;
 
-EXECUTE format('COPY proveniences(cigs_id, name, modern_name, latitude, longitude) FROM %L CSV NULL ''\N''', path || 'proveniences.csv');
+EXECUTE format('COPY proveniences(site_id, name, modern_name, latitude, longitude) FROM %L CSV NULL ''\N''', path || 'proveniences.csv');
 
 EXECUTE format('COPY genres(name) FROM %L CSV NULL ''\N''', path || 'genres.csv');
 
