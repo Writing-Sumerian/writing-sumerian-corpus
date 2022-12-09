@@ -525,8 +525,6 @@ static char* close_html(char* s, int changes, const State* state)
         s = cun_strcpy(s, "</span>");
     if(changes >= PHONOGRAPHIC && !state->phonographic_null && (state->phonographic == (state->language == LANGUAGE_SUMERIAN)))
         s = cun_strcpy(s, "</span>");
-    if(changes >= PHONOGRAPHIC && state->phonographic && !state->phonographic_null)
-        s = cun_strcpy(s, "</span>");
     if(changes >= HIGHLIGHT && state->highlight)
         s = cun_strcpy(s, "</span>");
     if(changes >= STEM && state->stem && !state->stem_null)
