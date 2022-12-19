@@ -143,7 +143,7 @@ CREATE AGGREGATE cun_agg_html (
 );
 
 
-CREATE OR REPLACE FUNCTION public.compose_sign_html (
+CREATE OR REPLACE FUNCTION compose_sign_html (
     tree jsonb)
     RETURNS TEXT
     LANGUAGE 'plpython3u' 
@@ -181,7 +181,7 @@ AS $BODY$
             if re.fullmatch(r'(BAU|LAK|KWU|RSP|REC|ZATU|ELLES)[0-9]{3}', op):
                 return re.sub(r'([0-9]+)$', r'<span class="slindex">\1</span>', op)
             else:
-                return re.sub(r'(?<=[^0-9x])([0-9x]+)$', r'<span class=''index''>\1</span>', op)
+                return re.sub(r'(?<=[^0-9x])([0-9x]+)$', r'<span class="index">\1</span>', op)
 
     def parenthesize(node, prec, left):
         if len(node['vals']) == 2 and precedence[node['op']] + int(left) <= prec and node['op'] in ['.', '×']:
@@ -192,54 +192,111 @@ AS $BODY$
 $BODY$;
 
 
-CREATE MATERIALIZED VIEW value_variants_html AS
-SELECT
-    value_variant_id,
-    regexp_replace(value, '(?<=[^0-9x])([0-9x]+)$', '<span class=''index''>\1</span>') AS value_html
-FROM
-    value_variants;
+CREATE TABLE value_variants_composed (
+    value_variant_id integer PRIMARY KEY,
+    value_id integer,
+    main boolean,
+    value_code text,
+    value_html text
+);
 
-CREATE MATERIALIZED VIEW values_html AS
+CREATE TABLE sign_variants_composed (
+    sign_variant_id integer PRIMARY KEY,
+    sign_code text,
+    graphemes_code text,
+    glyphs_code text,
+    sign_html text,
+    graphemes_html text,
+    glyphs_html text,
+    variant_type sign_variant_type
+);
+
+CREATE VIEW values_composed AS
 SELECT
     value_id,
+    value_code,
     value_html
 FROM
-    values
-    JOIN value_variants_html ON main_variant_id = value_variant_id;
+    value_variants_composed
+WHERE
+    main;
 
-CREATE MATERIALIZED VIEW values_code AS
+
+CREATE VIEW value_variants_composed_view AS
 SELECT
-    values.value_id,
-    value AS value_code
+    value_variant_id,
+    value_id,
+    value_variant_id = main_variant_id,
+    value,
+    regexp_replace(value, '(?<=[^0-9x])([0-9x]+)$', '<span class=''index''>\1</span>')
 FROM
-    values
-    JOIN value_variants ON main_variant_id = value_variant_id;
+    value_variants
+    LEFT JOIN values USING (value_id);
 
-CREATE MATERIALIZED VIEW signs_code AS
+INSERT INTO value_variants_composed SELECT * from value_variants_composed_view;
+
+
+CREATE FUNCTION value_variants_composed_value_variants_trigger_fun () 
+  RETURNS trigger 
+  VOLATILE
+  LANGUAGE PLPGSQL
+  AS
+$BODY$
+BEGIN
+    IF NEW = NULL THEN
+        DELETE FROM value_variants_composed WHERE value_variants_composed.value_variant_id = (OLD).value_variant_id;
+    ELSE
+        INSERT INTO value_variants_composed
+        SELECT
+            *
+        FROM
+            value_variants_composed_view
+        WHERE
+            value_variant_id = (NEW).value_variant_id
+        ON CONFLICT (value_variant_id) DO UPDATE SET
+            value_id = EXCLUDED.value_id,
+            main = EXCLUDED.main,
+            value_code = EXCLUDED.value_code,
+            value_html = EXCLUDED.value_html;
+    END IF;
+    RETURN NULL;
+END;
+$BODY$;
+
+CREATE FUNCTION value_variants_composed_values_trigger_fun () 
+  RETURNS trigger 
+  VOLATILE
+  LANGUAGE PLPGSQL
+  AS
+$BODY$
+BEGIN
+    UPDATE value_variants_composed SET main = sign_variant_id = (NEW).main_variant_id WHERE value_id = (NEW).value_id;
+    RETURN NULL;
+END;
+$BODY$;
+
+CREATE TRIGGER value_variants_composed_value_variants_trigger
+  AFTER UPDATE OR INSERT OR DELETE ON value_variants 
+  FOR EACH ROW
+  EXECUTE FUNCTION value_variants_composed_value_variants_trigger_fun();
+
+CREATE TRIGGER value_variants_composed_values_trigger
+  AFTER UPDATE ON values 
+  FOR EACH ROW
+  EXECUTE FUNCTION value_variants_composed_values_trigger_fun();
+
+
+
+CREATE VIEW sign_variants_composed_view AS
 SELECT
     sign_variant_id,
-    string_agg(
-        CASE WHEN allographs.variant_type = 'default' THEN grapheme ELSE glyph END,
-        '.'
-        ORDER BY ord
-    ) AS sign_code,
+    string_agg(CASE WHEN allographs.variant_type = 'default' THEN grapheme ELSE glyph END, '.' ORDER BY ord) AS sign_code,
     string_agg(grapheme, '.'ORDER BY ord) AS graphemes_code,
-    string_agg(glyph, '.' ORDER BY ord) AS glyphs_code
-FROM
-    sign_variants
-    LEFT JOIN LATERAL unnest(allograph_ids) WITH ORDINALITY AS a(allograph_id, ord) ON TRUE
-    LEFT JOIN allographs USING (allograph_id)
-    LEFT JOIN graphemes USING (grapheme_id)
-    LEFT JOIN glyphs USING (glyph_id)
-GROUP BY
-    sign_variant_id;
-
-CREATE MATERIALIZED VIEW signs_html AS
-SELECT
-    sign_variant_id,
+    string_agg(glyph, '.' ORDER BY ord) AS glyphs_code,
     string_agg(CASE WHEN allographs.variant_type = 'default' THEN grapheme_html ELSE glyph_html END, '.' ORDER BY ord) AS sign_html,
     string_agg(grapheme_html, '.'ORDER BY ord) AS graphemes_html,
-    string_agg(glyph_html, '.' ORDER BY ord) AS glyphs_html
+    string_agg(glyph_html, '.' ORDER BY ord) AS glyphs_html,
+    sign_variants.variant_type
 FROM
     sign_variants
     LEFT JOIN LATERAL unnest(allograph_ids) WITH ORDINALITY AS a(allograph_id, ord) ON TRUE
@@ -250,6 +307,124 @@ FROM
     LEFT JOIN LATERAL compose_sign_html(parse_sign(glyph)) AS c(glyph_html) ON TRUE
 GROUP BY
     sign_variant_id;
+
+INSERT INTO sign_variants_composed SELECT * from sign_variants_composed_view;
+
+
+CREATE FUNCTION update_sign_variants_composed (
+        v_sign_variant_id integer
+    ) 
+    RETURNS void 
+    VOLATILE
+    LANGUAGE PLPGSQL
+    AS
+$BODY$
+BEGIN
+    INSERT INTO sign_variants_composed 
+    SELECT
+        *
+    FROM 
+        sign_variants_composed_view
+    WHERE
+        sign_variant_id = v_sign_variant_id
+    ON CONFLICT (sign_variant_id) DO UPDATE SET
+        sign_code = EXCLUDED.sign_code,
+        graphemes_code = EXCLUDED.graphemes_code,
+        glyphs_code = EXCLUDED.glyphs_code,
+        sign_html = EXCLUDED.sign_html,
+        graphemes_html = EXCLUDED.graphemes_html,
+        glyphs_html = EXCLUDED.glyphs_html,
+        variant_type = EXCLUDED.variat_type;
+END;
+$BODY$;
+
+CREATE FUNCTION sign_variants_composed_sign_variants_trigger_fun () 
+  RETURNS trigger 
+  VOLATILE
+  LANGUAGE PLPGSQL
+  AS
+$BODY$
+BEGIN
+    IF NEW = NULL THEN
+        DELETE FROM sign_variants_composed WHERE sign_variants_composed.sign_variant_id = (OLD).sign_variant_id;
+    ELSE
+        PERFORM update_sign_variants_composed((NEW).sign_variant_id);
+    END IF;
+    RETURN NULL;
+END;
+$BODY$;
+
+CREATE FUNCTION sign_variants_composed_allographs_trigger_fun () 
+  RETURNS trigger 
+  VOLATILE
+  LANGUAGE PLPGSQL
+  AS
+$BODY$
+BEGIN
+    PERFORM 
+        update_sign_variants_composed(sign_variant_id)
+    FROM
+        sign_variants 
+    WHERE
+        (NEW).allograph_id = ANY(allograph_ids);
+    RETURN NULL;
+END;
+$BODY$;
+
+CREATE FUNCTION sign_variants_composed_graphemes_trigger_fun () 
+  RETURNS trigger 
+  VOLATILE
+  LANGUAGE PLPGSQL
+  AS
+$BODY$
+BEGIN
+    PERFORM 
+        update_sign_variants_composed(sign_variant_id)
+    FROM
+        sign_variants 
+    WHERE
+        (NEW).grapheme_id = ANY(grapheme_ids);
+    RETURN NULL;
+END;
+$BODY$;
+
+CREATE FUNCTION sign_variants_composed_glyphs_trigger_fun () 
+  RETURNS trigger 
+  VOLATILE
+  LANGUAGE PLPGSQL
+  AS
+$BODY$
+BEGIN
+    PERFORM 
+        update_sign_variants_composed(sign_variant_id)
+    FROM
+        sign_variants 
+    WHERE
+        (NEW).glyph_id = ANY(glyph_ids);
+    RETURN NULL;
+END;
+$BODY$;
+
+CREATE TRIGGER sign_variants_composed_sign_variants_trigger
+  AFTER UPDATE OR INSERT OR DELETE ON sign_variants 
+  FOR EACH ROW
+  EXECUTE FUNCTION sign_variants_composed_sign_variants_trigger_fun();
+
+CREATE TRIGGER sign_variants_composed_allographs_trigger
+  AFTER UPDATE OF variant_type ON allographs 
+  FOR EACH ROW
+  EXECUTE FUNCTION sign_variants_composed_allographs_trigger_fun();
+
+CREATE TRIGGER sign_variants_composed_graphemes_trigger
+  AFTER UPDATE OF grapheme ON graphemes 
+  FOR EACH ROW
+  EXECUTE FUNCTION sign_variants_composed_graphemes_trigger_fun();
+
+CREATE TRIGGER sign_variants_composed_glyphs_trigger
+  AFTER UPDATE OF glyph ON glyphs 
+  FOR EACH ROW
+  EXECUTE FUNCTION sign_variants_composed_glyphs_trigger_fun();
+
 
 CREATE OR REPLACE FUNCTION placeholder (type SIGN_TYPE)
     RETURNS text
@@ -280,7 +455,7 @@ $BODY$;
 CREATE VIEW corpus_code AS
 SELECT
     transliteration_id,
-    CASE WHEN (properties).type = 'sign' THEN COALESCE(graphemes_code,custom_value) ELSE COALESCE(value_code, custom_value) END AS value,
+    CASE WHEN (properties).type = 'sign' THEN COALESCE(graphemes_code, custom_value) ELSE COALESCE(value_code, custom_value) END AS value,
     glyphs_code AS sign, 
     variant_type,
     sign_no, 
@@ -306,9 +481,8 @@ FROM
     LEFT JOIN words USING (transliteration_id, word_no) 
     LEFT JOIN compounds USING (transliteration_id, compound_no) 
     LEFT JOIN sections USING (transliteration_id, section_no)
-    LEFT JOIN sign_variants USING (sign_variant_id) 
-    LEFT JOIN signs_code USING (sign_variant_id)
-    LEFT JOIN values_code USING (value_id);
+    LEFT JOIN sign_variants_composed USING (sign_variant_id)
+    LEFT JOIN values_composed USING (value_id);
 
 
 CREATE VIEW corpus_code_clean AS
@@ -327,9 +501,8 @@ FROM
     corpus
     LEFT JOIN words USING (transliteration_id, word_no) 
     LEFT JOIN compounds USING (transliteration_id, compound_no) 
-    LEFT JOIN sign_variants USING (sign_variant_id) 
-    LEFT JOIN signs_code USING (sign_variant_id)
-    LEFT JOIN values_code USING (value_id);
+    LEFT JOIN sign_variants_composed USING (sign_variant_id)
+    LEFT JOIN values_composed USING (value_id);
 
 
 CREATE OR REPLACE VIEW corpus_html AS
@@ -361,9 +534,8 @@ FROM
     LEFT JOIN words USING (transliteration_id, word_no) 
     LEFT JOIN compounds USING (transliteration_id, compound_no) 
     LEFT JOIN sections USING (transliteration_id, section_no)
-    LEFT JOIN sign_variants USING (sign_variant_id) 
-    LEFT JOIN values_html USING (value_id)
-    LEFT JOIN signs_html USING (sign_variant_id);
+    LEFT JOIN sign_variants_composed USING (sign_variant_id)
+    LEFT JOIN values_composed USING (value_id);
 
 CREATE VIEW corpus_html_clean AS
 SELECT
@@ -381,9 +553,8 @@ FROM
     corpus
     LEFT JOIN words USING (transliteration_id, word_no) 
     LEFT JOIN compounds USING (transliteration_id, compound_no) 
-    LEFT JOIN sign_variants USING (sign_variant_id) 
-    LEFT JOIN values_html USING (value_id)
-    LEFT JOIN signs_html USING (sign_variant_id);
+    LEFT JOIN sign_variants_composed USING (sign_variant_id)
+    LEFT JOIN values_composed USING (value_id);
 
 
 CREATE VIEW corpus_code_range AS
