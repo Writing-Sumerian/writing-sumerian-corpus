@@ -190,7 +190,7 @@ WHERE
 CREATE INDEX value_index ON value_variants (value);
 
 
-CREATE MATERIALIZED VIEW sign_variants_composed AS
+CREATE MATERIALIZED VIEW sign_variants_composition AS
 SELECT
     sign_variant_id,
     graphemes,
@@ -224,7 +224,7 @@ SELECT
     array_length(glyph_ids, 1) AS length
 FROM
     sign_variants
-    JOIN sign_variants_composed USING (sign_variant_id);
+    JOIN sign_variants_composition USING (sign_variant_id);
 
 
 CREATE MATERIALIZED VIEW sign_map (identifier, graphemes, grapheme_ids, glyphs, glyph_ids) AS
@@ -323,7 +323,7 @@ SELECT
     glyphs,
     graphemes,
     TRUE,
-    sign_variants.specific
+    count(*) OVER (PARTITION BY value) = 1
 FROM
     glyph_values 
     JOIN sign_variants USING (glyph_ids)
@@ -391,6 +391,43 @@ CREATE OR REPLACE FUNCTION normalize_glyphs (
             sign_no
         ) _
 $BODY$;
+
+CREATE OR REPLACE FUNCTION split_sign (
+    sign text
+    )
+    RETURNS TABLE(component text, op text)
+    LANGUAGE SQL
+    IMMUTABLE
+    STRICT
+    ROWS 2
+    AS $BODY$
+    SELECT 
+        regexp_split_to_table(sign, '([()+.&%×]|@[gštnkzi0-9]*)+'), 
+        regexp_split_to_table(regexp_replace(sign, '^\(', 'V('), '[A-ZŠĜŘḪṬṢŚ’]+[x0-9]*(bis)?|(?<![@0-9])[0-9]+')
+$BODY$;
+
+CREATE OR REPLACE FUNCTION split_glyphs (
+    sign text
+    )
+    RETURNS TABLE(glyph text)
+    LANGUAGE PLPYTHON3U
+    IMMUTABLE
+    STRICT
+    ROWS 2
+    AS $BODY$
+    j = 0
+    level = 0
+    for i, c in enumerate(sign):
+        if c == '(':
+            level += 1
+        elif c == ')':
+            level -= 1
+        elif not level and c == '.':
+            yield sign[j:i]
+            j = i+1
+    yield sign[j:]
+$BODY$;
+
 
 CREATE OR REPLACE PROCEDURE add_value (
   sign_id integer, 
@@ -490,7 +527,7 @@ CREATE OR REPLACE PROCEDURE add_allomorph (
         pos,
         grapheme_ids[1]
     FROM
-        LATERAL regexp_split_to_table(graphemes, '\.') WITH ORDINALITY a(grapheme_identifier, pos)
+        LATERAL split_glyphs(graphemes) WITH ORDINALITY a(grapheme_identifier, pos)
         LEFT JOIN sign_map ON identifier = grapheme_identifier AND array_length(grapheme_ids, 1) = 1;
   END;
 $BODY$;
@@ -677,43 +714,6 @@ LANGUAGE PLPGSQL
     SELECT value_variants.value_id INTO value_id_new FROM value_variants WHERE value_variants.value = make_glyph_value.value_new;
     CALL make_glyph_value(value_id, value_id_new);
 END;
-$BODY$;
-
-
-CREATE OR REPLACE FUNCTION split_sign (
-    sign text
-    )
-    RETURNS TABLE(component text, op text)
-    LANGUAGE SQL
-    IMMUTABLE
-    STRICT
-    ROWS 2
-    AS $BODY$
-    SELECT 
-        regexp_split_to_table(sign, '([()+.&%×]|@[gštnkzi0-9]*)+'), 
-        regexp_split_to_table(regexp_replace(sign, '^\(', 'V('), '[A-ZŠĜŘḪṬṢŚ’]+[x0-9]*(bis)?|(?<![@0-9])[0-9]+')
-$BODY$;
-
-CREATE OR REPLACE FUNCTION split_glyphs (
-    sign text
-    )
-    RETURNS TABLE(glyph text)
-    LANGUAGE PLPYTHON3U
-    IMMUTABLE
-    STRICT
-    ROWS 2
-    AS $BODY$
-    j = 0
-    level = 0
-    for i, c in enumerate(sign):
-        if c == '(':
-            level += 1
-        elif c == ')':
-            level -= 1
-        elif not level and c == '.':
-            yield sign[j:i]
-            j = i+1
-    yield sign[j:]
 $BODY$;
 
 
