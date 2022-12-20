@@ -92,6 +92,9 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
 
         @v_args(inline=True)
         def indicator(self, alignment, indic_type, spec):
+
+            spec += " AND {table}.indicator"
+
             if alignment == '>':
                 spec += " AND {table}.alignment = 'right'"
             elif alignment == '<':
