@@ -165,7 +165,7 @@ BEGIN
       (properties).phonographic
     FROM 
       (SELECT (NEW).*) new
-      JOIN sign_variants USING (sign_variant_id)
+      JOIN sign_variants_composition USING (sign_variant_id)
       LEFT JOIN LATERAL unnest(grapheme_ids, glyph_ids) WITH ORDINALITY a(grapheme_id, glyph_id, pos) ON TRUE
     UNION ALL
     SELECT
@@ -396,7 +396,7 @@ SELECT * FROM (
     (properties).phonographic
   FROM 
     x
-    JOIN sign_variants USING (sign_variant_id)
+    JOIN sign_variants_composition USING (sign_variant_id)
     LEFT JOIN LATERAL unnest(grapheme_ids, glyph_ids) WITH ORDINALITY a(grapheme_id, glyph_id, pos) ON TRUE
   UNION ALL
   SELECT

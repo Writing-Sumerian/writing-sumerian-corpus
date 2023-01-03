@@ -243,7 +243,7 @@ CREATE FUNCTION value_variants_composed_value_variants_trigger_fun ()
   AS
 $BODY$
 BEGIN
-    IF NEW = NULL THEN
+    IF NEW IS NULL THEN
         DELETE FROM value_variants_composed WHERE value_variants_composed.value_variant_id = (OLD).value_variant_id;
     ELSE
         INSERT INTO value_variants_composed
@@ -263,14 +263,14 @@ BEGIN
 END;
 $BODY$;
 
-CREATE FUNCTION value_variants_composed_values_trigger_fun () 
+CREATE OR REPLACE FUNCTION value_variants_composed_values_trigger_fun () 
   RETURNS trigger 
   VOLATILE
   LANGUAGE PLPGSQL
   AS
 $BODY$
 BEGIN
-    UPDATE value_variants_composed SET main = sign_variant_id = (NEW).main_variant_id WHERE value_id = (NEW).value_id;
+    UPDATE value_variants_composed SET main = value_variant_id = (NEW).main_variant_id WHERE value_id = (NEW).value_id;
     RETURN NULL;
 END;
 $BODY$;
@@ -311,7 +311,7 @@ GROUP BY
 INSERT INTO sign_variants_composed SELECT * from sign_variants_composed_view;
 
 
-CREATE FUNCTION update_sign_variants_composed (
+CREATE OR REPLACE FUNCTION update_sign_variants_composed (
         v_sign_variant_id integer
     ) 
     RETURNS void 
@@ -334,7 +334,7 @@ BEGIN
         sign_html = EXCLUDED.sign_html,
         graphemes_html = EXCLUDED.graphemes_html,
         glyphs_html = EXCLUDED.glyphs_html,
-        variant_type = EXCLUDED.variat_type;
+        variant_type = EXCLUDED.variant_type;
 END;
 $BODY$;
 
@@ -345,7 +345,7 @@ CREATE FUNCTION sign_variants_composed_sign_variants_trigger_fun ()
   AS
 $BODY$
 BEGIN
-    IF NEW = NULL THEN
+    IF NEW IS NULL THEN
         DELETE FROM sign_variants_composed WHERE sign_variants_composed.sign_variant_id = (OLD).sign_variant_id;
     ELSE
         PERFORM update_sign_variants_composed((NEW).sign_variant_id);
@@ -381,7 +381,7 @@ BEGIN
     PERFORM 
         update_sign_variants_composed(sign_variant_id)
     FROM
-        sign_variants 
+        sign_variants_composition 
     WHERE
         (NEW).grapheme_id = ANY(grapheme_ids);
     RETURN NULL;
@@ -398,7 +398,7 @@ BEGIN
     PERFORM 
         update_sign_variants_composed(sign_variant_id)
     FROM
-        sign_variants 
+        sign_variants_composition 
     WHERE
         (NEW).glyph_id = ANY(glyph_ids);
     RETURN NULL;

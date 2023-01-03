@@ -361,7 +361,7 @@ BEGIN
                 corpus
                 LEFT JOIN values USING (value_id) 
                 LEFT JOIN value_variants ON main_variant_id = value_variant_id
-                LEFT JOIN sign_variants_text USING (sign_variant_id)
+                LEFT JOIN sign_variants_composition USING (sign_variant_id)
             WHERE 
                 corpus.transliteration_id = %2$s
         ),
@@ -372,7 +372,7 @@ BEGIN
                 %1$I.corpus 
                 LEFT JOIN values USING (value_id) 
                 LEFT JOIN value_variants ON main_variant_id = value_variant_id
-                LEFT JOIN sign_variants_text USING (sign_variant_id)
+                LEFT JOIN sign_variants_composition USING (sign_variant_id)
             WHERE 
                 corpus.transliteration_id = %2$s
         )

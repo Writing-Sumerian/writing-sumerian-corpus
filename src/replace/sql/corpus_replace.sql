@@ -96,7 +96,7 @@ components_original AS (
         glyph_id
     FROM
         original
-        LEFT JOIN sign_variants USING (sign_variant_id)
+        LEFT JOIN sign_variants_composition USING (sign_variant_id)
         LEFT JOIN LATERAL UNNEST (glyph_ids) WITH ORDINALITY AS _(glyph_id, ord) ON TRUE
     WHERE
         matched
@@ -108,7 +108,7 @@ components_replacement AS (
         glyph_id
     FROM
         replacement
-        LEFT JOIN sign_variants USING (sign_variant_id)
+        LEFT JOIN sign_variants_composition USING (sign_variant_id)
         LEFT JOIN LATERAL UNNEST (glyph_ids) WITH ORDINALITY AS _(glyph_id, ord) ON TRUE
 ),
 correspondence AS (

@@ -129,11 +129,11 @@ EXECUTE format(
     UPDATE %1$s
     SET
         value_id = NULL,
-        sign_variant_id = sign_variants_text.sign_variant_id
+        sign_variant_id = sign_variants_composition.sign_variant_id
     FROM
         %2$I s
         JOIN normalized_signs USING (%3$I, sign_no)
-        JOIN sign_variants_text USING (glyphs)
+        JOIN sign_variants_composition USING (glyphs)
     WHERE
         specific AND
         %1$s.%3$I = s.%3$I AND
@@ -151,14 +151,14 @@ EXECUTE format(
     UPDATE %1$s
     SET
         value_id = NULL,
-        sign_variant_id = sign_variants_text.sign_variant_id
+        sign_variant_id = sign_variants_composition.sign_variant_id
     FROM
         %2$I s
         JOIN normalized_sign_specs USING (%3$I, sign_no)
-        JOIN sign_variants_text USING (glyphs)
+        JOIN sign_variants_composition USING (glyphs)
         JOIN sign_map ON identifier = value
     WHERE 
-        sign_map.graphemes = sign_variants_text.graphemes AND
+        sign_map.graphemes = sign_variants_composition.graphemes AND
         %1$s.%3$I = s.%3$I AND
         %1$s.sign_no = s.sign_no AND
         s.type = 'sign' AND 
@@ -174,11 +174,11 @@ EXECUTE format(
     UPDATE %1$s
     SET
         value_id = NULL,
-        sign_variant_id = sign_variants_text.sign_variant_id
+        sign_variant_id = sign_variants_composition.sign_variant_id
     FROM
         %2$I s
         LEFT JOIN normalized_sign_specs USING (%3$I, sign_no)
-        LEFT JOIN sign_variants_text USING (glyphs)
+        LEFT JOIN sign_variants_composition USING (glyphs)
     WHERE 
         specific AND
         %1$s.%3$I = s.%3$I AND
@@ -300,13 +300,13 @@ BEGIN
                     %1$s,
                     sign_no,
                     NULL,
-                    sign_variants_text.sign_variant_id
+                    sign_variants_composition.sign_variant_id
                 FROM
                     %2$I s
                     LEFT JOIN normalized_signs USING (%1$s, sign_no)
-                    LEFT JOIN sign_variants_text USING (glyphs)
+                    LEFT JOIN sign_variants_composition USING (glyphs)
                 WHERE
-                    (sign_variants_text.specific OR sign_variants_text.specific IS NULL) AND
+                    (sign_variants_composition.specific OR sign_variants_composition.specific IS NULL) AND
                     s.type = 'sign' AND 
                     s.sign_spec IS NULL
                 UNION ALL
@@ -314,14 +314,14 @@ BEGIN
                     %1$s,
                     sign_no,
                     NULL,
-                    sign_variants_text.sign_variant_id
+                    sign_variants_composition.sign_variant_id
                 FROM
                     %2$I s
                     LEFT JOIN normalized_sign_specs USING (%1$s, sign_no)
-                    LEFT JOIN sign_variants_text USING (glyphs)
-                    LEFT JOIN sign_map ON sign_variants_text.sign_variant_id IS NOT NULL AND identifier = value
+                    LEFT JOIN sign_variants_composition USING (glyphs)
+                    LEFT JOIN sign_map ON sign_variants_composition.sign_variant_id IS NOT NULL AND identifier = value
                 WHERE 
-                    (sign_map.graphemes = sign_variants_text.graphemes OR sign_variants_text.graphemes IS NULL) AND
+                    (sign_map.graphemes = sign_variants_composition.graphemes OR sign_variants_composition.graphemes IS NULL) AND
                     s.type = 'sign' AND 
                     s.sign_spec IS NOT NULL
                 UNION ALL
@@ -329,13 +329,13 @@ BEGIN
                     %1$s,
                     sign_no,
                     NULL,
-                    sign_variants_text.sign_variant_id
+                    sign_variants_composition.sign_variant_id
                 FROM
                     %2$I s
                     LEFT JOIN normalized_sign_specs USING (%1$s, sign_no)
-                    LEFT JOIN sign_variants_text USING (glyphs)
+                    LEFT JOIN sign_variants_composition USING (glyphs)
                 WHERE 
-                    (sign_variants_text.specific OR sign_variants_text.specific IS NULL) AND
+                    (sign_variants_composition.specific OR sign_variants_composition.specific IS NULL) AND
                     s.type = 'number'
         $$,
         key_str,

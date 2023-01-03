@@ -25,7 +25,9 @@ include $(PGXS)
 
 all: build/$(EXTENSION)--$(version).sql
 
-build/$(EXTENSION)--$(version).sql: sql/$(EXTENSION).sql python/$(EXTENSION).py
+sql					:= sql/data_structures.sql sql/sign_variants.sql sql/commands.sql sql/$(EXTENSION).sql sql/normalize.sql
+
+build/$(EXTENSION)--$(version).sql:  $(sql) python/$(EXTENSION).py
 	@mkdir -p build
 	@py2plpy python/$(EXTENSION).py build/$(EXTENSION)--$(version).sql
-	@cat sql/$(EXTENSION).sql >> build/$(EXTENSION)--$(version).sql
+	@cat $(sql) >> build/$(EXTENSION)--$(version).sql

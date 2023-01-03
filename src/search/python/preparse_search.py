@@ -17,15 +17,14 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
 
         QUERY = "SELECT array_agg(value_id) AS value_ids, array_agg(sign_variant_id) AS sign_variant_ids FROM {fromClause} WHERE {whereClause}"
         NOSPEC_FROM = "(SELECT DISTINCT value, value_id, CASE glyphs_required WHEN TRUE THEN sign_variant_id ELSE NULL END AS sign_variant_id FROM value_map) _"
-        GRAPHEME_TABLE = "sign_variants JOIN allomorphs USING (allomorph_id) JOIN values USING (sign_id) JOIN value_variants USING (value_id)"
+        GRAPHEME_TABLE = "sign_variants_composition JOIN allomorphs USING (allomorph_id) JOIN values USING (sign_id) JOIN value_variants USING (value_id)"
         
         VALUE_SPEC_PLAN = plpy.prepare(QUERY.format(fromClause='value_map', whereClause='value = $1 AND glyphs = $2'), ["text", "text"])
         VALUE_NOSPEC_PLAN = plpy.prepare(QUERY.format(fromClause=NOSPEC_FROM, whereClause='value = $1'), ["text"])
         PATTERN_SPEC_PLAN = plpy.prepare(QUERY.format(fromClause='value_map', whereClause='value ~ $1 AND glyphs = $2'), ["text", "text"])
         PATTERN_NOSPEC_PLAN = plpy.prepare(QUERY.format(fromClause=NOSPEC_FROM, whereClause='value ~ $1'), ["text"])
-        VALUEX_SPEC_PLAN = plpy.prepare("SELECT sign_variant_id FROM sign_variants_text WHERE glyphs = $1 AND specific", ["text"])
-        SIGN_SPEC_PLAN = plpy.prepare(f"""SELECT grapheme_ids, glyph_ids FROM {GRAPHEME_TABLE} JOIN sign_variants_text 
-            USING (sign_variant_id, allomorph_id) WHERE value = $1 AND glyphs = $2""", ["text", "text"])
+        VALUEX_SPEC_PLAN = plpy.prepare("SELECT sign_variant_id FROM sign_variants_composition WHERE glyphs = $1 AND specific", ["text"])
+        SIGN_SPEC_PLAN = plpy.prepare(f"""SELECT grapheme_ids, glyph_ids FROM {GRAPHEME_TABLE} WHERE value = $1 AND glyphs = $2""", ["text", "text"])
         SIGN_GRAPHEME_PLAN = plpy.prepare(f"SELECT DISTINCT grapheme_ids FROM {GRAPHEME_TABLE} WHERE value = $1", ["text"])
         SIGN_GLYPH_PLAN = plpy.prepare("SELECT glyph_ids FROM sign_map WHERE glyphs = $1 AND array_length(glyph_ids, 1) = 1", ["text"])
         
