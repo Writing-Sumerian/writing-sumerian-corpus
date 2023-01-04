@@ -691,7 +691,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     const text* value = PG_ARGISNULL(ARG_VALUE) ? NULL : PG_GETARG_TEXT_PP(ARG_VALUE);
     const text* sign = PG_ARGISNULL(ARG_SIGN) ? (state->unknown_reading ? value : NULL) : PG_GETARG_TEXT_PP(ARG_SIGN);
 
-    const Oid variant_type = PG_ARGISNULL(ARG_VARIANT_TYPE) ? VARIANT_TYPE_NONDEFAULT : PG_GETARG_OID(ARG_VARIANT_TYPE);
+    const Oid variant_type = PG_ARGISNULL(ARG_VARIANT_TYPE) ? VARIANT_TYPE_DEFAULT : PG_GETARG_OID(ARG_VARIANT_TYPE);
 
     const bool inverted = PG_GETARG_BOOL(ARG_INVERTED);
     const bool newline = PG_GETARG_BOOL(ARG_NEWLINE);
@@ -1070,7 +1070,7 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     const text* value = PG_ARGISNULL(ARG_VALUE) ? NULL : PG_GETARG_TEXT_PP(ARG_VALUE);
     const text* sign = PG_ARGISNULL(ARG_SIGN) ? (state->unknown_reading ? value : NULL) : PG_GETARG_TEXT_PP(ARG_SIGN);
 
-    const Oid variant_type = PG_ARGISNULL(ARG_VARIANT_TYPE) ? VARIANT_TYPE_NONDEFAULT : PG_GETARG_OID(ARG_VARIANT_TYPE);
+    const Oid variant_type = PG_ARGISNULL(ARG_VARIANT_TYPE) ? VARIANT_TYPE_DEFAULT : PG_GETARG_OID(ARG_VARIANT_TYPE);
 
     const bool inverted = PG_GETARG_BOOL(ARG_INVERTED);
     const bool newline = PG_GETARG_BOOL(ARG_NEWLINE);
