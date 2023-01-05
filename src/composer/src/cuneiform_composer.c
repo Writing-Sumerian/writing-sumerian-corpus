@@ -390,7 +390,7 @@ static Connector determine_connector(const State* s1, const State* s2, bool inve
 
     if(s1->indicator && s2->indicator && s1->alignment == s2->alignment)
         res.connector = s1->phonographic == s2->phonographic ? (s1->phonographic ? SEP_INDICATOR_P : SEP_INDICATOR_L) : SEP_INDICATOR_M;
-    else if((s1->indicator && s1->alignment == ALIGNMENT_RIGHT) || (s2->indicator && s2->alignment == ALIGNMENT_LEFT))
+    else if((s1->indicator && (s1->alignment == ALIGNMENT_RIGHT || s1->alignment == ALIGNMENT_CENTER)) || (s2->indicator && (s2->alignment == ALIGNMENT_LEFT || s2->alignment == ALIGNMENT_CENTER)))
         res.connector = SEP_INDICATOR_0;
     else if(s1->compound_no != s2->compound_no)
         res.connector = SEP_COMPOUND;
@@ -1019,6 +1019,7 @@ static char* write_modified_connector_code(char* s, const Connector c)
     }
     else if(c.modifier == SEP_EXT_LIGATURE)
     {
+        s = write_simple_connector_code(s, c.connector);
         *s++ = '+';
     }
     else if(c.modifier == SEP_EXT_LINEBREAK)
