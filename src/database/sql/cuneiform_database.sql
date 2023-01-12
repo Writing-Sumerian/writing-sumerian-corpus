@@ -8,7 +8,7 @@ CREATE TABLE corpora (
 
 -- Texts
 
-CREATE TABLE texts_norm (
+CREATE TABLE texts (
     text_id serial PRIMARY KEY,
     cdli_no text,
     bdtns_no text,
@@ -26,7 +26,7 @@ CREATE TABLE texts_norm (
 
 CREATE TABLE transliterations (
     transliteration_id serial PRIMARY KEY,
-    text_id integer NOT NULL REFERENCES texts_norm (text_id) DEFERRABLE INITIALLY IMMEDIATE,
+    text_id integer NOT NULL REFERENCES texts (text_id) DEFERRABLE INITIALLY IMMEDIATE,
     corpus_id integer NOT NULL REFERENCES corpora (corpus_id) DEFERRABLE INITIALLY IMMEDIATE
 );
 
@@ -225,37 +225,26 @@ ALTER TABLE corpus ADD FOREIGN KEY (transliteration_id) REFERENCES transliterati
 CLUSTER corpus USING corpus_pkey;
 
 
--- Views
-
-CREATE VIEW texts AS
-SELECT 
-    texts_norm.*,
-    periods.name AS period,
-    COALESCE(proveniences.name, proveniences.modern_name) AS provenience,
-    genres.name AS genre
-FROM
-    texts_norm
-    LEFT JOIN periods USING (period_id)
-    LEFT JOIN proveniences USING (provenience_id)
-    LEFT JOIN genres USING (genre_id);
-
-
 -- Performance
 
 CREATE OR REPLACE PROCEDURE database_create_indexes ()
 LANGUAGE SQL
 AS $BODY$
-    CREATE INDEX texts_norm_provenience_id_ix ON texts_norm(provenience_id);
-    CREATE INDEX texts_norm_period_id_ix ON texts_norm(period_id);
-    CREATE INDEX texts_norm_genre_id_ix ON texts_norm(genre_id);
+    CREATE INDEX texts_provenience_id_ix ON texts(provenience_id);
+    CREATE INDEX texts_period_id_ix ON texts(period_id);
+    CREATE INDEX texts_genre_id_ix ON texts(genre_id);
 $BODY$;
 
 CREATE OR REPLACE PROCEDURE database_drop_indexes ()
 LANGUAGE SQL
 AS $BODY$
-    DROP INDEX texts_norm_provenience_id_ix;
-    DROP INDEX texts_norm_period_id_ix;
-    DROP INDEX texts_norm_genre_id_ix;
+    DROP INDEX texts_provenience_id_ix;
+    DROP INDEX texts_period_id_ix;
+    DROP INDEX texts_genre_id_ix;
 $BODY$;
 
 CALL database_create_indexes ();
+
+
+SELECT pg_catalog.pg_extension_config_dump('corpora', '');
+SELECT pg_catalog.pg_extension_config_dump('texts', '');

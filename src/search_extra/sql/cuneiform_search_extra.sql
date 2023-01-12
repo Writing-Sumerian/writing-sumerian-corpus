@@ -502,7 +502,7 @@ SELECT
   sum(1.0/transliteration_count) AS weight
 FROM corpus
   LEFT JOIN transliterations USING (transliteration_id)
-  LEFT JOIN texts_norm USING (text_id)
+  LEFT JOIN texts USING (text_id)
   LEFT JOIN (SELECT text_id, count(*) AS transliteration_count FROM transliterations GROUP BY text_id) _ USING (text_id)
 GROUP BY
   value_id,
@@ -520,7 +520,7 @@ SELECT DISTINCT
   sum(1.0/transliteration_count) AS weight
 FROM corpus
   LEFT JOIN transliterations USING (transliteration_id)
-  LEFT JOIN texts_norm USING (text_id)
+  LEFT JOIN texts USING (text_id)
   LEFT JOIN (SELECT text_id, count(*) AS transliteration_count FROM transliterations GROUP BY text_id) _ USING (text_id)
 GROUP BY
   sign_variant_id,

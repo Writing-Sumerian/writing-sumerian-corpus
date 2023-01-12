@@ -81,7 +81,7 @@ FROM
 -- texts
 
 CREATE TEMPORARY TABLE text_ids_tmp_ (
-    text_id integer DEFAULT nextval('texts_norm_text_id_seq'),
+    text_id integer DEFAULT nextval('texts_text_id_seq'),
     identifier text
 )
 ON COMMIT DROP;
@@ -111,7 +111,7 @@ FROM texts_tmp_;
 
 ALTER TABLE text_ids_tmp_ ADD PRIMARY KEY (identifier);
 
-INSERT INTO texts_norm (text_id, cdli_no, bdtns_no, citation, provenience_id, provenience_comment, period_id, period_comment, genre_id, genre_comment, date, archive)
+INSERT INTO texts (text_id, cdli_no, bdtns_no, citation, provenience_id, provenience_comment, period_id, period_comment, genre_id, genre_comment, date, archive)
 SELECT
     text_id,
     cdli_no,
@@ -467,7 +467,7 @@ DELETE FROM lines;
 DELETE FROM blocks;
 DELETE FROM surfaces;
 DELETE FROM transliterations;
-DELETE FROM texts_norm;
+DELETE FROM texts;
 
 CALL load_corpus(path);
 
@@ -536,9 +536,9 @@ DELETE FROM genres;
 
 CALL load_context(path);
 
-UPDATE texts_norm SET period_id = (SELECT periods.period_id FROM periods JOIN periods_old_ USING (name) WHERE periods_old_.period_id = texts_norm.period_id);
-UPDATE texts_norm SET provenience_id = (SELECT proveniences.provenience_id FROM proveniences JOIN proveniences_old_ USING (name) WHERE proveniences_old_.provenience_id = texts_norm.provenience_id);
-UPDATE texts_norm SET genre_id = (SELECT genres.genre_id FROM genres JOIN genres_old_ USING (name) WHERE genres_old_.genre_id = texts_norm.genre_id);
+UPDATE texts SET period_id = (SELECT periods.period_id FROM periods JOIN periods_old_ USING (name) WHERE periods_old_.period_id = texts.period_id);
+UPDATE texts SET provenience_id = (SELECT proveniences.provenience_id FROM proveniences JOIN proveniences_old_ USING (name) WHERE proveniences_old_.provenience_id = texts.provenience_id);
+UPDATE texts SET genre_id = (SELECT genres.genre_id FROM genres JOIN genres_old_ USING (name) WHERE genres_old_.genre_id = texts.genre_id);
 
 DROP TABLE periods_old_;
 DROP TABLE proveniences_old_;
