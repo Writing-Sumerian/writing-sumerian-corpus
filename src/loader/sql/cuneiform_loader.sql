@@ -15,6 +15,40 @@ CREATE INDEX ON corpus_unencoded (type, (sign_spec IS null));
 CALL create_corpus_encoder('corpus_encoder', 'corpus_unencoded', '{transliteration_id}');
 
 
+CREATE OR REPLACE PROCEDURE encode_corpus ()
+    LANGUAGE PLPGSQL
+    AS $BODY$
+    
+BEGIN
+
+UPDATE corpus SET 
+    value_id = corpus_encoder.value_id, 
+    sign_variant_id = corpus_encoder.sign_variant_id
+FROM
+    corpus_encoder
+WHERE
+    corpus.sign_variant_id IS NULL AND
+    corpus.transliteration_id = corpus_encoder.transliteration_id AND
+    corpus.sign_no = corpus_encoder.sign_no;
+
+DELETE FROM corpus_unencoded 
+USING corpus 
+WHERE 
+    corpus.transliteration_id = corpus_unencoded.transliteration_id AND
+    corpus.sign_no = corpus_unencoded.sign_no AND
+    corpus.sign_variant_id IS NOT NULL;
+
+UPDATE corpus SET 
+    custom_value = NULL
+WHERE
+    custom_value IS NOT NULL AND
+    corpus.sign_variant_id IS NOT NULL;
+
+END
+
+$BODY$;
+
+
 CREATE OR REPLACE PROCEDURE load_corpus (path text)
     LANGUAGE PLPGSQL
     AS $BODY$
