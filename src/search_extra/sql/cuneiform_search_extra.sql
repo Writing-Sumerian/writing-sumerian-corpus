@@ -339,7 +339,7 @@ END;
 $BODY$;
 
 CREATE TRIGGER corpus_search_corpus_trigger
-  AFTER UPDATE OR INSERT OR DELETE ON corpus 
+  AFTER DELETE OR INSERT OR UPDATE OF transliteration_id, sign_no, word_no, line_no, value_id, sign_variant_id, properties ON corpus 
   FOR EACH ROW
   EXECUTE FUNCTION corpus_search_corpus_trigger_fun();
 
