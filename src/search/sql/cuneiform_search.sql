@@ -255,3 +255,19 @@ CREATE TYPE search_wildcard AS (
     wildcard_id integer,
     sign_nos integer[]
 );
+
+CREATE VIEW values_search (value, value_id, sign_variant_id) AS
+SELECT
+    value,
+    value_id,
+    NULL
+FROM
+    value_variants
+UNION ALL
+SELECT
+    value,
+    value_id,
+    sign_variant_id
+FROM
+    glyph_values 
+    JOIN sign_variants_composition USING (glyph_ids);

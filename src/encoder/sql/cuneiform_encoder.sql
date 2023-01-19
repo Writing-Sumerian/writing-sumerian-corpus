@@ -1,199 +1,99 @@
-
-
-
-
-
-
-CREATE OR REPLACE PROCEDURE encode_corpus2 (source text, target text, key text)
-    LANGUAGE PLPGSQL
-    AS $BODY$
-    
-BEGIN
-
-EXECUTE format(
-    $$
-    CREATE TEMPORARY VIEW normalized_signs AS
-    WITH x AS (
-        SELECT
-            %1$s,
-            sign_no,
-            glyph_no,
-            normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
-        FROM
-            %2$I
-            LEFT JOIN LATERAL split_glyphs(value) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
-            LEFT JOIN LATERAL split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
-            LEFT JOIN sign_map ON component = identifier
-        WHERE type = 'sign'
-        GROUP BY 
-            %1$s,
-            sign_no,
-            glyph_no
-    )
-    SELECT 
-        %1$s,
-        sign_no,
-        string_agg(glyphs, '.' ORDER BY glyph_no) AS glyphs
+CREATE OR REPLACE VIEW values_encoded AS
+WITH a(value, sign_spec, value_id, sign_variant_id) AS (
+    SELECT
+        value,
+        glyphs,
+        value_id,
+        sign_variant_id,
+        variant_type
     FROM
-        x
-    GROUP BY
-        %1$s,
-        sign_no
-    $$, 
-    key,
-    source);
-
-EXECUTE format(
-    $$
-    CREATE TEMPORARY VIEW normalized_sign_specs AS
-    WITH x AS (
-        SELECT
-            %1$s,
-            sign_no,
-            glyph_no,
-            normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
-        FROM
-            %2$I
-            LEFT JOIN LATERAL split_glyphs(sign_spec) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
-            LEFT JOIN LATERAL split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
-            LEFT JOIN sign_map ON component = identifier
-        WHERE sign_spec IS NOT NULL
-        GROUP BY 
-            %1$s,
-            sign_no,
-            glyph_no
-    )
-    SELECT 
-        %1$s,
-        sign_no,
-        string_agg(glyphs, '.' ORDER BY glyph_no) AS glyphs
+        value_variants
+        JOIN values USING (value_id)
+        JOIN sign_variants_composition USING (sign_id)
+    UNION ALL
+    SELECT
+        value,
+        null,
+        value_id,
+        sign_variant_id,
+        variant_type
     FROM
-        x
-    GROUP BY
-        %1$s,
-        sign_no
-    $$, 
-    key,
-    source);
-
-
--- values
-EXECUTE format(
-    $$
-    UPDATE %1$s
-    SET
-        value_id = value_map.value_id,
-        sign_variant_id = value_map.sign_variant_id
-    FROM
-        %2$I s
-        JOIN value_map USING (value)
-    WHERE 
-        value_map.specific AND
-        %1$s.%3$I = s.%3$I AND
-        %1$s.sign_no = s.sign_no AND
-        s.sign_spec IS NULL AND 
-        s.type != 'sign' AND 
-        s.type != 'number'
-    $$,
-    target, 
-    source,
-    key);
-
--- values with sign_spec
-EXECUTE format(
-    $$
-    UPDATE %1$s
-    SET
-        value_id = value_map.value_id,
-        sign_variant_id = value_map.sign_variant_id
-    FROM
-        %2$I s
-        JOIN normalized_sign_specs USING (%3$I, sign_no)
-        JOIN value_map USING (glyphs)
-    WHERE 
-        ((s.value !~ 'x' AND s.value = value_map.value) OR  
-            (s.value ~ 'x' AND replace(s.value, 'x', '') = regexp_replace(value_map.value, '[x0-9]+', ''))) AND
-        %1$s.%3$I = s.%3$I AND
-        %1$s.sign_no = s.sign_no AND
-        s.sign_spec IS NOT NULL AND 
-        s.type != 'sign' AND 
-        s.type != 'number'
-    $$,
-    target, 
-    source,
-    key);
-
--- signs
-EXECUTE format(
-    $$
-    UPDATE %1$s
-    SET
-        value_id = NULL,
-        sign_variant_id = sign_variants_composition.sign_variant_id
-    FROM
-        %2$I s
-        JOIN normalized_signs USING (%3$I, sign_no)
-        JOIN sign_variants_composition USING (glyphs)
+        value_variants
+        JOIN values USING (value_id)
+        JOIN sign_variants_composition USING (sign_id)
     WHERE
-        specific AND
-        %1$s.%3$I = s.%3$I AND
-        %1$s.sign_no = s.sign_no AND
-        s.type = 'sign' AND 
-        s.sign_spec IS NULL
-    $$,
-    target,
-    source,
-    key);
-
--- signs with sign_spec
-EXECUTE format(
-    $$
-    UPDATE %1$s
-    SET
-        value_id = NULL,
-        sign_variant_id = sign_variants_composition.sign_variant_id
+        variant_type = 'default'
+        AND NOT value ~ 'x'
+    UNION ALL
+    SELECT
+        regexp_replace(value, '[0-9]*$', 'x'),
+        glyphs,
+        value_id,
+        sign_variant_id,
+        variant_type
     FROM
-        %2$I s
-        JOIN normalized_sign_specs USING (%3$I, sign_no)
-        JOIN sign_variants_composition USING (glyphs)
-        JOIN sign_map ON identifier = value
-    WHERE 
-        sign_map.graphemes = sign_variants_composition.graphemes AND
-        %1$s.%3$I = s.%3$I AND
-        %1$s.sign_no = s.sign_no AND
-        s.type = 'sign' AND 
-        s.sign_spec IS NOT NULL
-    $$,
-    target,
-    source,
-    key);
-
--- numbers
-EXECUTE format(
-    $$
-    UPDATE %1$s
-    SET
-        value_id = NULL,
-        sign_variant_id = sign_variants_composition.sign_variant_id
+        value_variants
+        JOIN values USING (value_id)
+        JOIN sign_variants_composition USING (sign_id)
+    WHERE
+        NOT value ~ 'x'
+    UNION ALL
+    SELECT
+        value,
+        glyphs,
+        value_id,
+        sign_variant_id,
+        variant_type
     FROM
-        %2$I s
-        LEFT JOIN normalized_sign_specs USING (%3$I, sign_no)
-        LEFT JOIN sign_variants_composition USING (glyphs)
-    WHERE 
-        specific AND
-        %1$s.%3$I = s.%3$I AND
-        %1$s.sign_no = s.sign_no AND
-        s.type = 'number'
-    $$,
-    target,
-    source,
-    key);
+        glyph_values 
+        JOIN values USING (value_id)
+        JOIN sign_variants_composition USING (sign_id, glyph_ids)
+    UNION ALL
+    SELECT
+        value,
+        null,
+        value_id,
+        sign_variant_id,
+        variant_type
+    FROM
+        glyph_values 
+        JOIN values USING (value_id)
+        JOIN sign_variants_composition USING (sign_id, glyph_ids)
+)
+SELECT DISTINCT ON (value, sign_spec)
+    value,
+    sign_spec,
+    value_id,
+    sign_variant_id
+FROM
+    a
+ORDER BY
+    value,
+    sign_spec,
+    variant_type;
 
-DROP VIEW normalized_signs;
-DROP VIEW normalized_sign_specs;
 
-END
-$BODY$;
+
+CREATE VIEW signs_encoded (sign, sign_spec, sign_variant_id) AS
+SELECT
+    glyphs,
+    null,
+    sign_variant_id
+FROM
+    sign_variants_composition
+WHERE
+    specific
+UNION ALL
+SELECT
+    a.glyphs,
+    b.glyphs,
+    b.sign_variant_id
+FROM
+    sign_variants_composition a
+    JOIN sign_variants_composition b USING (sign_id)
+WHERE
+    a.variant_type = 'default';
+
 
 
 CREATE OR REPLACE PROCEDURE create_corpus_encoder (name text, source text, key text[])
@@ -201,9 +101,7 @@ CREATE OR REPLACE PROCEDURE create_corpus_encoder (name text, source text, key t
     AS 
 $BODY$
 DECLARE
-
     key_str text;
-
 BEGIN
 
     SELECT string_agg(format('%I', val), ', ') INTO key_str FROM unnest(key) AS _(val);
@@ -268,75 +166,27 @@ BEGIN
                 SELECT
                     %1$s,
                     sign_no,
-                    value_map.value_id,
-                    value_map.sign_variant_id
-                FROM
-                    %2$I s
-                    LEFT JOIN value_map USING (value)
-                WHERE 
-                    (value_map.specific OR value_map.specific IS NULL) AND
-                    s.sign_spec IS NULL AND 
-                    s.type != 'sign' AND 
-                    s.type != 'number'
-                UNION ALL
-                SELECT
-                    %1$s,
-                    sign_no,
-                    value_map.value_id,
-                    value_map.sign_variant_id
+                    value_id,
+                    sign_variant_id
                 FROM
                     %2$I s
                     LEFT JOIN normalized_sign_specs USING (%1$s, sign_no)
-                    LEFT JOIN value_map USING (glyphs)
+                    JOIN values_encoded ON ( normalized_sign_specs.glyphs IS NOT DISTINCT FROM values_encoded.sign_spec AND s.value = values_encoded.value)
                 WHERE 
-                    ((s.value !~ 'x' AND s.value = value_map.value) OR  
-                        (s.value ~ 'x' AND replace(s.value, 'x', '') = regexp_replace(value_map.value, '[x0-9]+', '')) OR
-                        value_map.value IS NULL) AND
-                    s.sign_spec IS NOT NULL AND 
-                    s.type != 'sign' AND 
-                    s.type != 'number'
+                    s.type = 'value'
                 UNION ALL
                 SELECT
                     %1$s,
                     sign_no,
                     NULL,
-                    sign_variants_composition.sign_variant_id
+                    sign_variant_id
                 FROM
                     %2$I s
                     LEFT JOIN normalized_signs USING (%1$s, sign_no)
-                    LEFT JOIN sign_variants_composition USING (glyphs)
-                WHERE
-                    (sign_variants_composition.specific OR sign_variants_composition.specific IS NULL) AND
-                    s.type = 'sign' AND 
-                    s.sign_spec IS NULL
-                UNION ALL
-                SELECT
-                    %1$s,
-                    sign_no,
-                    NULL,
-                    sign_variants_composition.sign_variant_id
-                FROM
-                    %2$I s
                     LEFT JOIN normalized_sign_specs USING (%1$s, sign_no)
-                    LEFT JOIN sign_variants_composition USING (glyphs)
-                    LEFT JOIN sign_map ON sign_variants_composition.sign_variant_id IS NOT NULL AND identifier = value
+                    JOIN signs_encoded ON normalized_signs.glyphs = signs_encoded.sign AND normalized_sign_specs.glyphs IS NOT DISTINCT FROM signs_encoded.sign_spec
                 WHERE 
-                    (sign_map.graphemes = sign_variants_composition.graphemes OR sign_variants_composition.graphemes IS NULL) AND
-                    s.type = 'sign' AND 
-                    s.sign_spec IS NOT NULL
-                UNION ALL
-                SELECT
-                    %1$s,
-                    sign_no,
-                    NULL,
-                    sign_variants_composition.sign_variant_id
-                FROM
-                    %2$I s
-                    LEFT JOIN normalized_sign_specs USING (%1$s, sign_no)
-                    LEFT JOIN sign_variants_composition USING (glyphs)
-                WHERE 
-                    (sign_variants_composition.specific OR sign_variants_composition.specific IS NULL) AND
-                    s.type = 'number'
+                    s.type = 'sign'
         $$,
         key_str,
         source,

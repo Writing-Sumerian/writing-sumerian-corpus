@@ -19,6 +19,7 @@ $BODY$;
 
 CREATE TABLE sign_variants (
     sign_variant_id SERIAL PRIMARY KEY,
+    sign_id integer NOT NULL REFERENCES signs (sign_id) DEFERRABLE INITIALLY DEFERRED,
     allomorph_id integer NOT NULL REFERENCES allomorphs (allomorph_id) DEFERRABLE INITIALLY DEFERRED,
     allograph_ids integer[] NOT NULL,
     variant_type sign_variant_type NOT NULL,
@@ -30,9 +31,7 @@ CREATE TABLE sign_variants (
 CREATE VIEW sign_variants_view AS
 WITH RECURSIVE 
     a AS (
-        SELECT *
-        FROM allomorph_components
-        LEFT JOIN allographs USING (grapheme_id)
+        SELECT * FROM allomorph_components LEFT JOIN allographs USING (grapheme_id)
     ), 
     x(sign_id, allomorph_id, pos, allograph_ids, grapheme_ids, glyph_ids, variant_type, allomorph_variant_type, specific) AS (
         SELECT 
@@ -64,6 +63,7 @@ WITH RECURSIVE
         WHERE (x.pos + 1) = a.pos
     )
 SELECT 
+    sign_id,
     allomorph_id,
     allograph_ids,
     variant_type,
@@ -80,38 +80,62 @@ FROM (
     WHERE rank1 = 1) __
 WHERE rank2 = 1;
 
-CREATE FUNCTION sign_variants_upsert_allomorphs_trigger_fun () 
+
+CREATE OR REPLACE FUNCTION sign_variants_sync_sign (v_sign_id integer)
+  RETURNS void 
+  VOLATILE
+  LANGUAGE PLPGSQL
+  AS
+$BODY$
+BEGIN
+    DELETE FROM sign_variants 
+    WHERE 
+        sign_id = v_sign_id
+        AND (allomorph_id, allograph_ids) NOT IN (SELECT allomorph_id, allograph_ids FROM sign_variants_view WHERE sign_id = v_sign_id);
+
+    INSERT INTO sign_variants (sign_id, allomorph_id, allograph_ids, variant_type, specific)
+    SELECT * FROM sign_variants_view WHERE sign_id = v_sign_id
+    ON CONFLICT (allomorph_id, allograph_ids) DO UPDATE SET
+        sign_id = EXCLUDED.sign_id,
+        variant_type = EXCLUDED.variant_type,
+        specific = EXCLUDED.specific;
+END;
+$BODY$;
+
+CREATE FUNCTION sign_variants_allomorphs_trigger_fun () 
   RETURNS trigger 
   VOLATILE
   LANGUAGE PLPGSQL
   AS
 $BODY$
 BEGIN
-    INSERT INTO sign_variants(allomorph_id, allograph_ids, variant_type, specific)
-    SELECT
-        *
-    FROM
-        sign_variants_view
-    WHERE
-        allomorph_id = (NEW).allomorph_id
-    ON CONFLICT (allomorph_id, allograph_ids) DO UPDATE SET
-        variant_type = EXCLUDED.variant_type,
-        specific = EXCLUDED.specific;
+    PERFORM sign_variants_sync_sign(sign_id) 
+    FROM (
+        SELECT DISTINCT sign_id 
+        FROM LATERAL (VALUES ((OLD).sign_id, (NEW).sign_id)) AS _(sign_id) 
+        WHERE sign_id IS NOT NULL
+    ) _;
     RETURN NULL;
 END;
 $BODY$;
 
-CREATE FUNCTION sign_variants_delete_allomorphs_trigger_fun () 
+CREATE OR REPLACE FUNCTION sign_variants_allomorph_components_trigger_fun () 
   RETURNS trigger 
   VOLATILE
   LANGUAGE PLPGSQL
   AS
 $BODY$
 BEGIN
-    DELETE FROM sign_variants WHERE allomorph_id = (OLD).allomorph_id;
+    PERFORM sign_variants_sync_sign(sign_id) 
+    FROM (
+        SELECT DISTINCT sign_id 
+        FROM allomorphs
+        WHERE allomorph_id = (OLD).allomorph_id OR allomorph_id = (NEW).allomorph_id       
+    ) _;
     RETURN NULL;
 END;
 $BODY$;
+
 
 CREATE OR REPLACE FUNCTION sign_variants_allographs_trigger_fun () 
   RETURNS trigger 
@@ -120,39 +144,29 @@ CREATE OR REPLACE FUNCTION sign_variants_allographs_trigger_fun ()
   AS
 $BODY$
 BEGIN
-    IF NEW IS NULL THEN
-        DELETE FROM sign_variants WHERE (OLD).allograph_id = ANY(allograph_ids);
-    ELSE
-        INSERT INTO sign_variants(allomorph_id, allograph_ids, variant_type, specific)
-        SELECT
-            *
-        FROM
-            sign_variants_view
-        WHERE
-            (NEW).allograph_id = ANY(allograph_ids)
-        ON CONFLICT (allomorph_id, allograph_ids) DO UPDATE SET
-            variant_type = EXCLUDED.variant_type,
-            specific = EXCLUDED.specific;
-    END IF;
+    PERFORM sign_variants_sync_sign(sign_id) 
+    FROM (
+        SELECT DISTINCT sign_id 
+        FROM 
+            allomorphs
+            JOIN allomorph_components USING (allomorph_id)
+            JOIN allographs USING (grapheme_id)
+        WHERE allograph_id = (OLD).allograph_id OR allograph_id = (NEW).allograph_id       
+    ) _;
     RETURN NULL;
 END;
 $BODY$;
 
 
-CREATE TRIGGER sign_variants_upsert_allomorphs_trigger
+CREATE TRIGGER sign_variants_allomorphs_trigger
   AFTER UPDATE OR INSERT ON allomorphs 
   FOR EACH ROW
-  EXECUTE FUNCTION sign_variants_upsert_allomorphs_trigger_fun();
-
-CREATE TRIGGER sign_variants_delete_allomorphs_trigger
-  AFTER DELETE ON allomorphs 
-  FOR EACH ROW
-  EXECUTE FUNCTION sign_variants_delete_allomorphs_trigger_fun();
+  EXECUTE FUNCTION sign_variants_allomorphs_trigger_fun();
 
 CREATE TRIGGER sign_variants_allomorph_components_trigger
   AFTER UPDATE OR INSERT OR DELETE ON allomorph_components 
   FOR EACH ROW
-  EXECUTE FUNCTION sign_variants_upsert_allomorphs_trigger_fun();
+  EXECUTE FUNCTION sign_variants_allomorph_components_trigger_fun();
 
 CREATE TRIGGER sign_variants_allographs_trigger
   AFTER UPDATE OR INSERT OR DELETE ON allographs
@@ -163,6 +177,7 @@ CREATE TRIGGER sign_variants_allographs_trigger
 
 CREATE TABLE sign_variants_composition (
     sign_variant_id integer PRIMARY KEY,
+    sign_id integer NOT NULL REFERENCES signs (sign_id) DEFERRABLE INITIALLY DEFERRED,
     allomorph_id integer NOT NULL REFERENCES allomorphs (allomorph_id) DEFERRABLE INITIALLY DEFERRED,
     grapheme_ids integer[] NOT NULL,
     glyph_ids integer[] NOT NULL,
@@ -194,6 +209,7 @@ WITH _ AS (
 )
 SELECT
     sign_variant_id,
+    sign_id,
     allomorph_id,
     grapheme_ids,
     glyph_ids,
@@ -224,6 +240,7 @@ BEGIN
         WHERE
             sign_variant_id = (NEW).sign_variant_id
         ON CONFLICT (sign_variant_id) DO UPDATE SET
+            sign_id = EXCLUDED.sign_id,
             allomorph_id = EXCLUDED.allomorph_id,
             grapheme_ids = EXCLUDED.grapheme_ids,
             glyph_ids = EXCLUDED.glyph_ids,

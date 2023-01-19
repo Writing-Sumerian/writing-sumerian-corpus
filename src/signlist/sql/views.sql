@@ -1,5 +1,4 @@
-
-CREATE MATERIALIZED VIEW sign_map (identifier, graphemes, grapheme_ids, glyphs, glyph_ids) AS
+CREATE VIEW sign_map (identifier, graphemes, grapheme_ids, glyphs, glyph_ids) AS
 SELECT
     upper(value),
     string_agg(grapheme, '.' ORDER BY pos),
@@ -73,36 +72,6 @@ SELECT
     'X',
     NULL;
 
-CREATE MATERIALIZED VIEW value_map (value, value_id, sign_variant_id, glyphs, graphemes, glyphs_required, specific) AS
-SELECT
-    value,
-    value_id,
-    sign_variant_id,
-    glyphs,
-    graphemes,
-    FALSE,
-    value !~ 'x' AND sign_variants_composition.variant_type = 'default'
-FROM
-    value_variants
-    JOIN values USING (value_id)
-    JOIN allomorphs USING (sign_id)
-    JOIN sign_variants_composition USING (allomorph_id)
-UNION ALL
-SELECT
-    value,
-    value_id,
-    sign_variant_id,
-    glyphs,
-    graphemes,
-    TRUE,
-    count(*) OVER (PARTITION BY value) = 1
-FROM
-    glyph_values 
-    JOIN sign_variants_composition USING (glyph_ids)
-    JOIN allomorphs USING (allomorph_id)
-    JOIN values USING (sign_id, value_id);
-
-
 
 CREATE VIEW signlist AS 
 SELECT 
@@ -119,8 +88,7 @@ SELECT
     value_variant_id = values.main_variant_id AS main 
 FROM value_variants 
     JOIN values USING (value_id)
-    JOIN allomorphs USING (sign_id) 
-    JOIN sign_variants_composition USING (allomorph_id)
+    JOIN sign_variants_composition USING (sign_id)
 ORDER BY 
     sign_id, 
     graphemes,
@@ -128,19 +96,3 @@ ORDER BY
     value_id, 
     main DESC,
     value;
-
-
-
-
-
-
-
-CREATE OR REPLACE PROCEDURE signlist_refresh ()
-    LANGUAGE PLPGSQL
-    AS 
-$BODY$
-    BEGIN
-    REFRESH MATERIALIZED VIEW sign_map;
-    REFRESH MATERIALIZED VIEW value_map;
-    END
-$BODY$;

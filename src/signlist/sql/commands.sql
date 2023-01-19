@@ -258,8 +258,7 @@ LANGUAGE PLPGSQL
         FROM 
             value_variants 
             JOIN values USING (value_id) 
-            JOIN allomorphs USING (sign_id) 
-            JOIN sign_variants_composition USING (allomorph_id)
+            JOIN sign_variants_composition USING (sign_id)
         WHERE
             values.value_id = make_glyph_value.value_id AND 
             value !~ 'x' AND

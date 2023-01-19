@@ -94,13 +94,13 @@ WHERE
 
 CREATE INDEX value_index ON value_variants (value);
 
-SELECT pg_catalog.pg_extension_config_dump('signs', '');
-SELECT pg_catalog.pg_extension_config_dump('allomorphs', '');
-SELECT pg_catalog.pg_extension_config_dump('allomorph_components', '');
-SELECT pg_catalog.pg_extension_config_dump('glyphs', '');
-SELECT pg_catalog.pg_extension_config_dump('glyph_synonyms', '');
-SELECT pg_catalog.pg_extension_config_dump('glyph_values', '');
-SELECT pg_catalog.pg_extension_config_dump('graphemes', '');
-SELECT pg_catalog.pg_extension_config_dump('allographs', '');
-SELECT pg_catalog.pg_extension_config_dump('values', '');
-SELECT pg_catalog.pg_extension_config_dump('value_variants', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.signs', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.allomorphs', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.allomorph_components', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.glyphs', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.glyph_synonyms', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.glyph_values', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.graphemes', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.allographs', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.values', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.value_variants', '');
