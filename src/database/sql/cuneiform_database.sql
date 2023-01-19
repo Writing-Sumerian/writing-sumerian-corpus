@@ -230,21 +230,31 @@ CLUSTER corpus USING corpus_pkey;
 CREATE OR REPLACE PROCEDURE database_create_indexes ()
 LANGUAGE SQL
 AS $BODY$
-    CREATE INDEX texts_provenience_id_ix ON texts(provenience_id);
-    CREATE INDEX texts_period_id_ix ON texts(period_id);
-    CREATE INDEX texts_genre_id_ix ON texts(genre_id);
+    CREATE INDEX texts_provenience_id_ix ON @extschema@.texts(provenience_id);
+    CREATE INDEX texts_period_id_ix ON @extschema@.texts(period_id);
+    CREATE INDEX texts_genre_id_ix ON @extschema@.texts(genre_id);
 $BODY$;
 
 CREATE OR REPLACE PROCEDURE database_drop_indexes ()
 LANGUAGE SQL
 AS $BODY$
-    DROP INDEX texts_provenience_id_ix;
-    DROP INDEX texts_period_id_ix;
-    DROP INDEX texts_genre_id_ix;
+    DROP INDEX @extschema@.texts_provenience_id_ix;
+    DROP INDEX @extschema@.texts_period_id_ix;
+    DROP INDEX @extschema@.texts_genre_id_ix;
 $BODY$;
 
 CALL database_create_indexes ();
 
 
-SELECT pg_catalog.pg_extension_config_dump('corpora', '');
-SELECT pg_catalog.pg_extension_config_dump('texts', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.corpora', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.texts', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.transliterations', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.compositions', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.sections', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.compounds', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.words', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.objects', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.surfaces', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.blocks', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.lines', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.corpus', '');
