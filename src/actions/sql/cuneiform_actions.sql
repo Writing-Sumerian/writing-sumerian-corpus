@@ -478,7 +478,7 @@ $BODY$
 DECLARE
 t text;
 BEGIN
-FOREACH t IN ARRAY array['corpus', 'words', 'compounds', 'lines', 'blocks', 'surfaces', 'objects'] LOOP
+FOREACH t IN ARRAY array['corpus', 'words', 'compounds', 'lines', 'blocks', 'surfaces', 'objects', 'sections'] LOOP
     EXECUTE format($$DELETE FROM %I.%I WHERE transliteration_id = %s$$, schema, t, transliteration_id);
 END LOOP;
 END;
@@ -492,7 +492,7 @@ $BODY$
 DECLARE
 t text;
 BEGIN
-FOREACH t IN ARRAY array['corpus', 'words', 'compounds', 'lines', 'blocks', 'surfaces', 'objects'] LOOP
+FOREACH t IN ARRAY array['corpus', 'words', 'compounds', 'lines', 'blocks', 'surfaces', 'objects', 'sections'] LOOP
     EXECUTE format($$INSERT INTO %I.%I SELECT * FROM %I.%I WHERE transliteration_id = %s$$, source_schema, t, target_schema, t, transliteration_id);
 END LOOP;
 END;
