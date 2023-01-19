@@ -224,26 +224,25 @@ static bool cun_has_char(const char* s, char c, size_t n)
 
 #define ARG_VALUE                1
 #define ARG_SIGN                 2
-#define ARG_VARIANT_TYPE         3
-#define ARG_SIGN_NO              4
-#define ARG_WORD_NO              5
-#define ARG_COMPOUND_NO          6
-#define ARG_SECTION_NO           7
-#define ARG_LINE_NO              8
-#define ARG_PROPERITIES          9
-#define ARG_STEM                10
-#define ARG_CONDITION           11
-#define ARG_LANGUAGE            12
-#define ARG_INVERTED            13
-#define ARG_NEWLINE             14
-#define ARG_LIGATURE            15
-#define ARG_CRITICS             16
-#define ARG_COMMENT             17
-#define ARG_CAPITALIZED         18
-#define ARG_PN_TYPE             19
-#define ARG_SECTION             20
-#define ARG_COMPOUND_COMMENT    21
-#define ARG_HIGHLIGHT           22
+#define ARG_SIGN_NO              3
+#define ARG_WORD_NO              4
+#define ARG_COMPOUND_NO          5
+#define ARG_SECTION_NO           6
+#define ARG_LINE_NO              7
+#define ARG_PROPERITIES          8
+#define ARG_STEM                 9
+#define ARG_CONDITION           10
+#define ARG_LANGUAGE            11
+#define ARG_INVERTED            12
+#define ARG_NEWLINE             13
+#define ARG_LIGATURE            14
+#define ARG_CRITICS             15
+#define ARG_COMMENT             16
+#define ARG_CAPITALIZED         17
+#define ARG_PN_TYPE             18
+#define ARG_SECTION             19
+#define ARG_COMPOUND_COMMENT    20
+#define ARG_HIGHLIGHT           21
 
 typedef struct State
 {
@@ -689,9 +688,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     state = init_state(fcinfo, aggcontext, &state_old);
 
     const text* value = PG_ARGISNULL(ARG_VALUE) ? NULL : PG_GETARG_TEXT_PP(ARG_VALUE);
-    const text* sign = PG_ARGISNULL(ARG_SIGN) ? (state->unknown_reading ? value : NULL) : PG_GETARG_TEXT_PP(ARG_SIGN);
-
-    const Oid variant_type = PG_ARGISNULL(ARG_VARIANT_TYPE) ? VARIANT_TYPE_DEFAULT : PG_GETARG_OID(ARG_VARIANT_TYPE);
+    const text* sign = PG_ARGISNULL(ARG_SIGN) ? NULL : PG_GETARG_TEXT_PP(ARG_SIGN);
 
     const bool inverted = PG_GETARG_BOOL(ARG_INVERTED);
     const bool newline = PG_GETARG_BOOL(ARG_NEWLINE);
@@ -717,12 +714,10 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         state->string_capacity += size + EXP_LINE_SIZE_HTML;
     }
 
-    const bool x_value = value_size >= 8 ? *((char*)VARDATA_ANY(value) + value_size - 8) == 'x' : false;
-
     char* s = VARDATA(state->string)+string_size;
 
     bool no_condition;
-    const Oid inner_condition = opened_condition_start((char*)VARDATA_ANY(value), value_size, &no_condition);
+    const Oid inner_condition = opened_condition_start(value ? (char*)VARDATA_ANY(value) : NULL, value_size, &no_condition);
     if(!no_condition)
         state->condition = inner_condition;
 
@@ -767,7 +762,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         s = open_condition_html(s, state->condition);
     s = open_html(s, changes, state);
 
-    if(!state->unknown_reading && value)
+    if(value)
     {
         if(!cun_strcmp(VARDATA_ANY(value), "||"))
             s = cun_strcpy(s, "<span class='hspace'></span>");
@@ -780,48 +775,19 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         else
         {
             char* s_ = s;
-            //s = cun_memcpy(s, VARDATA_ANY(value), value_size);
             s = write_value_replacing_conditions_html(s, VARDATA_ANY(value), value_size);
             if(state->capitalize && !state->indicator) {
                 cun_capitalize(s_);
                 state->capitalize = false;
             }
         } 
-
-        if(variant_type == VARIANT_TYPE_REDUCED)
-            s = cun_strcpy(s, "⁻");
-        if(variant_type == VARIANT_TYPE_AUGMENTED)
-            s = cun_strcpy(s, "⁺");
-
-        if(critics_size || variant_type == VARIANT_TYPE_NONSTANDARD)
-        {
-            s = cun_strcpy(s, "<span class='critics'>");
-            if(critics_size)
-                s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
-            if(variant_type == VARIANT_TYPE_NONSTANDARD) 
-                s = cun_strcpy(s, "!");
-            s = cun_strcpy(s, "</span>");
-        }
-
-        if(sign && (variant_type == VARIANT_TYPE_NONSTANDARD || 
-                    variant_type == VARIANT_TYPE_NONDEFAULT || 
-                    state->type == TYPE_NUMBER || 
-                    x_value))
-        {
-            s = cun_strcpy(s, "<span class='signspec'>");
-            s = cun_memcpy(s, VARDATA_ANY(sign), sign_size);
-            s = cun_strcpy(s, "</span>");
-        }
     }
-    else if(sign)
+
+    if(critics_size)
     {
-        s = cun_memcpy(s, VARDATA_ANY(sign), sign_size);
-        if(critics_size)
-        {
-            s = cun_strcpy(s, "<span class='critics'>");
-            s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
-            s = cun_strcpy(s, "</span>");
-        }
+        s = cun_strcpy(s, "<span class='critics'>");
+        s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
+        s = cun_strcpy(s, "</span>");
     }
     
     if(comment_size)
@@ -848,7 +814,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         SET_VARSIZE(state->compound_comment, VARHDRSZ);
 
     if(!no_condition)
-        state->condition = opened_condition_end((char*)VARDATA_ANY(value), value_size);
+        state->condition = opened_condition_end(value ? (char*)VARDATA_ANY(value) : NULL, value_size);
 
     SET_VARSIZE(state->string, s-VARDATA(state->string)+VARHDRSZ); 
 
@@ -930,6 +896,9 @@ static char* open_code(char* s, const State* s1, State* s2)
     if(s1 != NULL && !s1->stem && s2->stem && !s1->stem_null && !s2->stem_null && s1->word_no == s2->word_no)
         *s++ = ';';
 
+    if(!s2->phonographic_null && !s2->phonographic && !s2->indicator && (s1 == NULL || s1->phonographic_null || s1->phonographic || s1->indicator || s1->line_no != s2->line_no))
+        *s++ = '_';
+
     if(s1 == NULL || s1->condition != s2->condition || s1->line_no != s2->line_no)
     {
         if(s2->condition == CONDITION_LOST)
@@ -988,6 +957,9 @@ static char* close_code(char* s, const State* s1, const State* s2)
         else if(s1->condition == CONDITION_DELETED)
             s = cun_strcpy(s, "»");
     }
+
+    if(!s1->phonographic_null && !s1->phonographic && !s1->indicator && (s2 == NULL || s2->phonographic_null || s2->phonographic || s2->indicator || s1->line_no != s2->line_no))
+        *s++ = '_';
 
     if(s2 != NULL && s1->stem && !s2->stem && !s1->stem_null && !s2->stem_null && s1->word_no == s2->word_no)
         *s++ = ';';
@@ -1071,8 +1043,6 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     const text* value = PG_ARGISNULL(ARG_VALUE) ? NULL : PG_GETARG_TEXT_PP(ARG_VALUE);
     const text* sign = PG_ARGISNULL(ARG_SIGN) ? (state->unknown_reading ? value : NULL) : PG_GETARG_TEXT_PP(ARG_SIGN);
 
-    const Oid variant_type = PG_ARGISNULL(ARG_VARIANT_TYPE) ? VARIANT_TYPE_DEFAULT : PG_GETARG_OID(ARG_VARIANT_TYPE);
-
     const bool inverted = PG_GETARG_BOOL(ARG_INVERTED);
     const bool newline = PG_GETARG_BOOL(ARG_NEWLINE);
     const bool ligature = PG_GETARG_BOOL(ARG_LIGATURE);
@@ -1096,12 +1066,10 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
         state->string_capacity += size + EXP_LINE_SIZE_CODE;
     }
 
-    const bool x_value = value_size ? *((char*)VARDATA_ANY(value) + value_size - 1) == 'x' : false;
-
     char* s = VARDATA(state->string)+string_size;
 
     bool no_condition;
-    const Oid inner_condition = opened_condition_start((char*)VARDATA_ANY(value), value_size, &no_condition);
+    const Oid inner_condition = opened_condition_start(value ? (char*)VARDATA_ANY(value) : NULL, value_size, &no_condition);
     if(!no_condition)
         state->condition = inner_condition;
 
@@ -1129,39 +1097,24 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
         s = cun_memcpy(s, VARDATA_ANY(section), section_size);
         *s++ = ' ';
     }
+    else if(state->section_null && string_size && !state_old.section_null)
+    {
+        s = cun_strcpy(s, "%sec ");
+    }
     
     s = open_code(s, string_size ? &state_old : NULL, state);
 
     if(value)
     {
-        const bool complex = state->unknown_reading && cun_has_char(VARDATA_ANY(sign), '.', sign_size);
         if(state->type == TYPE_DESCRIPTION)
             *s++ = '"';
-        else if(complex)
-            *s++= '|';
         s = cun_memcpy(s, VARDATA_ANY(value), value_size);
         if(state->type == TYPE_DESCRIPTION)
             *s++ = '"';
-        else if(complex)
-            *s++= '|';
     }
 
-    if(variant_type == VARIANT_TYPE_NONSTANDARD)
-        s = cun_strcpy(s, "!");
     if(critics_size)
         s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
-
-    if(sign && (variant_type == VARIANT_TYPE_NONSTANDARD || 
-                variant_type == VARIANT_TYPE_NONDEFAULT || 
-                variant_type == VARIANT_TYPE_REDUCED ||
-                variant_type == VARIANT_TYPE_AUGMENTED ||
-                state->type == TYPE_NUMBER ||
-                x_value))
-    {
-        *s++ = '(';
-        s = cun_memcpy(s, VARDATA_ANY(sign), sign_size);
-        *s++ = ')';
-    }
 
     if(comment_size)
     {
@@ -1187,7 +1140,7 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
         SET_VARSIZE(state->compound_comment, VARHDRSZ);
 
     if(!no_condition)
-        state->condition = opened_condition_end((char*)VARDATA_ANY(value), value_size);
+        state->condition = opened_condition_end(value ? (char*)VARDATA_ANY(value) : NULL, value_size);
 
     SET_VARSIZE(state->string, s-VARDATA(state->string)+VARHDRSZ); 
 

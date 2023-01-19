@@ -25,6 +25,9 @@ include $(PGXS)
 
 all: build/$(EXTENSION)--$(version).sql
 
-build/$(EXTENSION)--$(version).sql: sql/$(EXTENSION).sql
+sql					:= sql/aggregates.sql sql/signlist.sql sql/views.sql
+
+build/$(EXTENSION)--$(version).sql:  python/compose_sign.py $(sql)
 	@mkdir -p build
-	@cp sql/$(EXTENSION).sql build/$(EXTENSION)--$(version).sql
+	@py2plpy python/compose_sign.py build/$(EXTENSION)--$(version).sql
+	@cat $(sql) >> build/$(EXTENSION)--$(version).sql
