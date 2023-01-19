@@ -26,3 +26,7 @@ CREATE TABLE proveniences (
     longitude real,
     CHECK (name IS NOT NULL OR modern_name IS NOT NULL)
 );
+
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.genres', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.periods', '');
+SELECT pg_catalog.pg_extension_config_dump('@extschema@.proveniences', '');
