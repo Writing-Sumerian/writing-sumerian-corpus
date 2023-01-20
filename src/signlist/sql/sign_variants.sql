@@ -158,20 +158,7 @@ END;
 $BODY$;
 
 
-CREATE TRIGGER sign_variants_allomorphs_trigger
-  AFTER UPDATE OR INSERT ON allomorphs 
-  FOR EACH ROW
-  EXECUTE FUNCTION sign_variants_allomorphs_trigger_fun();
 
-CREATE TRIGGER sign_variants_allomorph_components_trigger
-  AFTER UPDATE OR INSERT OR DELETE ON allomorph_components 
-  FOR EACH ROW
-  EXECUTE FUNCTION sign_variants_allomorph_components_trigger_fun();
-
-CREATE TRIGGER sign_variants_allographs_trigger
-  AFTER UPDATE OR INSERT OR DELETE ON allographs
-  FOR EACH ROW
-  EXECUTE FUNCTION sign_variants_allographs_trigger_fun();
 
 
 
@@ -294,6 +281,33 @@ END;
 $BODY$;
 
 
+
+
+CREATE PROCEDURE signlist_create_triggers()
+    LANGUAGE SQL
+    AS
+$BODY$
+
+INSERT INTO sign_variants (sign_id, allomorph_id, allograph_ids, variant_type, specific) SELECT * FROM sign_variants_view;
+
+CREATE TRIGGER sign_variants_allomorphs_trigger
+  AFTER UPDATE OR INSERT ON allomorphs 
+  FOR EACH ROW
+  EXECUTE FUNCTION sign_variants_allomorphs_trigger_fun();
+
+CREATE TRIGGER sign_variants_allomorph_components_trigger
+  AFTER UPDATE OR INSERT OR DELETE ON allomorph_components 
+  FOR EACH ROW
+  EXECUTE FUNCTION sign_variants_allomorph_components_trigger_fun();
+
+CREATE TRIGGER sign_variants_allographs_trigger
+  AFTER UPDATE OR INSERT OR DELETE ON allographs
+  FOR EACH ROW
+  EXECUTE FUNCTION sign_variants_allographs_trigger_fun();
+
+
+INSERT INTO sign_variants_composition SELECT * FROM sign_variants_composition_view;
+
 CREATE TRIGGER sign_variants_composition_sign_variants_trigger
   AFTER UPDATE OR INSERT OR DELETE ON sign_variants 
   FOR EACH ROW
@@ -308,3 +322,26 @@ CREATE TRIGGER sign_variants_composition_glyphs_trigger
   AFTER UPDATE ON glyphs 
   FOR EACH ROW
   EXECUTE FUNCTION sign_variants_composition_glyphs_trigger_fun();
+
+$BODY$;
+
+
+CREATE PROCEDURE signlist_drop_triggers()
+    LANGUAGE SQL
+    AS
+$BODY$
+
+DELETE FROM sign_variants;
+DROP TRIGGER sign_variants_allomorphs_trigger ON allomorphs;
+DROP TRIGGER sign_variants_allomorph_components_trigger ON allomorph_components;
+DROP TRIGGER sign_variants_allographs_trigger ON allographs;
+
+DELETE FROM sign_variants_composition;
+DROP TRIGGER sign_variants_composition_sign_variants_trigger ON sign_variants;
+DROP TRIGGER sign_variants_composition_graphemes_trigger ON graphemes;
+DROP TRIGGER sign_variants_composition_glyphs_trigger ON glyphs;
+
+$BODY$;
+
+
+CALL signlist_create_triggers();
