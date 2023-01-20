@@ -45,14 +45,16 @@ $BODY$;
 CREATE OR REPLACE VIEW corpus_code AS
 SELECT
     transliteration_id,
-    COALESCE(character_code, CASE WHEN (properties).type = 'sign' THEN regexp_replace(custom_value, '^(\(?[A-ZĜḪŘŠṢṬ]+[0-9]*(@([gštvzn]|90|180))*\)?([×\.%&@\+]\(?[A-ZĜḪŘŠṢṬ]+[0-9]*(@([gštvzn]|90|180))*\)?)*)(?=\(|$)', '|\1|') ELSE custom_value END) AS value,
+    COALESCE(character_code, CASE WHEN type = 'sign' THEN regexp_replace(custom_value, '^(\(?[A-ZĜḪŘŠṢṬ]+[0-9]*(@([gštvzn]|90|180))*\)?([×\.%&@\+]\(?[A-ZĜḪŘŠṢṬ]+[0-9]*(@([gštvzn]|90|180))*\)?)*)(?=\(|$)', '|\1|') ELSE custom_value END) AS value,
     NULL AS sign,
     sign_no, 
     word_no, 
     compound_no, 
     section_no,
     line_no, 
-    properties, 
+    type,
+    indicator_type,
+    phonographic, 
     stem, 
     condition, 
     language, 
@@ -76,12 +78,14 @@ FROM
 CREATE VIEW corpus_code_clean AS
 SELECT
     transliteration_id,
-    COALESCE(character_code, placeholder((properties).type)) AS value,
+    COALESCE(character_code, placeholder(type)) AS value,
     NULL AS sign,
     sign_no, 
     word_no, 
     compound_no, 
-    properties, 
+    type,
+    indicator_type,
+    phonographic, 
     stem,
     language
 FROM
@@ -101,7 +105,9 @@ SELECT
     compound_no, 
     section_no,
     line_no, 
-    properties, 
+    type,
+    indicator_type,
+    phonographic, 
     stem, 
     condition, 
     language, 
@@ -124,12 +130,14 @@ FROM
 CREATE VIEW corpus_html_clean AS
 SELECT
     transliteration_id,
-    COALESCE(character_html, placeholder((properties).type)) AS value,
+    COALESCE(character_html, placeholder(type)) AS value,
     NULL AS sign,
     sign_no, 
     word_no, 
     compound_no, 
-    properties, 
+    type,
+    indicator_type,
+    phonographic, 
     stem,
     language
 FROM
@@ -144,7 +152,7 @@ CREATE VIEW corpus_code_range AS
 SELECT
     a.transliteration_id,
     RANGE,
-    cun_agg (value, sign, sign_no, word_no, compound_no, section_no, line_no, properties, stem, condition, language, 
+    cun_agg (value, sign, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
         inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no) AS content
 FROM (
     SELECT
@@ -164,7 +172,7 @@ CREATE VIEW corpus_html_range AS
 SELECT
     a.transliteration_id,
     RANGE,
-    cun_agg_html (value, sign, sign_no, word_no, compound_no, section_no, line_no, properties, stem, condition, language, 
+    cun_agg_html (value, sign, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
         inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no)  AS content
 FROM (
     SELECT
@@ -184,7 +192,7 @@ CREATE VIEW corpus_code_lines AS
 SELECT
     a.transliteration_id,
     RANGE,
-    cun_agg (value, sign, sign_no, word_no, compound_no, section_no, line_no, properties, stem, condition, language, 
+    cun_agg (value, sign, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
         inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no) AS content
 FROM (
     SELECT DISTINCT
@@ -204,7 +212,7 @@ CREATE OR REPLACE VIEW corpus_code_transliterations AS
 WITH a AS (
 SELECT
     transliteration_id,
-    cun_agg (value, sign, sign_no, word_no, compound_no, section_no, line_no, properties, stem, condition, language, 
+    cun_agg (value, sign, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
         inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no) AS lines
 FROM corpus_code
 GROUP BY
@@ -288,7 +296,7 @@ CREATE VIEW corpus_html_transliterations AS
 WITH a AS (
 SELECT
     transliteration_id,
-    cun_agg_html (value, sign, sign_no, word_no, compound_no, section_no, line_no, properties, stem, condition, language, 
+    cun_agg_html (value, sign, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
         inverted, ligature, newline, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no) AS lines
 FROM corpus_html
 GROUP BY

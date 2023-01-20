@@ -36,7 +36,9 @@ replacement_ AS (
         COALESCE(b.value_id, a.value_id) AS value_id,
         COALESCE(b.sign_variant_id, a.sign_variant_id) AS sign_variant_id,
         COALESCE(b.custom_value, CASE WHEN reference_id IS NULL THEN a.custom_value ELSE NULL END) AS custom_value,
-        COALESCE(b.properties, a.properties) AS properties,
+        COALESCE(b.type, a.type) AS type,
+        COALESCE(b.indicator_type, a.indicator_type) AS indicator_type,
+        COALESCE(b.phonographic, a.phonographic) AS phonographic,
         COALESCE(b.stem, a.stem) AS stem,
         COALESCE(
             b.word_no != lag(b.word_no) OVER w1, 
@@ -57,7 +59,7 @@ replacement_ AS (
     FROM
         replace.corpus_pattern a
         LEFT JOIN replace.words_pattern a_words USING (pattern_id, word_no)
-        LEFT JOIN "references" ON ((properties).type = 'description' AND custom_value ~ '^[0-9]+' AND reference_id = custom_value::integer)
+        LEFT JOIN "references" ON (type = 'description' AND custom_value ~ '^[0-9]+' AND reference_id = custom_value::integer)
         LEFT JOIN original b ON (b.sign_no = "references".sign_no)
     WHERE
         a.pattern_id = v_pattern_id
@@ -74,7 +76,9 @@ replacement AS (
         value_id,
         sign_variant_id,
         custom_value,
-        properties,
+        type,
+        indicator_type,
+        phonographic,
         stem,
         pattern_word,
         pattern_compound,
@@ -149,7 +153,9 @@ patched_ AS (
         value_id,
         sign_variant_id,
         custom_value,
-        properties,
+        type,
+        indicator_type,
+        phonographic,
         stem,
         condition,
         crits,
@@ -177,7 +183,9 @@ patched_ AS (
         value_id,
         sign_variant_id,
         custom_value,
-        properties,
+        type,
+        indicator_type,
+        phonographic,
         stem,
         condition,
         crits,
@@ -234,7 +242,9 @@ SELECT
     value_id,
     sign_variant_id,
     custom_value,
-    properties,
+    type,
+    indicator_type,
+    phonographic,
     stem,
     condition,
     crits,

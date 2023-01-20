@@ -13,8 +13,8 @@ from cuneiformparser import parse
 import pandas as pd
 
 corpus_plan = plpy.prepare(
-    f"INSERT INTO replace.corpus_pattern VALUES ($1, $2, $3, NULL, NULL, CASE WHEN $5 = 'value' OR $5 = 'sign' THEN NULL ELSE $4 END, ($5, $6, $7, $8)::sign_properties, $9)", 
-    ['integer', 'integer', 'integer', 'text', 'sign_type', 'boolean', 'alignment', 'boolean', 'boolean']
+    f"INSERT INTO replace.corpus_pattern VALUES ($1, $2, $3, NULL, NULL, CASE WHEN $5 = 'value' OR $5 = 'sign' THEN NULL ELSE $4 END, $5, $6, $7, $8)", 
+    ['integer', 'integer', 'integer', 'text', 'sign_type', 'indicator_type', 'boolean', 'boolean']
 )
 
 corpus_unencoded_plan = plpy.prepare(
@@ -43,7 +43,7 @@ for ix, row in compounds.iterrows():
 for ix, row in words.iterrows():
     plpy.execute(words_plan, [id, ix]+[row[key] for key in ['compound_no', 'capitalized']])
 for ix, row in signs.iterrows():
-    plpy.execute(corpus_plan, [id, ix]+[row[key] for key in ['word_no', 'value', 'type', 'indicator', 'alignment', 'phonographic', 'stem']])
+    plpy.execute(corpus_plan, [id, ix]+[row[key] for key in ['word_no', 'value', 'type', 'indicator_type', 'phonographic', 'stem']])
 for ix, row in signs.iterrows():
     if row['type'] in ['value', 'sign'] or (row['type'] == 'number' and row['sign_spec'] is not None):
         plpy.execute(corpus_unencoded_plan, [id, ix]+[row[key] for key in ['value', 'sign_spec', 'type']])

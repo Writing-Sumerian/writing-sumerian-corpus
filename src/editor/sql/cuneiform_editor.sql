@@ -396,7 +396,9 @@ BEGIN
                     a.custom_value,
                     a.value_id,
                     a.sign_variant_id,
-                    a.properties,
+                    a.type,
+                    a.indicator_type,
+                    a.phonographic,
                     a.stem,
                     a.condition,
                     a.crits,
@@ -421,7 +423,7 @@ BEGIN
         END IF;
     END LOOP;
 
-    FOREACH col IN ARRAY array['custom_value', 'value_id', 'sign_variant_id', 'properties', 'stem', 
+    FOREACH col IN ARRAY array['custom_value', 'value_id', 'sign_variant_id', 'type', 'indicator_type', 'phonographic', 'stem', 
                                'condition', 'crits', 'comment', 'newline', 'inverted', 'ligature'] LOOP
         RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'corpus', 'sign_no', col, v_schema, 'public');
     END LOOP;

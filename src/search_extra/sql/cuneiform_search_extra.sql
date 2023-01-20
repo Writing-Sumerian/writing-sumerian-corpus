@@ -10,8 +10,7 @@ CREATE TABLE corpus_search (
   grapheme_id integer,
   glyph_id integer,
   type sign_type,
-  indicator boolean,
-  alignment alignment,
+  indicator_type indicator_type,
   phonographic boolean
 );
 
@@ -159,10 +158,9 @@ BEGIN
       NULL AS sign_variant_id,
       grapheme_id,
       glyph_id,
-      (properties).type,
-      (properties).indicator,
-      (properties).alignment,
-      (properties).phonographic
+      type,
+      indicator_type,
+      phonographic
     FROM 
       (SELECT (NEW).*) new
       JOIN sign_variants_composition USING (sign_variant_id)
@@ -179,15 +177,14 @@ BEGIN
       sign_variant_id,
       NULL AS grapheme_id,
       NULL AS glyph_id,
-      (properties).type,
-      (properties).indicator,
-      (properties).alignment,
-      (properties).phonographic
+      type,
+      indicator_type,
+      phonographic
     FROM 
       (SELECT (NEW).*) new
     WHERE 
-      (properties).type != 'punctuation' 
-      AND (properties).type != 'damage';
+      type != 'punctuation' 
+      AND type != 'damage';
 
     CALL corpus_search_update_marginals((NEW).transliteration_id, v_object_no);
     
@@ -339,7 +336,7 @@ END;
 $BODY$;
 
 CREATE TRIGGER corpus_search_corpus_trigger
-  AFTER DELETE OR INSERT OR UPDATE OF transliteration_id, sign_no, word_no, line_no, value_id, sign_variant_id, properties ON corpus 
+  AFTER DELETE OR INSERT OR UPDATE OF transliteration_id, sign_no, word_no, line_no, value_id, sign_variant_id, type, indicator_type, phonographic ON corpus 
   FOR EACH ROW
   EXECUTE FUNCTION corpus_search_corpus_trigger_fun();
 
@@ -390,10 +387,9 @@ SELECT * FROM (
     NULL AS sign_variant_id,
     grapheme_id,
     glyph_id,
-    (properties).type,
-    (properties).indicator,
-    (properties).alignment,
-    (properties).phonographic
+    type,
+    indicator_type,
+    phonographic
   FROM 
     x
     JOIN sign_variants_composition USING (sign_variant_id)
@@ -413,14 +409,13 @@ SELECT * FROM (
     sign_variant_id,
     NULL AS grapheme_id,
     NULL AS glyph_id,
-    (properties).type,
-    (properties).indicator,
-    (properties).alignment,
-    (properties).phonographic
+    type,
+    indicator_type,
+    phonographic
   FROM 
     x
-  WHERE (properties).type != 'punctuation' 
-    AND (properties).type != 'damage'
+  WHERE type != 'punctuation' 
+    AND type != 'damage'
   UNION ALL
   SELECT                      -- pseudo first row
     transliteration_id,
@@ -434,8 +429,7 @@ SELECT * FROM (
     NULL AS grapheme_id,
     NULL AS glyph_id,
     NULL AS type,
-    NULL AS indicator,
-    NULL AS alignment,
+    NULL AS indicator_type,
     NULL AS phonographic
   FROM 
     x
@@ -458,8 +452,7 @@ SELECT * FROM (
     NULL AS grapheme_id,
     NULL AS glyph_id,
     NULL AS type,
-    NULL AS indicator,
-    NULL AS alignment,
+    NULL AS indicator_type,
     NULL AS phonographic
   FROM 
     x
@@ -479,8 +472,7 @@ SELECT * FROM (
     NULL AS grapheme_id,
     NULL AS glyph_id,
     NULL AS type,
-    NULL AS indicator,
-    NULL AS alignment,
+    NULL AS indicator_type,
     NULL AS phonographic
   FROM 
     x
@@ -592,7 +584,7 @@ CREATE OR REPLACE FUNCTION public.search_signs_clean (search_term text)
   AS $BODY$
   SELECT
     transliteration_id,
-    (cun_agg(value, sign, variant_type, sign_no, word_no, compound_no, NULL, 0, properties, stem, 'intact', LANGUAGE, 
+    (cun_agg(value, sign, variant_type, sign_no, word_no, compound_no, NULL, 0, type, indicator_type, phonographic, stem, 'intact', LANGUAGE, 
             FALSE, FALSE, FALSE, NULL, NULL, FALSE, NULL, NULL, NULL, FALSE ORDER BY sign_no))[1],
     signs
   FROM (
@@ -647,7 +639,7 @@ found_words AS (
 )
 SELECT
   corpus_code_clean.transliteration_id,
-  (cun_agg (value, sign, variant_type, sign_no, corpus_code_clean.word_no, compound_no, NULL, 0, properties, stem, 'intact', LANGUAGE, 
+  (cun_agg (value, sign, variant_type, sign_no, corpus_code_clean.word_no, compound_no, NULL, 0, type, indicator_type, phonographic, stem, 'intact', LANGUAGE, 
             FALSE, FALSE, FALSE, NULL, NULL, FALSE, NULL, NULL, NULL, FALSE ORDER BY sign_no))[1]
 FROM
   found_words
@@ -683,7 +675,7 @@ CREATE OR REPLACE FUNCTION public.search_lines (search_term text)
     JOIN corpus USING (transliteration_id, sign_no))
 SELECT
   transliteration_id,
-  array_to_string(cun_agg(value, sign, variant_type, sign_no, word_no, compound_no, section_no, line_no, properties, stem, condition, LANGUAGE, 
+  array_to_string(cun_agg(value, sign, variant_type, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, LANGUAGE, 
       inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no), '\n'),
   line_no
 FROM

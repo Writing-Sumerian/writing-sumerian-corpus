@@ -15,7 +15,8 @@ CREATE TYPE sign_type AS ENUM (
     'damage'
 );
 
-CREATE TYPE alignment AS ENUM (
+CREATE TYPE indicator_type AS ENUM (
+    'none',
     'left',
     'right',
     'center'
@@ -28,13 +29,6 @@ CREATE TYPE sign_condition AS ENUM (
     'inserted',
     'deleted',
     'erased'
-);
-
-CREATE TYPE sign_properties AS (
-    TYPE SIGN_TYPE,
-    indicator boolean,
-    alignment ALIGNMENT,
-    phonographic boolean
 );
 
 CREATE TYPE pn_type AS ENUM (

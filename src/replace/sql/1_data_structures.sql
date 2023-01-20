@@ -7,7 +7,9 @@ CREATE TABLE replace.corpus_pattern (
     value_id integer,
     sign_variant_id integer,
     custom_value text,
-    properties sign_properties,
+    type sign_type,
+    indicator_type indicator_type,
+    phonographic boolean,
     stem boolean,
     PRIMARY KEY (pattern_id, sign_no)
 );

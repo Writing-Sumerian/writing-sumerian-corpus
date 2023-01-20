@@ -35,9 +35,10 @@ Oid TYPE_PUNCTUATION;
 Oid TYPE_DESCRIPTION;
 Oid TYPE_DAMAGE;
 
-Oid ALIGNMENT_LEFT;
-Oid ALIGNMENT_RIGHT;
-Oid ALIGNMENT_CENTER;
+Oid INDICATOR_TYPE_NONE;
+Oid INDICATOR_TYPE_LEFT;
+Oid INDICATOR_TYPE_RIGHT;
+Oid INDICATOR_TYPE_CENTER;
 
 Oid LANGUAGE_SUMERIAN;
 Oid LANGUAGE_AKKADIAN;
@@ -90,15 +91,16 @@ static void set_enums()
         LANGUAGE_EBLAITE = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 4, &isnull));
         LANGUAGE_OTHER = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 5, &isnull));
     }
-    SPI_execute("SELECT 'left'::alignment, 'right'::alignment, 'center'::alignment", true, 1);
+    SPI_execute("SELECT 'none'::indicator_type, 'left'::indicator_type, 'right'::indicator_type, 'center'::indicator_type", true, 1);
     if(SPI_tuptable != NULL && SPI_processed == 1)
     {
         const HeapTuple tuple = SPI_tuptable->vals[0];
         const TupleDesc tupdesc = SPI_tuptable->tupdesc;
         bool isnull;
-        ALIGNMENT_LEFT = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 1, &isnull));
-        ALIGNMENT_RIGHT = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 2, &isnull));
-        ALIGNMENT_CENTER = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 3, &isnull));
+        INDICATOR_TYPE_NONE = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 1, &isnull));
+        INDICATOR_TYPE_LEFT = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 2, &isnull));
+        INDICATOR_TYPE_RIGHT = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 3, &isnull));
+        INDICATOR_TYPE_CENTER = DatumGetObjectId(SPI_getbinval(tuple, tupdesc, 4, &isnull));
     }
     SPI_execute("SELECT 'value'::sign_type, 'sign'::sign_type, 'number'::sign_type, 'punctuation'::sign_type,"
                 "       'description'::sign_type, 'damage'::sign_type", true, 1);
@@ -229,20 +231,22 @@ static bool cun_has_char(const char* s, char c, size_t n)
 #define ARG_COMPOUND_NO          5
 #define ARG_SECTION_NO           6
 #define ARG_LINE_NO              7
-#define ARG_PROPERITIES          8
-#define ARG_STEM                 9
-#define ARG_CONDITION           10
-#define ARG_LANGUAGE            11
-#define ARG_INVERTED            12
-#define ARG_NEWLINE             13
-#define ARG_LIGATURE            14
-#define ARG_CRITICS             15
-#define ARG_COMMENT             16
-#define ARG_CAPITALIZED         17
-#define ARG_PN_TYPE             18
-#define ARG_SECTION             19
-#define ARG_COMPOUND_COMMENT    20
-#define ARG_HIGHLIGHT           21
+#define ARG_TYPE                 8
+#define ARG_INDICATOR_TYPE       9
+#define ARG_PHONOGRAPHIC        10      
+#define ARG_STEM                11
+#define ARG_CONDITION           12
+#define ARG_LANGUAGE            13
+#define ARG_INVERTED            14
+#define ARG_NEWLINE             15
+#define ARG_LIGATURE            16
+#define ARG_CRITICS             17
+#define ARG_COMMENT             18
+#define ARG_CAPITALIZED         19
+#define ARG_PN_TYPE             20
+#define ARG_SECTION             21
+#define ARG_COMPOUND_COMMENT    22
+#define ARG_HIGHLIGHT           23
 
 typedef struct State
 {
@@ -262,8 +266,7 @@ typedef struct State
     bool section_null;
     Oid type;
     bool phonographic;
-    bool indicator;
-    Oid alignment;
+    Oid indicator_type;
     bool stem;
     Oid condition;
     Oid language;
@@ -280,7 +283,6 @@ typedef struct State
 
 static State* init_state(FunctionCallInfo fcinfo, MemoryContext memcontext, State* state_old)
 {
-    bool isnull;
     State* state;
 
     if(PG_ARGISNULL(0))
@@ -308,11 +310,10 @@ static State* init_state(FunctionCallInfo fcinfo, MemoryContext memcontext, Stat
     state->line_no = PG_GETARG_INT32(ARG_LINE_NO);
     state->section_no = PG_GETARG_INT32(ARG_SECTION_NO);
     state->section_null = PG_ARGISNULL(ARG_SECTION_NO);
-    const HeapTupleHeader properties = PG_GETARG_HEAPTUPLEHEADER(ARG_PROPERITIES);
-    state->type = DatumGetObjectId(GetAttributeByName(properties, "type", &isnull));
-    state->phonographic = DatumGetBool(GetAttributeByName(properties, "phonographic", &state->phonographic_null));
-    state->alignment = DatumGetObjectId(GetAttributeByName(properties, "alignment", &isnull));
-    state->indicator = DatumGetBool(GetAttributeByName(properties, "indicator", &isnull));
+    state->type = PG_GETARG_OID(ARG_TYPE);
+    state->phonographic = PG_GETARG_BOOL(ARG_PHONOGRAPHIC);
+    state->phonographic_null = PG_ARGISNULL(ARG_PHONOGRAPHIC);
+    state->indicator_type = PG_GETARG_OID(ARG_INDICATOR_TYPE);
     state->stem = PG_GETARG_BOOL(ARG_STEM);
     state->stem_null = PG_ARGISNULL(ARG_STEM);
     state->condition = PG_GETARG_OID(ARG_CONDITION);
@@ -334,7 +335,7 @@ static int get_changes(const State* s1, const State* s2)
     int changes = 0;
     if(s1->condition != s2->condition)
         changes += CONDITION;
-    if(s1->indicator != s2->indicator || s1->alignment != s2->alignment)
+    if(s1->indicator_type != s2->indicator_type)
         changes += INDICATOR;
     if(s1->type != s2->type || s1->unknown_reading != s2->unknown_reading)
         changes += TYPE;
@@ -387,9 +388,9 @@ static Connector determine_connector(const State* s1, const State* s2, bool inve
     else if(s1->line_no != s2->line_no)
         res.modifier = SEP_EXT_LINEBREAK;
 
-    if(s1->indicator && s2->indicator && s1->alignment == s2->alignment)
+    if(s1->indicator_type != INDICATOR_TYPE_NONE && s2->indicator_type == s1->indicator_type)
         res.connector = s1->phonographic == s2->phonographic ? (s1->phonographic ? SEP_INDICATOR_P : SEP_INDICATOR_L) : SEP_INDICATOR_M;
-    else if((s1->indicator && (s1->alignment == ALIGNMENT_RIGHT || s1->alignment == ALIGNMENT_CENTER)) || (s2->indicator && (s2->alignment == ALIGNMENT_LEFT || s2->alignment == ALIGNMENT_CENTER)))
+    else if((s1->indicator_type == INDICATOR_TYPE_RIGHT || s1->indicator_type == INDICATOR_TYPE_CENTER) || (s2->indicator_type == INDICATOR_TYPE_LEFT || s2->indicator_type == INDICATOR_TYPE_CENTER))
         res.connector = SEP_INDICATOR_0;
     else if(s1->compound_no != s2->compound_no)
         res.connector = SEP_COMPOUND;
@@ -496,7 +497,7 @@ static char* open_html(char* s, int changes, const State* state)
         else if(state->unknown_reading)
             s = cun_strcpy(s, "<span class='unknown_reading'>");
     }
-    if(changes >= INDICATOR && state->indicator)
+    if(changes >= INDICATOR && state->indicator_type != INDICATOR_TYPE_NONE)
         s = cun_strcpy(s, "<span class='indicator'>");
     if(changes >= CONDITION && state->condition != CONDITION_INTACT)
     {
@@ -518,7 +519,7 @@ static char* close_html(char* s, int changes, const State* state)
 {
     if(changes >= CONDITION && state->condition != CONDITION_INTACT)
         s = cun_strcpy(s, "</span>");
-    if(changes >= INDICATOR && state->indicator)
+    if(changes >= INDICATOR && state->indicator_type != INDICATOR_TYPE_NONE)
         s = cun_strcpy(s, "</span>");
     if(changes >= TYPE && (state->type != TYPE_VALUE || state->unknown_reading) && state->type != TYPE_PUNCTUATION)
         s = cun_strcpy(s, "</span>");
@@ -776,7 +777,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         {
             char* s_ = s;
             s = write_value_replacing_conditions_html(s, VARDATA_ANY(value), value_size);
-            if(state->capitalize && !state->indicator) {
+            if(state->capitalize && state->indicator_type == INDICATOR_TYPE_NONE) {
                 cun_capitalize(s_);
                 state->capitalize = false;
             }
@@ -896,7 +897,7 @@ static char* open_code(char* s, const State* s1, State* s2)
     if(s1 != NULL && !s1->stem && s2->stem && !s1->stem_null && !s2->stem_null && s1->word_no == s2->word_no)
         *s++ = ';';
 
-    if(!s2->phonographic_null && !s2->phonographic && !s2->indicator && (s1 == NULL || s1->phonographic_null || s1->phonographic || s1->indicator || s1->line_no != s2->line_no))
+    if(!s2->phonographic_null && !s2->phonographic && s2->indicator_type == INDICATOR_TYPE_NONE && (s1 == NULL || s1->phonographic_null || s1->phonographic || s1->indicator_type != INDICATOR_TYPE_NONE || s1->line_no != s2->line_no))
         *s++ = '_';
 
     if(s1 == NULL || s1->condition != s2->condition || s1->line_no != s2->line_no)
@@ -916,7 +917,7 @@ static char* open_code(char* s, const State* s1, State* s2)
         s2->capitalize = false;
     }
 
-    if(s2->indicator && (s1 == NULL || !s1->indicator || s1->alignment != s2->alignment || s1->phonographic != s2->phonographic || s1->phonographic_null || s1->line_no != s2->line_no))
+    if(s2->indicator_type != INDICATOR_TYPE_NONE && (s1 == NULL || s1->indicator_type != s2->indicator_type || s1->phonographic != s2->phonographic || s1->phonographic_null || s1->line_no != s2->line_no))
     {
         if(s2->phonographic)
             *s++ = '<';
@@ -930,7 +931,7 @@ static char* open_code(char* s, const State* s1, State* s2)
 
 static char* close_code(char* s, const State* s1, const State* s2)
 {
-    if(s1->indicator && (s2 == NULL || !s2->indicator || s1->alignment != s2->alignment || s1->phonographic != s2->phonographic || s2->phonographic_null || s1->line_no != s2->line_no))
+    if(s1->indicator_type != INDICATOR_TYPE_NONE && (s2 == NULL || s1->indicator_type != s2->indicator_type || s1->phonographic != s2->phonographic || s2->phonographic_null || s1->line_no != s2->line_no))
     {
         if(s1->phonographic)
             *s++ = '>';
@@ -958,7 +959,7 @@ static char* close_code(char* s, const State* s1, const State* s2)
             s = cun_strcpy(s, "»");
     }
 
-    if(!s1->phonographic_null && !s1->phonographic && !s1->indicator && (s2 == NULL || s2->phonographic_null || s2->phonographic || s2->indicator || s1->line_no != s2->line_no))
+    if(!s1->phonographic_null && !s1->phonographic && s1->indicator_type == INDICATOR_TYPE_NONE && (s2 == NULL || s2->phonographic_null || s2->phonographic || s2->indicator_type != INDICATOR_TYPE_NONE || s1->line_no != s2->line_no))
         *s++ = '_';
 
     if(s2 != NULL && s1->stem && !s2->stem && !s1->stem_null && !s2->stem_null && s1->word_no == s2->word_no)

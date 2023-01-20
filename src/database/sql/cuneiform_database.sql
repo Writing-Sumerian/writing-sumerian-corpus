@@ -187,13 +187,15 @@ EXECUTE format(
     $$
     CREATE TABLE %1$I.corpus (
         transliteration_id integer,
-        sign_no integer NOT NULL,
+        sign_no integer,
         line_no integer NOT NULL,
         word_no integer NOT NULL,
         value_id integer REFERENCES values DEFERRABLE INITIALLY IMMEDIATE,
         sign_variant_id integer REFERENCES sign_variants DEFERRABLE INITIALLY IMMEDIATE,
         custom_value text,
-        properties SIGN_PROPERTIES NOT NULL,
+        type sign_type NOT NULL,
+        indicator_type indicator_type,
+        phonographic boolean,
         stem boolean,
         condition sign_condition NOT NULL,
         crits text,
