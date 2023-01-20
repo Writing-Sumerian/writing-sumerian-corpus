@@ -2,4 +2,4 @@ comment = 'Load data into the Cuneiform Database'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_loader'
-requires = 'cuneiform_sign_properties, cuneiform_signlist, cuneiform_encoder'
+requires = 'cuneiform_sign_properties, cuneiform_encode_corpus'

@@ -1,54 +1,4 @@
 
--- corpus
-
-CREATE TABLE corpus_unencoded (
-    transliteration_id integer,
-    sign_no integer,
-    value text,
-    sign_spec text,
-    type sign_type NOT NULL,
-    PRIMARY KEY (transliteration_id, sign_no)
-);
-
-CREATE INDEX ON corpus_unencoded (type, (sign_spec IS null));
-
-CALL create_corpus_encoder('corpus_encoder', 'corpus_unencoded', '{transliteration_id}');
-
-
-CREATE OR REPLACE PROCEDURE encode_corpus ()
-    LANGUAGE PLPGSQL
-    AS $BODY$
-    
-BEGIN
-
-UPDATE corpus SET 
-    value_id = corpus_encoder.value_id, 
-    sign_variant_id = corpus_encoder.sign_variant_id
-FROM
-    corpus_encoder
-WHERE
-    corpus.sign_variant_id IS NULL AND
-    corpus.transliteration_id = corpus_encoder.transliteration_id AND
-    corpus.sign_no = corpus_encoder.sign_no;
-
-DELETE FROM corpus_unencoded 
-USING corpus 
-WHERE 
-    corpus.transliteration_id = corpus_unencoded.transliteration_id AND
-    corpus.sign_no = corpus_unencoded.sign_no AND
-    corpus.sign_variant_id IS NOT NULL;
-
-UPDATE corpus SET 
-    custom_value = NULL
-WHERE
-    custom_value IS NOT NULL AND
-    corpus.sign_variant_id IS NOT NULL;
-
-END
-
-$BODY$;
-
-
 CREATE OR REPLACE PROCEDURE load_corpus (path text)
     LANGUAGE PLPGSQL
     AS $BODY$
@@ -384,10 +334,10 @@ SELECT
     word_no,
     null,
     null,
-    CASE WHEN type = 'value' OR type = 'sign' THEN NULL ELSE corpus_tmp_.value END,
+    value || COALESCE('(' || sign_spec || ')', ''),
     type, 
     indicator_type, 
-    corpus_tmp_.phonographic,
+    phonographic,
     stem,
     condition,
     crits,
@@ -397,7 +347,10 @@ SELECT
     ligature
 FROM
     corpus_tmp_
-    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier);
+    LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier)
+ORDER BY
+    transliteration_id,
+    sign_no;
 
 INSERT INTO corpus_unencoded
 SELECT
@@ -410,67 +363,12 @@ FROM
     corpus_tmp_
     LEFT JOIN transliteration_ids_tmp_ USING (transliteration_identifier)
 WHERE
-    type = 'value' OR
-    type = 'sign';
+    type = 'value'
+    OR type = 'sign';
 
-
+CALL encode_corpus();
+CLUSTER corpus;
 CALL database_create_indexes ();
-
-COMMIT;
-
-CLUSTER corpus;
-
-UPDATE corpus SET 
-    value_id = corpus_encoder.value_id, 
-    sign_variant_id = corpus_encoder.sign_variant_id
-FROM
-    corpus_encoder
-WHERE
-    corpus.transliteration_id = corpus_encoder.transliteration_id AND
-    corpus.sign_no = corpus_encoder.sign_no;
-
-DELETE FROM corpus_unencoded 
-USING corpus 
-WHERE 
-    corpus.transliteration_id = corpus_unencoded.transliteration_id AND
-    corpus.sign_no = corpus_unencoded.sign_no AND
-    corpus.sign_variant_id IS NOT NULL;
-
-UPDATE corpus SET 
-    custom_value = corpus_unencoded.value || COALESCE('(' || corpus_unencoded.sign_spec || ')', '')
-FROM
-    corpus_unencoded
-WHERE
-    corpus.transliteration_id = corpus_unencoded.transliteration_id AND
-    corpus.sign_no = corpus_unencoded.sign_no;
-
-CLUSTER corpus;
-
-END
-
-$BODY$;
-
-
-CREATE OR REPLACE PROCEDURE reload_corpus (path text)
-    LANGUAGE PLPGSQL
-    AS $BODY$
-    
-BEGIN
-
-SET CONSTRAINTS All DEFERRED;
-
-DELETE FROM corpus_unencoded;
-
-DELETE FROM corpus;
-DELETE FROM words;
-DELETE FROM compounds;
-DELETE FROM lines;
-DELETE FROM blocks;
-DELETE FROM surfaces;
-DELETE FROM transliterations;
-DELETE FROM texts;
-
-CALL load_corpus(path);
 
 END
 

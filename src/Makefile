@@ -6,6 +6,7 @@ all:
 	make -C database
 	make -C editor
 	make -C encoder
+	make -C encode_corpus
 	make -C loader
 	make -C parser
 	make -C replace
@@ -23,6 +24,7 @@ install:
 	make -C database install
 	make -C editor install
 	make -C encoder install
+	make -C encode_corpus install
 	make -C loader install
 	make -C parser install
 	make -C replace install
