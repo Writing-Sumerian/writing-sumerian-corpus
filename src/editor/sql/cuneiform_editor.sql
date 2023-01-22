@@ -334,20 +334,22 @@ DECLARE
     rec     record;
     col     text;
 
-    word_columns         text[]      := '{compound_no, capitalized}';
-    word_special_col     boolean[]   := '{t,f}';
-    compound_columns     text[]      := '{pn_type, language, section_no, compound_comment}';
-    compound_special_col boolean[]   := '{f,f,t,f}';
-    line_columns         text[]      := '{block_no, line, line_comment}';
-    line_special_col     boolean[]   := '{t,f,f}';
-    block_columns        text[]      := '{surface_no, block_type, block_data, block_comment}';
-    block_special_col    boolean[]   := '{t,f,f,f}';
-    surface_columns      text[]      := '{object_no, surface_type, surface_data, surface_comment}';
-    surface_special_col  boolean[]   := '{t,f,f,f}';
-    object_columns       text[]      := '{object_type, object_data, object_comment}';
-    object_special_col   boolean[]   := '{f,f,f}';
-    section_columns      text[]      := '{section_name, composition_id, witness_type}';
-    section_special_col  boolean[]   := '{f,f,f}';
+    word_columns          text[]      := '{compound_no, capitalized}';
+    word_special_col      boolean[]   := '{t,f}';
+    word_noupdate_col     boolean[]   := '{t,f}';
+    compound_columns      text[]      := '{pn_type, language, section_no, compound_comment}';
+    compound_special_col  boolean[]   := '{f,f,t,f}';
+    compound_noupdate_col boolean[]   := '{f,f,f,f}';
+    line_columns          text[]      := '{block_no, line, line_comment}';
+    line_special_col      boolean[]   := '{t,f,f}';
+    block_columns         text[]      := '{surface_no, block_type, block_data, block_comment}';
+    block_special_col     boolean[]   := '{t,f,f,f}';
+    surface_columns       text[]      := '{object_no, surface_type, surface_data, surface_comment}';
+    surface_special_col   boolean[]   := '{t,f,f,f}';
+    object_columns        text[]      := '{object_type, object_data, object_comment}';
+    object_special_col    boolean[]   := '{f,f,f}';
+    section_columns       text[]      := '{section_name, composition_id, witness_type}';
+    section_special_col   boolean[]   := '{f,f,f}';
 
 BEGIN
 
@@ -439,6 +441,8 @@ BEGIN
     RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'sections', 'compounds', 'section_no', 'public');
     RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'sections', 'compounds', 'section_no', 'compound_no', section_columns, section_special_col, v_schema, 'public');
     RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'sections', 'section_no', section_columns, section_special_col, v_schema, 'public');
+
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'compounds', 'compound_no', '{section_no}', '{f}'::boolean[], v_schema, 'public');
 
     RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', 'public');
     RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', 'sign_no', line_columns, line_special_col, v_schema, 'public');
