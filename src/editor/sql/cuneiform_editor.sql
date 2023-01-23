@@ -500,20 +500,34 @@ $BODY$;
 
 
 CREATE OR REPLACE PROCEDURE edit_transliteration (
-    code text, 
-    transliteration_id integer,
-    language language,
-    stemmed boolean,
-    user_id integer DEFAULT NULL
+    v_code text, 
+    v_transliteration_id integer,
+    v_language language,
+    v_stemmed boolean,
+    v_user_id integer DEFAULT NULL
     )
     LANGUAGE PLPGSQL
 AS $BODY$
 
+DECLARE
+
+    v_count integer;
+
 BEGIN
 
-    CALL parse(code, 'editor', language, stemmed, transliteration_id);
-    CALL edit_logged('editor', transliteration_id, user_id);
-    CALL delete_transliteration(transliteration_id, 'editor');
+    CALL parse(v_code, 'editor', v_language, v_stemmed, v_transliteration_id);
+
+    SELECT count(*) INTO v_count FROM editor.errors;
+    IF v_count > 0 THEN
+        RAISE EXCEPTION 'cuneiform_parser syntax error';
+    END IF;
+    SELECT count(*) INTO v_count FROM corpus_parsed_unencoded WHERE transliteration_id = v_transliteration_id;
+    IF v_count > 0 THEN
+        RAISE EXCEPTION 'cuneiform_parser encoding error';
+    END IF;
+
+    CALL edit_logged('editor', v_transliteration_id, v_user_id);
+    CALL delete_transliteration(v_transliteration_id, 'editor');
 
 END;
 
