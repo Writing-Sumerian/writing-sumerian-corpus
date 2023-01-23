@@ -992,7 +992,8 @@ static char* write_modified_connector_code(char* s, const Connector c)
     }
     else if(c.modifier == SEP_EXT_LIGATURE)
     {
-        s = write_simple_connector_code(s, c.connector);
+        if(c.connector == SEP_WORD)
+            s = write_simple_connector_code(s, c.connector);
         *s++ = '+';
     }
     else if(c.modifier == SEP_EXT_LINEBREAK)
