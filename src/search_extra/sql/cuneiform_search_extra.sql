@@ -335,32 +335,48 @@ BEGIN
 END;
 $BODY$;
 
-CREATE TRIGGER corpus_search_corpus_trigger
-  AFTER DELETE OR INSERT OR UPDATE OF transliteration_id, sign_no, word_no, line_no, value_id, sign_variant_id, type, indicator_type, phonographic ON corpus 
-  FOR EACH ROW
-  EXECUTE FUNCTION corpus_search_corpus_trigger_fun();
 
-CREATE TRIGGER corpus_search_update_lines_trigger
-  AFTER UPDATE OF block_no ON lines
-  FOR EACH ROW
-  WHEN (NEW.block_no != OLD.block_no)
-  EXECUTE FUNCTION corpus_search_update_lines_trigger_fun();
+CREATE PROCEDURE corpus_search_create_triggers()
+  LANGUAGE SQL
+  AS
+$BODY$
+  CREATE TRIGGER corpus_search_corpus_trigger
+    AFTER DELETE OR INSERT OR UPDATE OF transliteration_id, sign_no, word_no, line_no, value_id, sign_variant_id, type, indicator_type, phonographic ON corpus 
+    FOR EACH ROW
+    EXECUTE FUNCTION corpus_search_corpus_trigger_fun();
 
-CREATE TRIGGER corpus_search_update_blocks_trigger
-  AFTER UPDATE OF surface_no ON blocks
-  FOR EACH ROW
-  WHEN (NEW.surface_no != OLD.surface_no)
-  EXECUTE FUNCTION corpus_search_update_blocks_trigger_fun();
+  CREATE TRIGGER corpus_search_update_lines_trigger
+    AFTER UPDATE OF block_no ON lines
+    FOR EACH ROW
+    WHEN (NEW.block_no != OLD.block_no)
+    EXECUTE FUNCTION corpus_search_update_lines_trigger_fun();
 
-CREATE TRIGGER corpus_search_update_surfaces_trigger
-  AFTER UPDATE OF object_no ON surfaces
-  FOR EACH ROW
-  WHEN (NEW.object_no != OLD.object_no)
-  EXECUTE FUNCTION corpus_search_update_surfaces_trigger_fun();
+  CREATE TRIGGER corpus_search_update_blocks_trigger
+    AFTER UPDATE OF surface_no ON blocks
+    FOR EACH ROW
+    WHEN (NEW.surface_no != OLD.surface_no)
+    EXECUTE FUNCTION corpus_search_update_blocks_trigger_fun();
+
+  CREATE TRIGGER corpus_search_update_surfaces_trigger
+    AFTER UPDATE OF object_no ON surfaces
+    FOR EACH ROW
+    WHEN (NEW.object_no != OLD.object_no)
+    EXECUTE FUNCTION corpus_search_update_surfaces_trigger_fun();
+$BODY$;
+
+CREATE PROCEDURE corpus_search_drop_triggers()
+  LANGUAGE SQL
+  AS
+$BODY$
+  DROP TRIGGER corpus_search_corpus_trigger ON corpus;
+  DROP TRIGGER corpus_search_update_lines_trigger ON lines;
+  DROP TRIGGER corpus_search_update_blocks_trigger ON blocks;
+  DROP TRIGGER corpus_search_update_surfaces_trigger ON surfaces;
+$BODY$;
 
 
-CREATE VIEW corpus_search_view AS (
-WITH x AS (
+CREATE OR REPLACE VIEW corpus_search_view AS (
+WITH x AS NOT MATERIALIZED (
   SELECT
     corpus.*,
     object_no
@@ -482,6 +498,16 @@ SELECT * FROM (
   a
 ORDER BY transliteration_id, object_no, position);
 
+
+CREATE PROCEDURE corpus_search_update_transliteration(v_transliteration_id integer)
+  LANGUAGE SQL
+  AS
+$BODY$
+  DELETE FROM corpus_search WHERE transliteration_id = v_transliteration_id;
+  INSERT INTO corpus_search SELECT * FROM corpus_search_view WHERE transliteration_id = v_transliteration_id;
+$BODY$;
+
+CALL corpus_search_create_triggers();
 
 
 CREATE MATERIALIZED VIEW values_present AS
