@@ -81,7 +81,7 @@ FROM (
 WHERE rank2 = 1;
 
 
-CREATE OR REPLACE FUNCTION sign_variants_sync_sign (v_sign_id integer)
+CREATE OR REPLACE FUNCTION sign_variants_sync_signs (v_sign_ids integer[])
   RETURNS void 
   VOLATILE
   LANGUAGE PLPGSQL
@@ -90,11 +90,11 @@ $BODY$
 BEGIN
     DELETE FROM sign_variants 
     WHERE 
-        sign_id = v_sign_id
-        AND (allomorph_id, allograph_ids) NOT IN (SELECT allomorph_id, allograph_ids FROM sign_variants_view WHERE sign_id = v_sign_id);
+        sign_id = ANY(v_sign_ids)
+        AND (allomorph_id, allograph_ids) NOT IN (SELECT allomorph_id, allograph_ids FROM sign_variants_view WHERE sign_id = ANY(v_sign_ids));
 
     INSERT INTO sign_variants (sign_id, allomorph_id, allograph_ids, variant_type, specific)
-    SELECT * FROM sign_variants_view WHERE sign_id = v_sign_id
+    SELECT * FROM sign_variants_view WHERE sign_id = ANY(v_sign_ids)
     ON CONFLICT (allomorph_id, allograph_ids) DO UPDATE SET
         sign_id = EXCLUDED.sign_id,
         variant_type = EXCLUDED.variant_type,
@@ -102,19 +102,14 @@ BEGIN
 END;
 $BODY$;
 
-CREATE FUNCTION sign_variants_allomorphs_trigger_fun () 
+CREATE OR REPLACE FUNCTION sign_variants_allomorphs_trigger_fun () 
   RETURNS trigger 
   VOLATILE
   LANGUAGE PLPGSQL
   AS
 $BODY$
 BEGIN
-    PERFORM sign_variants_sync_sign(sign_id) 
-    FROM (
-        SELECT DISTINCT sign_id 
-        FROM LATERAL (VALUES ((OLD).sign_id, (NEW).sign_id)) AS _(sign_id) 
-        WHERE sign_id IS NOT NULL
-    ) _;
+    PERFORM sign_variants_sync_signs(ARRAY[(OLD).sign_id, (NEW).sign_id]);
     RETURN NULL;
 END;
 $BODY$;
@@ -126,12 +121,13 @@ CREATE OR REPLACE FUNCTION sign_variants_allomorph_components_trigger_fun ()
   AS
 $BODY$
 BEGIN
-    PERFORM sign_variants_sync_sign(sign_id) 
-    FROM (
-        SELECT DISTINCT sign_id 
-        FROM allomorphs
-        WHERE allomorph_id = (OLD).allomorph_id OR allomorph_id = (NEW).allomorph_id       
-    ) _;
+    PERFORM 
+        sign_variants_sync_signs(array_agg(DISTINCT sign_id)) 
+    FROM 
+        allomorphs
+    WHERE 
+        allomorph_id = (OLD).allomorph_id 
+        OR allomorph_id = (NEW).allomorph_id;
     RETURN NULL;
 END;
 $BODY$;
@@ -144,15 +140,15 @@ CREATE OR REPLACE FUNCTION sign_variants_allographs_trigger_fun ()
   AS
 $BODY$
 BEGIN
-    PERFORM sign_variants_sync_sign(sign_id) 
-    FROM (
-        SELECT DISTINCT sign_id 
-        FROM 
-            allomorphs
-            JOIN allomorph_components USING (allomorph_id)
-            JOIN allographs USING (grapheme_id)
-        WHERE allograph_id = (OLD).allograph_id OR allograph_id = (NEW).allograph_id       
-    ) _;
+    PERFORM 
+        sign_variants_sync_signs(array_agg(DISTINCT sign_id)) 
+    FROM 
+        allomorphs
+        JOIN allomorph_components USING (allomorph_id)
+        JOIN allographs USING (grapheme_id)
+    WHERE 
+        allograph_id = (OLD).allograph_id 
+        OR allograph_id = (NEW).allograph_id;
     RETURN NULL;
 END;
 $BODY$;
