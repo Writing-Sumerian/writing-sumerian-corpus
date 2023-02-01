@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION split_sign (
     AS $BODY$
     SELECT 
         regexp_split_to_table(sign, '([()+.&%×]|@[gštnkzi0-9]*)+'), 
-        regexp_split_to_table(regexp_replace(sign, '^\(', 'V('), '[A-ZŠĜŘḪṬṢŚ’]+[x0-9]*(bis)?|(?<![@0-9])[0-9]+')
+        regexp_split_to_table(regexp_replace(sign, '^\(', 'V('), '[A-ZŠĜŘḪṬṢŚ’]+[x0-9]*([a-c]|bis|ter)?|(?<![@0-9])[0-9]+')
 $BODY$;
 
 CREATE OR REPLACE FUNCTION split_glyphs (

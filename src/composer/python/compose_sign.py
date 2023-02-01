@@ -31,7 +31,7 @@ def compose_sign_html (tree:jsonb) -> str:
                 return rotate(compose(node['vals'][0]), op)
             return parenthesize(node['vals'][0], 100, True) + '<span class="modifier">'+modifiers[op]+'</span>'
         else:
-            if re.fullmatch(r'(BAU|LAK|KWU|RSP|REC|ZATU|ELLES)[0-9]{3}', op):
+            if re.fullmatch(r'(BAU|LAK|KWU|RSP|REC|ZATU|ELLES|UKN)[0-9]{3}([a-c]|bis|ter)?', op):
                 return re.sub(r'([0-9]+)$', r'<span class="slindex">\1</span>', op)
             else:
                 return re.sub(r'(?<=[^0-9x])([0-9x]+)$', r'<span class="index">\1</span>', op)
