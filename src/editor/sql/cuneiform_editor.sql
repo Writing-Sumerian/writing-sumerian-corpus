@@ -2,7 +2,8 @@ CREATE TABLE edits (
     edit_id BIGSERIAL PRIMARY KEY,
     transliteration_id integer REFERENCES transliterations(transliteration_id) ON DELETE CASCADE,
     timestamp timestamp,
-    user_id text
+    user_id text,
+    internal boolean
 );
 
 CREATE TABLE edit_log (
@@ -469,7 +470,8 @@ $BODY$;
 CREATE OR REPLACE PROCEDURE edit_logged (
     v_schema text, 
     v_transliteration_id integer,
-    v_user_id integer DEFAULT NULL
+    v_user_id integer DEFAULT NULL,
+    v_internal boolean DEFAULT false
     )
     LANGUAGE PLPGSQL
 AS $BODY$
@@ -477,11 +479,12 @@ DECLARE
     v_edit_id       integer;
 BEGIN
 
-    INSERT INTO edits (transliteration_id, timestamp, user_id) 
+    INSERT INTO edits (transliteration_id, timestamp, user_id, internal) 
     SELECT 
         v_transliteration_id, 
         CURRENT_TIMESTAMP, 
-        v_user_id 
+        v_user_id,
+        v_internal
     RETURNING edit_id INTO v_edit_id;
 
     INSERT INTO edit_log 
@@ -504,7 +507,8 @@ CREATE OR REPLACE PROCEDURE edit_transliteration (
     v_transliteration_id integer,
     v_language language,
     v_stemmed boolean,
-    v_user_id integer DEFAULT NULL
+    v_user_id integer DEFAULT NULL,
+    v_internal boolean DEFAULT false
     )
     LANGUAGE PLPGSQL
 AS $BODY$
@@ -526,7 +530,7 @@ BEGIN
         RAISE EXCEPTION 'cuneiform_parser encoding error';
     END IF;
 
-    CALL edit_logged('editor', v_transliteration_id, v_user_id);
+    CALL edit_logged('editor', v_transliteration_id, v_user_id, v_internal);
     CALL delete_transliteration(v_transliteration_id, 'editor');
 
 END;
