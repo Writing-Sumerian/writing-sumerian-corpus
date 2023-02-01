@@ -7,6 +7,8 @@ BEGIN
 SET CONSTRAINTS ALL DEFERRED;
 
 CALL signlist_drop_triggers();
+DELETE FROM sign_variants_composition;
+DELETE FROM sign_variants;
 
 EXECUTE format('COPY glyphs(glyph_id, glyph, unicode) FROM %L CSV NULL ''\N''', path || 'glyphs.csv');
 EXECUTE format('COPY glyph_synonyms(synonym, glyph_id) FROM %L CSV NULL ''\N''', path || 'glyph_synonyms.csv');
@@ -28,6 +30,8 @@ PERFORM setval('values_value_id_seq', max(value_id)) FROM values;
 PERFORM setval('value_variants_value_variant_id_seq', max(value_variant_id)) FROM value_variants;
 PERFORM setval('signs_sign_id_seq', max(sign_id)) FROM signs;
 
+INSERT INTO sign_variants (sign_id, allomorph_id, allograph_ids, variant_type, specific) SELECT * FROM sign_variants_view;
+INSERT INTO sign_variants_composition SELECT * FROM sign_variants_composition_view;
 CALL signlist_create_triggers();
 
 END
