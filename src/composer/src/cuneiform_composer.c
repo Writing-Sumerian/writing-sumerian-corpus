@@ -702,7 +702,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
     const int32 string_size = VARSIZE_ANY_EXHDR(state->string);
     const int32 value_size = value ? VARSIZE_ANY_EXHDR(value) : 0;
-    const int32 value_size_final = calculate_value_size_replacing_conditions_html(VARDATA_ANY(value), value_size);
+    const int32 value_size_final = calculate_value_size_replacing_conditions_html(value ? VARDATA_ANY(value) : NULL, value_size);
     const int32 sign_size = sign ? VARSIZE_ANY_EXHDR(sign) : 0;
     const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
     const int32 comment_size = comment ? VARSIZE_ANY_EXHDR(comment) : 0;
