@@ -80,24 +80,31 @@ CREATE OR REPLACE PROCEDURE add_default_grapheme (
 $BODY$;
 
 CREATE OR REPLACE PROCEDURE add_allomorph (
-  sign_id integer,
-  graphemes text,
-  variant_type sign_variant_type DEFAULT 'nondefault',
-  specific boolean DEFAULT FALSE,
-  allomorph_id INOUT integer DEFAULT NULL
+  v_sign_id integer,
+  v_graphemes text,
+  v_variant_type sign_variant_type DEFAULT 'nondefault',
+  v_specific boolean DEFAULT FALSE,
+  v_allomorph_id INOUT integer DEFAULT NULL
   )
   LANGUAGE PLPGSQL
   AS $BODY$
   BEGIN
-  INSERT INTO allomorphs VALUES (default, sign_id, variant_type, specific) RETURNING allomorphs.allomorph_id INTO allomorph_id;
+
+  CALL signlist_drop_triggers();
+
+  INSERT INTO allomorphs VALUES (default, v_sign_id, v_variant_type, v_specific) RETURNING allomorph_id INTO v_allomorph_id;
   INSERT INTO allomorph_components
     SELECT
-        allomorph_id,
+        v_allomorph_id,
         pos,
         grapheme_ids[1]
     FROM
-        LATERAL split_glyphs(graphemes) WITH ORDINALITY a(grapheme_identifier, pos)
+        LATERAL split_glyphs(v_graphemes) WITH ORDINALITY a(grapheme_identifier, pos)
         LEFT JOIN sign_map ON identifier = grapheme_identifier AND array_length(grapheme_ids, 1) = 1;
+
+  CALL signlist_create_triggers();
+  UPDATE allomorphs SET sign_id = sign_id WHERE allomorph_id = v_allomorph_id; -- trigger trigger
+
   END;
 $BODY$;
 
@@ -241,6 +248,80 @@ CREATE OR REPLACE PROCEDURE merge_signs (
     UPDATE allomorphs SET sign_id = sign_id_1 where sign_id = sign_id_2;
     DELETE FROM signs WHERE sign_id = sign_id_2;
 END;
+$BODY$;
+
+CREATE OR REPLACE PROCEDURE allomorph_to_allograph (
+  v_allomorph_id integer,
+  v_allgraph_id INOUT integer DEFAULT NULL
+  )
+  LANGUAGE PLPGSQL
+  AS $BODY$
+  DECLARE
+
+  v_variant_type sign_variant_type;
+  v_specific boolean;
+  v_grapheme_id integer;
+  v_allograph_specific boolean;
+  v_glyph_id integer;
+  v_allograph_id integer;
+  v_sign_variant_id integer;
+  v_grapheme_id_new integer;
+  v_allomorph_id_new integer;
+  v_allograph_id_new integer;
+  v_sign_id integer;
+
+  BEGIN
+
+  SELECT sign_id INTO v_sign_id FROM allomorphs WHERE allomorph_id = v_allomorph_id;
+
+  SELECT 
+    grapheme_id,
+    glyph_id,
+    allograph_id,
+    specific
+  INTO STRICT 
+    v_grapheme_id,
+    v_glyph_id,
+    v_allograph_id,
+    v_allograph_specific
+  FROM 
+    allomorph_components 
+    JOIN allographs USING (grapheme_id)
+  WHERE 
+    allomorph_id = v_allomorph_id
+    AND variant_type = 'default';
+
+  SELECT 
+    allomorph_id, 
+    grapheme_id 
+  INTO STRICT
+    v_allomorph_id_new,
+    v_grapheme_id_new
+  FROM 
+    allomorphs
+    JOIN allomorph_components USING (allomorph_id) 
+  WHERE
+    sign_id = v_sign_id
+    AND variant_type = 'default';
+
+  SELECT variant_type, specific AND v_allograph_specific INTO v_variant_type, v_specific FROM allomorphs WHERE allomorph_id = v_allomorph_id; 
+  SELECT sign_variant_id INTO v_sign_variant_id FROM sign_variants WHERE allomorph_id = v_allomorph_id AND allograph_ids = ARRAY[v_allograph_id];
+
+  SET CONSTRAINTS ALL DEFERRED;
+
+  CALL delete_allomorph(v_allomorph_id);
+  IF v_specific THEN
+    CALL delete_grapheme(v_grapheme_id);
+  END IF;
+  INSERT INTO allographs VALUES (default, v_grapheme_id_new, v_glyph_id, v_variant_type, v_specific) RETURNING allograph_id INTO v_allograph_id_new;
+  DELETE FROM sign_variants WHERE allomorph_id = v_allomorph_id_new AND allograph_ids = ARRAY[v_allograph_id_new];
+  INSERT INTO sign_variants VALUES (v_sign_variant_id, v_sign_id, v_allomorph_id_new, ARRAY[v_allograph_id_new], v_variant_type, v_specific);
+
+  RAISE NOTICE '% % %', v_sign_variant_id, v_allomorph_id_new,v_allograph_id_new;
+
+  --SET CONSTRAINTS ALL IMMEDIATE;
+
+  END;
 $BODY$;
 
 CREATE OR REPLACE PROCEDURE make_glyph_value (
