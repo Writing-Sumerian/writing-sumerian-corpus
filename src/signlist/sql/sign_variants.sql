@@ -145,10 +145,9 @@ BEGIN
     FROM 
         allomorphs
         JOIN allomorph_components USING (allomorph_id)
-        JOIN allographs USING (grapheme_id)
     WHERE 
-        allograph_id = (OLD).allograph_id 
-        OR allograph_id = (NEW).allograph_id;
+        grapheme_id = (OLD).grapheme_id 
+        OR grapheme_id = (NEW).grapheme_id;
     RETURN NULL;
 END;
 $BODY$;
@@ -278,12 +277,12 @@ $BODY$;
 
 
 
-CREATE PROCEDURE signlist_create_triggers()
+CREATE OR REPLACE PROCEDURE signlist_create_triggers()
     LANGUAGE SQL
     AS
 $BODY$
 CREATE TRIGGER sign_variants_allomorphs_trigger
-  AFTER UPDATE OR INSERT ON allomorphs 
+  AFTER UPDATE OR INSERT OR DELETE ON allomorphs 
   FOR EACH ROW
   EXECUTE FUNCTION sign_variants_allomorphs_trigger_fun();
 CREATE TRIGGER sign_variants_allomorph_components_trigger
@@ -309,7 +308,7 @@ CREATE TRIGGER sign_variants_composition_glyphs_trigger
 $BODY$;
 
 
-CREATE PROCEDURE signlist_drop_triggers()
+CREATE OR REPLACE PROCEDURE signlist_drop_triggers()
     LANGUAGE SQL
     AS
 $BODY$
