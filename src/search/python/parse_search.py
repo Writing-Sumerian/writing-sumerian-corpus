@@ -27,6 +27,7 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
         CON = 9
         WC = 10
         INHERITCON = 11
+        PSEUDO = 12
 
 
     class Token:
@@ -41,8 +42,8 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
 
 
     class Char(Token):
-        def __init__(self, id, condition):
-            self.type = TokenType.CHAR
+        def __init__(self, id, condition, pseudo=False):
+            self.type = TokenType.PSEUDO if pseudo else TokenType.CHAR
             self.id = id
             self.condition = condition
             self.lineId = None
@@ -91,6 +92,11 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             return [Char(self.id, ' AND '.join(args[:-1]).format(table = f'c{self.id}'))] + ([Wildcard(args[-1])] if args[-1] is not None else [])
 
         @v_args(inline=True)
+        def pseudo(self):
+            self.id += 1
+            return [Char(self.id, f'c{self.id}.glyph_id IS NULL', True)]
+
+        @v_args(inline=True)
         def indicator(self, alignment, indic_type, spec):
             if alignment == '>':
                 spec += " AND {table}.indicator_type = 'right'"
@@ -131,9 +137,6 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
         def numberx(self):
             return f"{{table}}.type = 'number'"
 
-        @v_args(inline=True)
-        def pseudo(self):
-            return 'TRUE'
 
         def wordbreak(self, args):
             return [Token(TokenType.WORDBREAK)]
@@ -175,6 +178,7 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
     class Table:
         def __init__(self):
             self.ids = []
+            self.matchIds = []
             self.ops = []
             self.wildcard = None
 
@@ -187,6 +191,8 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             super().__init__()
             self.id = char.id
             self.ids.append(char.id)
+            if char.type == TokenType.CHAR:
+                self.matchIds.append(char.id)
             self.condition = char.condition
 
         def first(self, column):
@@ -196,9 +202,12 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             return f"c{self.id}.{column}"
 
 
-    class DummyTable(SingleTable):
+    class DummyTable(Table):
         def __init__(self, id):
-            super().__init__(Char(id, f"c{id}.position IS NULL"))
+            super().__init__()
+            self.id = id
+            self.ids.append(id)
+            self.condition = f"c{id}.position IS NULL"
 
     
     class ComplexTable(Table):
@@ -214,6 +223,7 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
 
         def append(self, table):
             self.ids += table.ids
+            self.matchIds += table.matchIds
             self.tables.append(table)
             if not isinstance(table, DummyTable):
                 self.end += 1
@@ -243,17 +253,18 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
                     table2 = ComplexTable([table2])
                 for id in table1.ids[len(table2.ids):]:
                     table2.append(DummyTable(id))
+            self.matchIds = list(set(table1.matchIds+table2.matchIds))
             self.tables = [table1, table2]
 
         def replaceIds(table, idMap):
-            if isinstance(table, SingleTable):
+            if isinstance(table, SingleTable) or isinstance(table, DummyTable):
                 table.condition = table.condition.replace(f'c{table.id}.', f'c{idMap[table.id]}.')
                 table.id = idMap[table.id]
-                table.ids = [table.id]
             else:
-                table.ids = [idMap[id] for id in table.ids]
                 for t in table.tables:
                     AlternativeTable.replaceIds(t, idMap)
+            table.ids = [idMap[id] for id in table.ids]
+            table.matchIds = [idMap[id] for id in table.matchIds]
 
         def first(self, column):
             a = self.tables[0].first(column)
@@ -315,7 +326,7 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
         def join(table):
             conditions = []
 
-            if isinstance(table, SingleTable):
+            if isinstance(table, SingleTable) or isinstance(table, DummyTable):
                 return [table.condition]
 
             if isinstance(table, AlternativeTable):
@@ -352,13 +363,13 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             ops = []
             i = 0
             while i < len(tokens):
-                if tokens[i].type in [TokenType.CHAR,TokenType.LPAREN]:
+                if tokens[i].type in [TokenType.CHAR, TokenType.PSEUDO, TokenType.LPAREN]:
                     if len(tables):
                         if TokenType.BAR not in ops:
                             outerOps = [x for x in ops if x in [TokenType.CON]]
                         tables[-1].ops = ops
                         ops = []
-                    if tokens[i].type == TokenType.CHAR:
+                    if tokens[i].type == TokenType.CHAR or tokens[i].type == TokenType.PSEUDO:
                         tables.append(SingleTable(tokens[i]))
                         if tokens[i].lineId is not None:
                             self.lines.setdefault(tokens[i].lineId, []).append(tables[-1])
@@ -407,9 +418,9 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
             fromClause = ', '.join(f"{targetTable} c{id}" for id in self.table.ids)
             whereClause = ' AND '.join(conditions)
             keyCols = ', '.join(f"c{self.table.ids[0]}.{col}" for col in targetKey)
-            matchClause = 'sort_uniq_remove_null('+', '.join(f"c{id}.sign_no" for id in self.table.ids)+')'
-            wordMatchClause = 'sort_uniq_remove_null('+', '.join(f"c{id}.word_no" for id in self.table.ids)+')'
-            lineMatchClause = 'sort_uniq_remove_null('+', '.join(f"c{id}.line_no" for id in self.table.ids)+')'
+            matchClause = 'sort_uniq_remove_null('+', '.join(f"c{id}.sign_no" for id in self.table.matchIds)+')'
+            wordMatchClause = 'sort_uniq_remove_null('+', '.join(f"c{id}.word_no" for id in self.table.matchIds)+')'
+            lineMatchClause = 'sort_uniq_remove_null('+', '.join(f"c{id}.line_no" for id in self.table.matchIds)+')'
             wildcardClause = self.translateWildcards()
 
             return f'SELECT {keyCols}, {matchClause} AS signs, {wordMatchClause} AS words, {lineMatchClause} AS lines, {wildcardClause} AS wildcards FROM {fromClause} WHERE {whereClause}'

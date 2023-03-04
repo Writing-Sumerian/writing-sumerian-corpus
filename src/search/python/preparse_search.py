@@ -221,7 +221,7 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
             return ';'
 
         def linebreak(self, args):
-            return '//'
+            return '/'
 
         def ellipsis(self, args):
             return '…'
@@ -275,17 +275,16 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
                 wildcardsExplicit.append(id)
             wildcardsNew[id] = key
 
-        #for i, id in enumerate(reversed(wildcardsExplicit)):
-        #    wildcardsNew[str(i)] = id
-
         wildcardsExplicit.reverse()
 
         return code, wildcardsNew, wildcardsExplicit
 
         
+    tr = str.maketrans('cjvCJV', 'šĝřŠĜŘ')
+    searchTerm = re.sub(r'(?<!@)[cjvCJV]', lambda m: m.group().translate(tr), search_term)
 
     l = Lark(grammar, lexer='standard', propagate_positions=True)
-    tree = l.parse(search_term.translate(search_term.maketrans('cjvCJV', 'šĝřŠĜŘ')))
+    tree = l.parse(searchTerm)
     code, wildcards = T().transform(tree)
     code, wildcards, wildcardsExplicit = processWildcards(code, wildcards)
     return code, wildcards, wildcardsExplicit

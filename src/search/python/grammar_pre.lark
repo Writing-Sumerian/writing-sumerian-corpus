@@ -4,10 +4,15 @@ _unit       : line
             | alt
             | _part
 
-//TODO: disallow nested lines?
-line        : "[" ( paren | char | alt ) ( sep ( paren | char | alt ) )* "]"
+_unit_noline: paren_noline
+            | alt_noline
+            | _part
+
+line        : "[" _unit_noline ( sep _unit_noline )* "]"
 paren       : "(" _unit ( sep _unit )* ")"
+paren_noline: "(" _unit_noline ( sep _unit_noline )* ")"                        -> paren
 alt         : ( line | paren | _part ) ( "|" ( line | paren | _part ) )+
+alt_noline  : ( paren_noline | _part ) ( "|" ( paren_noline | _part ) )+        -> alt
 
 _part       : ( lindicator nullsep )* char ( nullsep rindicator )* 
             | _indicator+
@@ -40,7 +45,7 @@ nullsep     : _break*
 _break      : wordbreak 
             | linebreak
 
-con         : _CON
+con         : _DASH | _DOT
 ellipsis    : _ELLIPSIS
 colon       : ":"
 wordbreak   : ";"
@@ -49,7 +54,7 @@ linebreak   : _NL
 signt       : SIMPLESIGN MOD* ( ( SIGNCON | xcon ) ( signt | parensignt ) )*
             | parensignt MOD+ ( ( SIGNCON | xcon ) ( signt | parensignt ) )*
             | parensignt ( ( SIGNCON | xcon ) ( signt | parensignt ) )+
-parensignt  : "(" signt ( "." signt )* ")"
+parensignt  : "(" signt ( _DOT signt )* ")"
 xcon        : X
 
 PATTERN.5   : /\/[^\/]*\//
@@ -62,7 +67,8 @@ _SIGNX.2    : "X"
 X.2         : "x"
 _N.2        : /[Nn]/
 _ELLIPSIS.2 : "…"|"..."
-_CON.1      : /[.-]/
+_DASH.1     : "-"
+_DOT.1      : "."
 _SPACE      : /[\t \f\n]+/
 _NL         : "//"
 MOD         : "@" ( /[tgšnkzicdfvabx]/ | "90" | "45" )
