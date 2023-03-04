@@ -430,8 +430,6 @@ SELECT * FROM (
     phonographic
   FROM 
     x
-  WHERE type != 'punctuation' 
-    AND type != 'damage'
   UNION ALL
   SELECT                      -- pseudo first row
     transliteration_id,
