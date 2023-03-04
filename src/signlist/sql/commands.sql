@@ -81,6 +81,34 @@ $BODY$;
 
 CREATE OR REPLACE PROCEDURE add_allomorph (
   v_sign_id integer,
+  v_grapheme_ids integer[],
+  v_variant_type sign_variant_type DEFAULT 'nondefault',
+  v_specific boolean DEFAULT FALSE,
+  v_allomorph_id INOUT integer DEFAULT NULL
+  )
+  LANGUAGE PLPGSQL
+  AS $BODY$
+  BEGIN
+
+  CALL signlist_drop_triggers();
+
+  INSERT INTO allomorphs VALUES (default, v_sign_id, v_variant_type, v_specific) RETURNING allomorph_id INTO v_allomorph_id;
+  INSERT INTO allomorph_components
+    SELECT
+        v_allomorph_id,
+        pos,
+        grapheme_id
+    FROM
+        LATERAL UNNEST(v_grapheme_ids) WITH ORDINALITY a(grapheme_id, pos);
+
+  CALL signlist_create_triggers();
+  UPDATE allomorphs SET sign_id = sign_id WHERE allomorph_id = v_allomorph_id; -- trigger trigger
+
+  END;
+$BODY$;
+
+CREATE OR REPLACE PROCEDURE add_allomorph (
+  v_sign_id integer,
   v_graphemes text,
   v_variant_type sign_variant_type DEFAULT 'nondefault',
   v_specific boolean DEFAULT FALSE,
@@ -135,6 +163,19 @@ CREATE OR REPLACE PROCEDURE add_sign (
   BEGIN
   INSERT INTO signs VALUES (default) RETURNING signs.sign_id INTO sign_id;
   CALL add_allomorph(sign_id, graphemes, 'default', TRUE, allomorph_id);
+  END;
+$BODY$;
+
+CREATE OR REPLACE PROCEDURE add_sign (
+  grapheme_ids integer[],
+  sign_id INOUT integer DEFAULT NULL,
+  allomorph_id INOUT integer DEFAULT NULL
+  )
+  LANGUAGE PLPGSQL
+  AS $BODY$
+  BEGIN
+  INSERT INTO signs VALUES (default) RETURNING signs.sign_id INTO sign_id;
+  CALL add_allomorph(sign_id, grapheme_ids, 'default', TRUE, allomorph_id);
   END;
 $BODY$;
 
