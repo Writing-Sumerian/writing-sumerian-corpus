@@ -6,6 +6,7 @@ from py2plpy import plpy, Out, sql_properties
 def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wildcards_explicit:Out[List[int]]):
      
     from lark import Lark, Transformer, v_args
+    from lark.exceptions import UnexpectedInput
     from collections import Counter
     import re
 
@@ -284,7 +285,10 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
     searchTerm = re.sub(r'(?<!@)[cjvCJV]', lambda m: m.group().translate(tr), search_term)
 
     l = Lark(grammar, lexer='standard', propagate_positions=True)
-    tree = l.parse(searchTerm)
+    try:
+        tree = l.parse(searchTerm)
+    except UnexpectedInput:
+        plpy.error('preparse_search syntax error')
     code, wildcards = T().transform(tree)
     code, wildcards, wildcardsExplicit = processWildcards(code, wildcards)
     return code, wildcards, wildcardsExplicit
