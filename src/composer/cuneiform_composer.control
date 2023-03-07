@@ -1,4 +1,4 @@
 comment = 'Compose abstract cuneiform into human readable text'
 default_version = '0.0.2'
 relocatable = false
-module_pathname = '$libdir/cuneiform_composer'
+module_pathname = '$libdir/cuneiform_composer_0.0.2'
