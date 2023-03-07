@@ -25,7 +25,7 @@ CREATE OR REPLACE FUNCTION cun_agg_sfunc (
     boolean
     )
     RETURNS internal
-    AS 'cuneiform_composer'
+    AS 'cuneiform_composer_new'
 ,
     'cuneiform_cun_agg_sfunc'
     LANGUAGE C
@@ -34,7 +34,7 @@ CREATE OR REPLACE FUNCTION cun_agg_sfunc (
 
 CREATE OR REPLACE FUNCTION cun_agg_finalfunc (internal)
     RETURNS text[]
-    AS 'cuneiform_composer'
+    AS 'cuneiform_composer_new'
 ,
     'cuneiform_cun_agg_finalfunc'
     LANGUAGE C
@@ -99,7 +99,7 @@ CREATE OR REPLACE FUNCTION cun_agg_html_sfunc (
     boolean
     )
     RETURNS internal
-    AS 'cuneiform_composer'
+    AS 'cuneiform_composer_new'
 ,
     'cuneiform_cun_agg_html_sfunc'
     LANGUAGE C
@@ -108,7 +108,7 @@ CREATE OR REPLACE FUNCTION cun_agg_html_sfunc (
 
 CREATE OR REPLACE FUNCTION cun_agg_html_finalfunc (internal)
     RETURNS text[]
-    AS 'cuneiform_composer'
+    AS 'cuneiform_composer_new'
 ,
     'cuneiform_cun_agg_html_finalfunc'
     LANGUAGE C
