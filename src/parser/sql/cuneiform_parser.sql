@@ -4,6 +4,9 @@ CREATE TABLE corpus_parsed_unencoded (
     value text,
     sign_spec text,
     type sign_type NOT NULL,
+    line_no_code integer,
+    start_col_code integer,
+    stop_col_code integer,
     PRIMARY KEY (transliteration_id, sign_no)
 );
 
@@ -28,8 +31,8 @@ corpus_plan = plpy.prepare(
 )
 
 corpus_unencoded_plan = plpy.prepare(
-    f'INSERT INTO corpus_parsed_unencoded VALUES ($1, $2, $3, $4, $5)', 
-    ['integer', 'integer', 'text', 'text', 'sign_type']
+    f'INSERT INTO corpus_parsed_unencoded VALUES ($1, $2, $3, $4, $5, $6, $7, $8)', 
+    ['integer', 'integer', 'text', 'text', 'sign_type', 'integer', 'integer', 'integer']
 )
 
 words_plan = plpy.prepare(
@@ -95,11 +98,11 @@ for ix, row in lines.iterrows():
 for ix, row in signs.iterrows():
     plpy.execute(corpus_plan, [id, ix]+[row[key] for key in ['line_no', 'word_no', 'value', 'type', 'indicator_type', 'phonographic', 'stem', 'condition', 'crits', 'comment', 'newline', 'inverted', 'ligature']])
 for ix, row in signs.iterrows():
-    if row['type'] in ['value', 'sign'] or (row['type'] == 'number' and row['sign_spec'] is not None):
-        plpy.execute(corpus_unencoded_plan, [id, ix]+[row[key] for key in ['value', 'sign_spec', 'type']])
+    if row['type'] in ['value', 'sign']:
+        plpy.execute(corpus_unencoded_plan, [id, ix]+[row[key] for key in ['value', 'sign_spec', 'type', 'line_no_code', 'start_col_code', 'stop_col_code']])
 
 for ix, row in errors.iterrows():
-    plpy.execute(errors_plan, [id]+[row[key] for key in ['line', 'column', 'symbol', 'msg']])
+    plpy.execute(errors_plan, [id]+[row[key] for key in ['line_no', 'column', 'symbol', 'msg']])
 
 plpy.execute(f"""
     UPDATE {schema}.corpus SET 
@@ -133,6 +136,5 @@ plpy.execute(f"""
         corpus.transliteration_id = {id} AND
         corpus.sign_no = corpus_parsed_unencoded.sign_no;
     """)
-
 
 $BODY$;

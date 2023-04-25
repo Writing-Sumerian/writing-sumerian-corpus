@@ -515,19 +515,28 @@ AS $BODY$
 
 DECLARE
 
-    v_count integer;
+    v_error text;
 
 BEGIN
 
     CALL parse(v_code, 'editor', v_language, v_stemmed, v_transliteration_id);
 
-    SELECT count(*) INTO v_count FROM editor.errors;
-    IF v_count > 0 THEN
-        RAISE EXCEPTION 'cuneiform_parser syntax error';
+    SELECT string_agg(format('"%s" near %s:%s', message, line, col),  E'\n') INTO v_error FROM editor.errors;
+    IF length(v_error) > 0 THEN
+        RAISE EXCEPTION 'cuneiform_parser syntax error:%', v_error;
     END IF;
-    SELECT count(*) INTO v_count FROM corpus_parsed_unencoded WHERE transliteration_id = v_transliteration_id;
-    IF v_count > 0 THEN
-        RAISE EXCEPTION 'cuneiform_parser encoding error';
+
+    SELECT 
+        string_agg(format('"%s" in %s:%s-%s', value || COALESCE('('||sign_spec||')', ''), line_no_code, start_col_code, stop_col_code),  E'\n') 
+    INTO 
+        v_error 
+    FROM 
+        corpus_parsed_unencoded
+    WHERE 
+        transliteration_id = v_transliteration_id;
+
+    IF length(v_error) > 0 THEN
+        RAISE EXCEPTION 'cuneiform_parser encoding error:%', v_error;
     END IF;
 
     CALL edit_logged('editor', v_transliteration_id, v_user_id, v_internal);
