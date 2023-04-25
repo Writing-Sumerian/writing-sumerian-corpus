@@ -5,6 +5,7 @@ all:
 	make -C context
 	make -C database
 	make -C editor
+	make -C editor_log
 	make -C encoder
 	make -C encode_corpus
 	make -C loader
@@ -23,6 +24,7 @@ install:
 	make -C context install
 	make -C database install
 	make -C editor install
+	make -C editor_log install
 	make -C encoder install
 	make -C encode_corpus install
 	make -C loader install
