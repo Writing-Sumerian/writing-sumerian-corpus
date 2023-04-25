@@ -98,7 +98,11 @@ BEGIN
     ON CONFLICT (allomorph_id, allograph_ids) DO UPDATE SET
         sign_id = EXCLUDED.sign_id,
         variant_type = EXCLUDED.variant_type,
-        specific = EXCLUDED.specific;
+        specific = EXCLUDED.specific
+    WHERE
+        sign_variants.sign_id != EXCLUDED.sign_id
+        OR sign_variants.variant_type != EXCLUDED.variant_type
+        OR sign_variants.specific != EXCLUDED.specific;
 END;
 $BODY$;
 
