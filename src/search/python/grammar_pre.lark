@@ -1,75 +1,82 @@
-start       : ( pseudochar _break )? _unit ( sep _unit )* ( _break pseudochar )?
-_unit       : line
-            | paren
-            | alt
-            | _part
+start           : ( pseudochar _break )? _unit ( sep _unit )* ( _break pseudochar )?
+_unit           : line
+                | paren
+                | alt
+                | _part
 
-_unit_noline: paren_noline
-            | alt_noline
-            | _part
+_unit_noline    : paren_noline
+                | alt_noline
+                | _part
 
-line        : "[" _unit_noline ( sep _unit_noline )* "]"
-paren       : "(" _unit ( sep _unit )* ")"
-paren_noline: "(" _unit_noline ( sep _unit_noline )* ")"                        -> paren
-alt         : ( line | paren | _part ) ( "|" ( line | paren | _part ) )+
-alt_noline  : ( paren_noline | _part ) ( "|" ( paren_noline | _part ) )+        -> alt
+line            : "[" _unit_noline ( sep _unit_noline )* "]"
+paren           : "(" _unit ( sep _unit )* ")"
+paren_noline    : "(" _unit_noline ( sep _unit_noline )* ")"                        -> paren
+alt             : ( line | paren | _part ) ( _BAR ( line | paren | _part ) )+
+alt_noline      : ( paren_noline | _part ) ( _BAR ( paren_noline | _part ) )+       -> alt
 
-_part       : ( lindicator nullsep )* char ( nullsep rindicator )* 
-            | _indicator+
-lindicator  : _indicator
-rindicator  : _indicator 
-_indicator  : det 
-            | pc
-det         : "{" char ( sep char )* "}"
-pc          : "<" char ( sep char )* ">"
+_part           : ( lindicator nullsep )* char ( nullsep rindicator )* 
+                | _indicator+
+lindicator      : _indicator
+rindicator      : _indicator 
+_indicator      : det 
+                | pc
+det             : "{" char ( sep char )* "}"
+pc              : "<" char ( sep char )* ">"
 
-char        : VALUE signspec?       -> value
-            | signt signspec?       -> sign
-            | PATTERN signspec?     -> pattern
-            | _SIGNX                -> signx
-            | X signspec?           -> valuex
-            | _N                    -> n
-signspec    : "(" signt ( "." signt )* ")"
-pseudochar  : 
+char            : VALUE _signspec?                      -> value
+                | signt _signspec?                      -> form
+                | _BAR complex_sign _BAR _signspec?     -> sign
+                | PATTERN _signspec?                    -> pattern
+                | _SIGNX                                -> signx
+                | X _signspec?                          -> valuex
+                | _N                                    -> n
+_signspec       : "(" complex_sign ")"
+complex_sign    : signt ( "." signt )*
+pseudochar      : 
 
-sep         : ( _SPACE | _break )+ 
-            | ( _SPACE | _break )* ellipsis ( _SPACE | _break )*
-            | _SPACE? colon _SPACE?
-            | ( ellipsis | colon )? con 
-            | con ( ellipsis | colon ) con?
+sep             : ( _SPACE | _break )+ 
+                | ( _SPACE | _break )* ellipsis ( _SPACE | _break )*
+                | _SPACE? colon _SPACE?
+                | linebreak? ( ellipsis | colon )? wordcon linebreak?
+                | linebreak? wordcon ( ellipsis | colon ) wordcon? linebreak?
+                | ( wordbreak | linebreak )* ( ellipsis | colon )? compoundcon ( wordbreak | linebreak )*
+                | ( wordbreak | linebreak )* compoundcon ( ellipsis | colon ) wordcon? ( wordbreak | linebreak )* 
+nullsep         : _break*
+                | _break* ellipsis _break*
+                | colon
 
-nullsep     : _break*
-            | _break* ellipsis _break*
-            | colon
+_break          : wordbreak 
+                | compoundbreak
+                | linebreak
 
-_break      : wordbreak 
-            | linebreak
+wordcon         : "="
+compoundcon     : _DASH | _DOT
+ellipsis        : _ELLIPSIS
+colon           : ":"
+wordbreak       : ","
+compoundbreak   : ";"
+linebreak       : _NL
 
-con         : _DASH | _DOT
-ellipsis    : _ELLIPSIS
-colon       : ":"
-wordbreak   : ";"
-linebreak   : _NL
+signt           : SIMPLESIGN MOD* ( ( SIGNCON | xcon ) ( signt | parensignt ) )*
+                | parensignt MOD+ ( ( SIGNCON | xcon ) ( signt | parensignt ) )*
+                | parensignt ( ( SIGNCON | xcon ) ( signt | parensignt ) )+
+parensignt      : "(" signt ( _DOT signt )* ")"
+xcon            : X
 
-signt       : SIMPLESIGN MOD* ( ( SIGNCON | xcon ) ( signt | parensignt ) )*
-            | parensignt MOD+ ( ( SIGNCON | xcon ) ( signt | parensignt ) )*
-            | parensignt ( ( SIGNCON | xcon ) ( signt | parensignt ) )+
-parensignt  : "(" signt ( _DOT signt )* ")"
-xcon        : X
-
-PATTERN.5   : /\/[^\/]*\//
-VALUE.3     : /[abdegĝhḫijklmnpqrsšṣtṭuwyz’][abdegĝhḫijklmnpqrsšṣtṭuwyz’]+[0-9xX]*/
-            | /[aeiou][0-9xX]*/
-            | "d"
-SIMPLESIGN.3: /[ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’][ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’]+[0-9]*/
-            | /[AEIOU][0-9]*/ 
-_SIGNX.2    : "X"
-X.2         : "x"
-_N.2        : /[Nn]/
-_ELLIPSIS.2 : "…"|"..."
-_DASH.1     : "-"
-_DOT.1      : "."
-_SPACE      : /[\t \f\n]+/
-_NL         : "//"
-MOD         : "@" ( /[tgšnkzicdfvabx]/ | "90" | "45" )
-SIGNCON     : /[×%&@]/
+PATTERN.5       : /\/[^\/]*\//
+VALUE.3         : /[abdegĝhḫijklmnpqrsšṣtṭuwyz’][abdegĝhḫijklmnpqrsšṣtṭuwyz’]+[0-9xX]*/
+                | /[aeiou][0-9xX]*/
+                | "d"
+SIMPLESIGN.3    : /[ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’][ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’]+[0-9]*/
+                | /[AEIOU][0-9]*/ 
+_SIGNX.2        : "X"
+X.2             : "x"
+_N.2            : /[Nn]/
+_ELLIPSIS.2     : "…"|"..."
+_DASH.1         : "-"
+_DOT.1          : "."
+_SPACE          : /[\t \f\n]+/
+_NL             : "//"
+MOD             : "@" ( /[tgšnkzicdfvabx]/ | "90" | "45" )
+SIGNCON         : /[×%&@]/
+_BAR            : "|"

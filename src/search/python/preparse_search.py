@@ -6,7 +6,7 @@ from py2plpy import plpy, Out, sql_properties
 def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wildcards_explicit:Out[List[int]]):
      
     from lark import Lark, Transformer, v_args
-    from lark.exceptions import UnexpectedInput
+    from lark.exceptions import UnexpectedInput, VisitError
     from collections import Counter
     import re
 
@@ -15,76 +15,58 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
     """
 
     class DB:
-
-        QUERY = "SELECT array_agg(value_id) AS value_ids, array_agg(sign_variant_id) AS sign_variant_ids FROM {fromClause} WHERE {whereClause}"
-        GRAPHEME_TABLE = "sign_variants_composition JOIN values USING (sign_id) JOIN value_variants USING (value_id)"
         
-        VALUE_SPEC_PLAN = plpy.prepare(QUERY.format(fromClause='values_encoded', whereClause='value = $1 AND sign_spec = $2'), ["text", "text"])
-        VALUE_NOSPEC_PLAN = plpy.prepare(QUERY.format(fromClause='values_search', whereClause='value = $1'), ["text"])
-        PATTERN_SPEC_PLAN = plpy.prepare(QUERY.format(fromClause='values_encoded', whereClause='value ~ $1 AND sign_spec = $2'), ["text", "text"])
-        PATTERN_NOSPEC_PLAN = plpy.prepare(QUERY.format(fromClause='values_search', whereClause='value ~ $1'), ["text"])
-        VALUEX_SPEC_PLAN = plpy.prepare("SELECT sign_variant_id FROM sign_variants_composition WHERE glyphs = $1 AND specific", ["text"])
-        SIGN_SPEC_PLAN = plpy.prepare(f"""SELECT grapheme_ids, glyph_ids FROM {GRAPHEME_TABLE} WHERE value = $1 AND glyphs = $2""", ["text", "text"])
-        SIGN_GRAPHEME_PLAN = plpy.prepare(f"SELECT DISTINCT grapheme_ids FROM {GRAPHEME_TABLE} WHERE value = $1", ["text"])
-        SIGN_GLYPH_PLAN = plpy.prepare("SELECT glyph_ids FROM sign_map WHERE glyphs = $1 AND array_length(glyph_ids, 1) = 1", ["text"])
+        VALUE_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM values_search WHERE value = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
+        PATTERN_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM values_search WHERE value ~ $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
+        VALUEX_SPEC_PLAN = plpy.prepare("SELECT array_agg('s' || sign_variant_id::text) AS codes FROM sign_variants_composition WHERE glyphs = $1 AND specific", ["text"])
+        SIGN_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM signs_search WHERE sign = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
+        FORM_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM forms_search WHERE form = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
+        SIGN_DESCRIPTION_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM sign_descriptions_search WHERE sign = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
+        FORM_DESCRIPTION_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM form_descriptions_search WHERE form = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
         
         def normalizeGlyphs(sign):
+            if sign is None:
+                return None
             r = plpy.execute(f"SELECT normalize_glyphs('{sign}')")
             return r[0]['normalize_glyphs']
 
         def value(value, spec=None):
-            if spec is not None:
-                r = plpy.execute(DB.VALUE_SPEC_PLAN, [value, DB.normalizeGlyphs(spec)])
-            else:
-                r = plpy.execute(DB.VALUE_NOSPEC_PLAN, [value])
-            value_ids = r[0]['value_ids']
-            if not value_ids:
+            codes = plpy.execute(DB.VALUE_PLAN, [value, DB.normalizeGlyphs(spec)])[0]['codes']
+            if not codes:
                 raise ValueError
-            return value_ids, r[0]['sign_variant_ids']
+            return codes
 
         def pattern(pattern, spec=None):
-            if spec is not None:
-                r = plpy.execute(DB.PATTERN_SPEC_PLAN, [pattern, DB.normalizeGlyphs(spec)])
-            else:
-                r = plpy.execute(DB.PATTERN_NOSPEC_PLAN, [pattern])
-            value_ids = r[0]['value_ids']
-            if not value_ids:
+            codes = plpy.execute(DB.PATTERN_PLAN, [pattern, DB.normalizeGlyphs(spec)])[0]['codes']
+            if not codes:
                 raise ValueError
-            return value_ids, r[0]['sign_variant_ids']
+            return codes
 
         def valuex(spec):
-            r = plpy.execute(DB.VALUEX_SPEC_PLAN, [DB.normalizeGlyphs(spec)])
-            if len(r) != 1:
+            codes = plpy.execute(DB.VALUEX_SPEC_PLAN, [DB.normalizeGlyphs(spec)])[0]['codes']
+            if len(codes) != 1:
                 raise ValueError
-            return r[0]['sign_variant_id']
+            return codes[0]
 
-        def signNoSpec(sign):
-            r = plpy.execute(DB.SIGN_GLYPH_PLAN, [DB.normalizeGlyphs(sign)])
-            glyph_id = r[0]['glyph_ids'][0] if len(r) else None
-            r = plpy.execute(DB.SIGN_GRAPHEME_PLAN, [sign.lower()])
-            grapheme_ids = (row['grapheme_ids'] for row in r)
-            if not glyph_id and not grapheme_ids:
+        def sign(sign, spec):
+            if re.search(r'[\.×&%@]', sign):
+                r = plpy.execute(DB.SIGN_DESCRIPTION_PLAN, [DB.normalizeGlyphs(sign), DB.normalizeGlyphs(spec)])
+            else:
+                r = plpy.execute(DB.SIGN_PLAN, [sign, DB.normalizeGlyphs(spec)])
+            codes = r[0]['codes']
+            if not codes:
                 raise ValueError
-            return glyph_id, grapheme_ids
-
-        def signSpec(sign, spec):
-            r = plpy.execute(DB.SIGN_SPEC_PLAN, [sign.lower(), DB.normalizeGlyphs(spec)])
-            if len(r) != 1:
+            return codes
+        
+        def form(sign, spec):
+            if re.search(r'[\.×&%@]', sign):
+                r = plpy.execute(DB.FORM_DESCRIPTION_PLAN, [DB.normalizeGlyphs(sign), DB.normalizeGlyphs(spec)])
+            else:
+                r = plpy.execute(DB.FORM_PLAN, [sign, DB.normalizeGlyphs(spec)])
+            codes = r[0]['codes']
+            if not codes:
                 raise ValueError
-            return r[0]['grapheme_ids'], r[0]['glyph_ids']
-
-
-    def value(id):
-        return 'v'+str(id) if id is not None else ''
-
-    def sign_variant(id):
-        return 's'+str(id) if id is not None else ''
-
-    def grapheme(id):
-        return 'g'+str(id) if id is not None else ''
-
-    def glyph(id):
-        return 'c'+str(id) if id is not None else ''
+            return codes
 
 
     class T(Transformer):
@@ -135,10 +117,9 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
         @v_args(meta=True)
         def value(self, args, meta):
             w = args[0] + (f'({args[1]})' if len(args) == 2 else '')
-            value_ids, sign_variant_ids = DB.value(args[0], args[1] if len(args) == 2 else None)
-            ids = list(zip(value_ids, sign_variant_ids))
-            s = '|'.join([value(value_id) + sign_variant(sign_variant_id) for value_id, sign_variant_id in ids])
-            if len(ids) > 1:
+            codes = DB.value(args[0], args[1] if len(args) == 2 else None)
+            s = '|'.join(codes)
+            if len(codes) > 1:
                 self.wildcardId += 1
                 self.wildcards.append((meta.start_pos, self.wildcardId, w, False))
                 s = f'({s})@{self.wildcardId}'
@@ -148,9 +129,8 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
         def pattern(self, args, meta):
             pattern = f'^{args[0][1:-1]}([0-9]+|x)?$'
             w = args[0] + (f'({args[1]})' if len(args) == 2 else '')
-            value_ids, sign_variant_ids = DB.pattern(pattern, args[1] if len(args) == 2 else None)
-            ids = list(zip(value_ids, sign_variant_ids))
-            s = '|'.join([value(value_id) + sign_variant(sign_variant_id) for value_id, sign_variant_id in ids])
+            codes = DB.value(pattern, args[1] if len(args) == 2 else None)
+            s = '|'.join(codes)
             self.wildcardId += 1
             self.wildcards.append((meta.start_pos, self.wildcardId, w, False))
             s = f'({s})@{self.wildcardId}'
@@ -158,24 +138,19 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
 
         @v_args(meta=True)
         def sign(self, args, meta):
-            s = ''
-            w = ''
-            if len(args) == 2:
-                w = f'{args[0]}({args[1]})'
-                grapheme_ids, glyph_ids = DB.signSpec(args[0], args[1])
-                ids = list(zip(grapheme_ids, glyph_ids))
-                s = '|'.join([grapheme(grapheme_id) + glyph(glyph_id) for grapheme_id, glyph_id in ids])
-                res = '('+res+')' if len(ids) > 1 else res
-            else:
-                w = args[0]
-                glyph_id, grapheme_ids = DB.signNoSpec(args[0])                
-                if glyph_id:
-                    s += glyph(glyph_id)    
-                for i, variant in enumerate(grapheme_ids):
-                    if i or glyph_id is not None:
-                        s += '|'
-                    v = '~'.join([grapheme(grapheme_id) for grapheme_id in variant])
-                    s += f'({v})' if len(variant) > 1 else v
+            w = args[0] + (f'({args[1]})' if len(args) == 2 else '')
+            codes = DB.sign(args[0], args[1] if len(args) == 2 else None)
+            s = '|'.join(codes)
+            self.wildcardId += 1
+            self.wildcards.append((meta.start_pos, self.wildcardId, w, False))
+            s = f'({s})@{self.wildcardId}'
+            return s, w
+
+        @v_args(meta=True)
+        def form(self, args, meta):
+            w = args[0] + (f'({args[1]})' if len(args) == 2 else '')
+            codes = DB.form(args[0], args[1] if len(args) == 2 else None)
+            s = '('+')|('.join(codes)+')'
             self.wildcardId += 1
             self.wildcards.append((meta.start_pos, self.wildcardId, w, False))
             s = f'({s})@{self.wildcardId}'
@@ -193,10 +168,10 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
             if len(args) == 1:
                 self.wildcards.append((meta.start_pos, self.wildcardId, 'x', False))
                 return f'x@{self.wildcardId}', 'x'
-            sign_variant_id = DB.valuex(args[1])
+            code = DB.valuex(args[1])
             w = f'x({args[1]})'
             self.wildcards.append((meta.start_pos, self.wildcardId, w, False))
-            return f'{sign_variant(sign_variant_id)}@{self.wildcardId}', w
+            return f'{code}@{self.wildcardId}', w
 
         @v_args(meta=True)   
         def n(self, args, meta):
@@ -219,6 +194,9 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
             return r or ' ', r
 
         def wordbreak(self, args):
+            return ','
+
+        def compoundbreak(self, args):
             return ';'
 
         def linebreak(self, args):
@@ -230,13 +208,16 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
         def colon(self, args):
             return ':'
 
-        def con(self, args):
+        def wordcon(self, args):
+            return '='
+
+        def compoundcon(self, args):
             return '-'
 
 
         # Complex signs
 
-        def signspec(self, args):
+        def complex_sign(self, args):
             return '.'.join(args)
 
         def signt(self, args):
@@ -287,8 +268,8 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
     l = Lark(grammar, lexer='standard', propagate_positions=True)
     try:
         tree = l.parse(searchTerm)
-    except UnexpectedInput:
+        code, wildcards = T().transform(tree)
+    except (UnexpectedInput, VisitError):
         plpy.error('preparse_search syntax error')
-    code, wildcards = T().transform(tree)
     code, wildcards, wildcardsExplicit = processWildcards(code, wildcards)
     return code, wildcards, wildcardsExplicit

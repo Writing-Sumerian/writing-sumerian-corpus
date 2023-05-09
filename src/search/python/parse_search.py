@@ -20,14 +20,16 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
         ELLIPSIS = 2
         COLON = 3
         WORDBREAK = 4
-        LINEBREAK = 5
-        LPAREN = 6
-        RPAREN = 7
-        BAR = 8
-        CON = 9
-        WC = 10
-        INHERITCON = 11
-        PSEUDO = 12
+        COMPOUNDBREAK = 5
+        LINEBREAK = 6
+        LPAREN = 7
+        RPAREN = 8
+        BAR = 9
+        WORDCON = 10
+        COMPOUNDCON = 11
+        WC = 12
+        INHERITCON = 13
+        PSEUDO = 14
 
 
     class Token:
@@ -141,6 +143,9 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
         def wordbreak(self, args):
             return [Token(TokenType.WORDBREAK)]
 
+        def compoundbreak(self, args):
+            return [Token(TokenType.COMPOUNDBREAK)]
+
         def linebreak(self, args):
             return [Token(TokenType.LINEBREAK)]
 
@@ -150,8 +155,11 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
         def colon(self, args):
             return [Token(TokenType.COLON)]
 
-        def con(self, args):
-            return [Token(TokenType.CON)]
+        def wordcon(self, args):
+            return [Token(TokenType.WORDCON)]
+
+        def compoundcon(self, args):
+            return [Token(TokenType.COMPOUNDCON)]
 
         def inheritcon(self, args):
             return [Token(TokenType.INHERITCON)]
@@ -345,10 +353,14 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
                         conditions.append(f"{a.last('position')} < {b.first('position')}")
                     else:
                         conditions.append(f"next({a.last('position')}) = {b.first('position')}")
-                if TokenType.CON in a.ops:
+                if TokenType.WORDCON in a.ops:
                     conditions.append(f"{a.last('word_no')} = {b.first('word_no')}")
+                if TokenType.COMPOUNDCON in a.ops:
+                    conditions.append(f"{a.last('compound_no')} = {b.first('compound_no')}")
                 if TokenType.WORDBREAK in a.ops:
                     conditions.append(f"{a.last('word_no')} < {b.first('word_no')}")
+                if TokenType.COMPOUNDBREAK in a.ops:
+                    conditions.append(f"{a.last('compound_no')} < {b.first('compound_no')}")
                 if TokenType.LINEBREAK in a.ops:
                     conditions.append(f"{a.last('line_no')} < {b.first('line_no')}")
 
@@ -366,7 +378,7 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
                 if tokens[i].type in [TokenType.CHAR, TokenType.PSEUDO, TokenType.LPAREN]:
                     if len(tables):
                         if TokenType.BAR not in ops:
-                            outerOps = [x for x in ops if x in [TokenType.CON]]
+                            outerOps = [x for x in ops if x in [TokenType.WORDCON, TokenType.COMPOUNDCON]]
                         tables[-1].ops = ops
                         ops = []
                     if tokens[i].type == TokenType.CHAR or tokens[i].type == TokenType.PSEUDO:

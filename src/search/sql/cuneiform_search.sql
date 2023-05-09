@@ -256,18 +256,147 @@ CREATE TYPE search_wildcard AS (
     sign_nos integer[]
 );
 
-CREATE VIEW values_search (value, value_id, sign_variant_id) AS
+
+CREATE VIEW values_search (value, sign_spec, code) AS
 SELECT
     value,
-    value_id,
-    NULL
+    null,
+    'v' || value_id::text
 FROM
     value_variants
+    LEFT JOIN values USING (value_id)
 UNION ALL
 SELECT
     value,
-    value_id,
-    sign_variant_id
+    glyphs,
+    'v' || value_id::text || 's' || sign_variant_id::text
+FROM
+    value_variants
+    LEFT JOIN values USING (value_id)
+    JOIN sign_variants_composition USING (sign_id)
+UNION ALL
+SELECT
+    value,
+    CASE WHEN i = 1 THEN NULL ELSE glyphs END,
+    'v' || value_id::text || 's' || sign_variant_id::text
 FROM
     glyph_values 
-    JOIN sign_variants_composition USING (glyph_ids);
+    JOIN sign_variants_composition USING (glyph_ids)
+    LEFT JOIN LATERAL generate_series(1, 2) AS _(i) ON TRUE;
+
+
+CREATE VIEW signs_search (sign, sign_spec, code) AS
+SELECT
+    upper(value),
+    CASE WHEN i = 1 THEN NULL ELSE glyphs END,
+    's' || sign_variant_id::text
+FROM
+    value_variants
+    LEFT JOIN values USING (value_id)
+    JOIN sign_variants_composition USING (sign_id)
+    LEFT JOIN LATERAL generate_series(1, 2) AS _(i) ON TRUE
+    UNION ALL
+SELECT
+    upper(value),
+    CASE WHEN i = 1 THEN NULL ELSE glyphs END,
+    's' || sign_variant_id::text
+FROM
+    glyph_values 
+    JOIN sign_variants_composition USING (glyph_ids)
+    LEFT JOIN LATERAL generate_series(1, 2) AS _(i) ON TRUE;
+
+
+CREATE VIEW sign_descriptions_search (sign, sign_spec, code) AS
+SELECT
+    a.glyphs,
+    CASE WHEN i = 1 THEN NULL ELSE b.glyphs END,
+    's' || b.sign_variant_id::text
+FROM
+    sign_variants_composition a
+    JOIN sign_variants_composition b USING (sign_id)
+    LEFT JOIN LATERAL generate_series(1, 2) AS _(i) ON TRUE
+WHERE
+    a.specific;
+
+
+CREATE OR REPLACE VIEW forms_search (form, sign_spec, code) AS
+WITH graphemes AS (
+    SELECT
+        sign_id,
+        allomorph_id,
+        pos,
+        '(g' || grapheme_id::text || '|' || string_agg('c' || glyph_id::text, '|') || ')' AS code
+    FROM
+        allomorphs
+        LEFT JOIN allomorph_components USING (allomorph_id)
+        LEFT JOIN allographs USING (grapheme_id)
+    WHERE 
+        allomorphs.specific AND allographs.specific
+    GROUP BY 
+        sign_id,
+        allomorph_id,
+        grapheme_id,
+        pos
+)
+SELECT
+    upper(value),
+    NULL,
+    string_agg(code, '~' ORDER BY pos)
+FROM
+    value_variants
+    LEFT JOIN values USING (value_id)
+    LEFT JOIN graphemes USING (sign_id)
+GROUP BY
+    value,
+    allomorph_id
+UNION ALL
+SELECT
+    upper(value),
+    glyphs,
+    string_agg('c' || glyph_id::text, '~' ORDER BY pos)
+FROM
+    value_variants
+    LEFT JOIN values USING (value_id)
+    LEFT JOIN sign_variants_composition USING (sign_id)
+    LEFT JOIN LATERAL unnest(glyph_ids) WITH ORDINALITY AS _(glyph_id, pos) ON TRUE
+GROUP BY
+    value,
+    sign_variant_id,
+    glyphs
+UNION ALL
+SELECT
+    upper(value),
+    CASE WHEN i = 1 THEN NULL ELSE string_agg(glyph, '.' ORDER BY pos) END,
+    string_agg('c' || glyph_id::text, '~')
+FROM
+    glyph_values
+    LEFT JOIN LATERAL unnest(glyph_ids) WITH ORDINALITY AS _(glyph_id, pos) ON TRUE
+    LEFT JOIN glyphs USING (glyph_id)
+    LEFT JOIN LATERAL generate_series(1, 2) AS __(i) ON TRUE
+GROUP BY
+    value,
+    i;
+
+CREATE OR REPLACE VIEW form_descriptions_search (form, sign_spec, code) AS
+SELECT
+    grapheme,
+    NULL,
+    'g' || grapheme_id::text
+FROM
+    graphemes
+UNION ALL
+SELECT
+    grapheme,
+    glyph,
+    'c' || glyph_id::text
+FROM
+    graphemes
+    LEFT JOIN allographs USING (grapheme_id)
+    LEFT JOIN glyphs USING (glyph_id)
+UNION ALL
+SELECT
+    glyph,
+    NULL,
+    'c' || glyph_id::text
+FROM
+    glyphs;
