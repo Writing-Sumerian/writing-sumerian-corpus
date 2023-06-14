@@ -34,7 +34,7 @@ compounds_plan = plpy.prepare(
 
 id = plpy.execute("SELECT nextval('@extschema@.replace_id_seq') AS id")[0]['id']
 
-signs, compounds, words, _, errors = parse(code, 'sumerian', False)
+signs, compounds, words, _, errors = parse(code, 'sumerian', stemmed)
 
 plpy.execute(f"DELETE FROM corpus_unencoded_pattern WHERE pattern_id = {id}")
 
