@@ -317,6 +317,9 @@ DECLARE
     rec     record;
     col     text;
 
+    v_word_no   integer;
+    v_line_no   integer;
+
     word_columns          text[]      := '{compound_no, capitalized}';
     word_special_col      boolean[]   := '{t,f}';
     word_noupdate_col     boolean[]   := '{t,f}';
@@ -371,13 +374,44 @@ BEGIN
 
     FOREACH op IN ARRAY ops LOOP
         IF (op).op = 'INSERT' THEN
+
+            EXECUTE format(
+                $$
+                SELECT
+                    CASE 
+                        WHEN COALESCE(a.word_no = a1.word_no, TRUE) THEN
+                            COALESCE(b1.word_no, 0)
+                        ELSE
+                            COALESCE(b2.word_no, b1.word_no, 0)
+                    END,
+                    CASE 
+                        WHEN COALESCE(a.line_no = a1.line_no, TRUE) THEN
+                            COALESCE(b1.line_no, 0)
+                        ELSE
+                            COALESCE(b2.line_no, b1.line_no, 0)
+                    END
+                FROM
+                    %2$I.corpus a
+                    LEFT JOIN %2$I.corpus a1 ON a.transliteration_id = a1.transliteration_id AND a1.sign_no = %1$s-2
+                    LEFT JOIN corpus b1 ON a.transliteration_id = b1.transliteration_id AND b1.sign_no = %1$s-2
+                    LEFT JOIN corpus b2 ON a.transliteration_id = b2.transliteration_id AND b2.sign_no = %1$s-1
+                WHERE
+                    a.transliteration_id = %3$s AND a.sign_no = %1$s-1
+                $$,
+                (op).pos,
+                v_schema,
+                v_transliteration_id)
+            INTO
+                v_word_no,
+                v_line_no;
+
             EXECUTE format(
                 $$
                 SELECT 
                     a.transliteration_id,
                     %1$s-1,
-                    COALESCE(b.line_no, 0),
-                    COALESCE(b.word_no, 0),
+                    %4$s,
+                    %5$s,
                     a.value_id,
                     a.sign_variant_id,
                     a.custom_value,
@@ -399,7 +433,9 @@ BEGIN
                 $$,
                 (op).pos,
                 v_schema,
-                v_transliteration_id)
+                v_transliteration_id,
+                v_line_no,
+                v_word_no)
                 INTO rec;
 
             RETURN QUERY SELECT * FROM insert_entry(v_transliteration_id, (op).pos-1, 'corpus', 'sign_no', rec, 'public');
