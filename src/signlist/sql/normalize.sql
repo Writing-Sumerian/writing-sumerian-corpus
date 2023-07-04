@@ -53,13 +53,14 @@ CREATE OR REPLACE FUNCTION normalize_glyphs (
     STRICT
     STABLE
     LANGUAGE SQL
+    COST 10000
     AS $BODY$
     SELECT 
         string_agg(glyphs, '.' ORDER BY sign_no) AS normalized_sign
     FROM (
         SELECT
             sign_no,
-            normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
+            normalize_operators(string_agg(op||COALESCE('('||sign_map.glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
         FROM
             LATERAL split_glyphs(glyphs) WITH ORDINALITY as a(sign, sign_no)
             LEFT JOIN LATERAL split_sign(sign) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
