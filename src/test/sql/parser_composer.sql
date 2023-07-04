@@ -31,7 +31,7 @@ SELECT content INTO code FROM corpus_code_transliterations WHERE transliteration
 IF code IS NULL THEN
     RETURN;
 END IF;
-SELECT name_short = 'Glossar' OR name_short = 'Attinger' OR name_short = 'ORACC' OR name_short = 'DCCLT' INTO stemmed FROM transliterations JOIN corpora USING (corpus_id) WHERE transliteration_id = v_transliteration_id;
+SELECT name_short = 'Glossar' OR name_short = 'Attinger' INTO stemmed FROM transliterations JOIN corpora USING (corpus_id) WHERE transliteration_id = v_transliteration_id;
 CALL parse(code, 'public', 'sumerian', stemmed, v_transliteration_id_new);
 END;
 $BODY$;
