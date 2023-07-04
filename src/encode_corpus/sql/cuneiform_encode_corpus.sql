@@ -31,7 +31,8 @@ WHERE
     corpus.sign_variant_id IS NULL
     AND corpus_encoder.sign_variant_id IS NOT NULL
     AND corpus.transliteration_id = corpus_encoder.transliteration_id
-    AND corpus.sign_no = corpus_encoder.sign_no;
+    AND corpus.sign_no = corpus_encoder.sign_no
+    AND corpus.type = corpus_encoder.type;
 
 DELETE FROM corpus_unencoded 
 USING corpus 

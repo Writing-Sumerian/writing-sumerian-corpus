@@ -108,7 +108,7 @@ BEGIN
 
     EXECUTE format(
         $$
-        CREATE OR REPLACE VIEW @extschema@.%3$I AS
+        CREATE OR REPLACE VIEW %3$I AS
             WITH normalized_signs AS NOT MATERIALIZED (
                     WITH x AS (
                         SELECT
@@ -167,7 +167,8 @@ BEGIN
                     %1$s,
                     sign_no,
                     value_id,
-                    sign_variant_id
+                    sign_variant_id,
+                    type
                 FROM
                     %2$I s
                     LEFT JOIN normalized_sign_specs USING (%1$s, sign_no)
@@ -179,7 +180,8 @@ BEGIN
                     %1$s,
                     sign_no,
                     NULL,
-                    sign_variant_id
+                    sign_variant_id,
+                    type
                 FROM
                     %2$I s
                     LEFT JOIN normalized_signs USING (%1$s, sign_no)
