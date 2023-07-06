@@ -9,7 +9,7 @@ def parse_sign(sign:str) -> jsonb:
 
     def parse(sign):
         level = 0
-        for op in ['.', '×', '&', '%@', '+']:
+        for op in ['.', '+', '×', '&', '%@']:
             for i, c in list(enumerate(sign))[::-1]:
                 if c == '(':
                     level -= 1
@@ -18,8 +18,8 @@ def parse_sign(sign:str) -> jsonb:
                 elif c in op and not level:
                     if c == '@' and i+1 < len(sign) and sign[i+1] in 'tgšnkzicdfvabx419':
                         continue
-                    return {'op': c.replace('+', '.'), 'vals': [parse(sign[:i]), parse(sign[i+1:])]}
-        m = re.match(r'(.*)@([tgšnkzicdfvabx]|45|90|180)$', sign)
+                    return {'op': c, 'vals': [parse(sign[:i]), parse(sign[i+1:])]}
+        m = re.match(r'(.*)@([tgšnkzicdfvabx]|45|90|180|4)$', sign)
         if m:
             return {'op': m.group(2), 'vals': [parse(m.group(1))]}
         if sign.startswith('(') and sign.endswith(')'):
@@ -32,7 +32,7 @@ def parse_sign(sign:str) -> jsonb:
 @sql_properties(cost=100, volatility='immutable', strict=True, transform=[jsonb])
 def compose_sign(tree:jsonb) -> str:
 
-    precedence = {'.': 0, '×': 1, '&': 2, '%': 3, '@': 3, '+': 4}
+    precedence = {'.': 0, '+': 1, '×': 2, '&': 3, '%': 4, '@': 4}
 
     def compose(node):
         if len(node['vals']) == 2:
@@ -55,7 +55,7 @@ def compose_sign(tree:jsonb) -> str:
 @sql_properties(cost=100, volatility='immutable', strict=True, transform=[jsonb])
 def normalize_sign(tree:jsonb) -> jsonb:
 
-    precedence = {'.': 0, '×': 1, '&': 2, '%': 3, '@': 3, '+': 4}
+    precedence = {'.': 0, '+': 1, '×': 2, '&': 3, '%': 4, '@': 4}
 
     def normalize(node):
         if len(node['vals']) == 2:
@@ -66,13 +66,13 @@ def normalize_sign(tree:jsonb) -> jsonb:
                 node['vals'][1] = v['vals'][1]
                 node['vals'][0] = {'op': op, 'vals': [node['vals'][0], v['vals'][0]]}
                 modified = True
-            if op == '.' and node['vals'][0]['op'] == '&' and node['vals'][1]['op'] == '&':
+            if (op == '.' or op == '+') and node['vals'][0]['op'] == '&' and node['vals'][1]['op'] == '&':
                 l = node['vals'][0]
                 r = node['vals'][1]
                 node['op'] = '&'
                 node['vals'] = [
-                    {'op': '.', 'vals': [l['vals'][0], r['vals'][0]]},
-                    {'op': '.', 'vals': [l['vals'][1], r['vals'][1]]}
+                    {'op': op, 'vals': [l['vals'][0], r['vals'][0]]},
+                    {'op': op, 'vals': [l['vals'][1], r['vals'][1]]}
                 ]
                 modified = True
             modified |= normalize(node['vals'][0])
@@ -90,7 +90,7 @@ def normalize_sign(tree:jsonb) -> jsonb:
 @sql_properties(cost=100, volatility='immutable', strict=True, transform=[jsonb])
 def match_sign(tree:jsonb, pattern:jsonb) -> bool:
 
-    precedence = {'.': 0, '×': 1, '&': 2, '%': 3, '@': 3, '+': 4}
+    precedence = {'.': 0, '+': 1, '×': 2, '&': 3, '%': 4, '@': 4}
 
     def match(node1, node2):
         if node2['op'] == 'X':

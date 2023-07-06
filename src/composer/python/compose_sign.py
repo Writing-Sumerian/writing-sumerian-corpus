@@ -7,7 +7,7 @@ class jsonb:
 def compose_sign_html (tree:jsonb) -> str:
     import re
 
-    precedence = {'.': 0, '×': 1, '&': 2, '%': 3, '@': 3, '+': 4}
+    precedence = {'.': 0, '+': 1, '×': 2, '&': 3, '%': 4, '@': 4}
     modifiers = {'g': 'gunû', 'š': 'šeššig', 't': 'tenû', 'n': 'nutillû', 'k': 'kabatenû', 'z': 'zidatenû', 'i': 'inversum', 'v': 'var', 'c': 'rounded'}
 
     def stack(a, b):
@@ -37,7 +37,7 @@ def compose_sign_html (tree:jsonb) -> str:
                 return re.sub(r'(?<=[^0-9x])([0-9x]+)$', r'<span class="index">\1</span>', op)
 
     def parenthesize(node, prec, left):
-        if len(node['vals']) == 2 and precedence[node['op']] + int(left) <= prec and node['op'] in ['.', '×']:
+        if len(node['vals']) == 2 and precedence[node['op']] + int(left) <= prec and node['op'] in ['.', '+', '×']:
             return '(' + compose(node) + ')'
         return compose(node)
 
