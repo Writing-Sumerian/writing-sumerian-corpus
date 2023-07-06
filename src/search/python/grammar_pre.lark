@@ -40,7 +40,7 @@ sep             : ( _SPACE | _break )+
                 | linebreak? ( ellipsis | colon )? wordcon linebreak?
                 | linebreak? wordcon ( ellipsis | colon ) wordcon? linebreak?
                 | ( wordbreak | linebreak )* ( ellipsis | colon )? compoundcon ( wordbreak | linebreak )*
-                | ( wordbreak | linebreak )* compoundcon ( ellipsis | colon ) wordcon? ( wordbreak | linebreak )* 
+                | ( wordbreak | linebreak )* compoundcon ( ellipsis | colon ) compoundcon? ( wordbreak | linebreak )* 
 nullsep         : _break*
                 | _break* ellipsis _break*
                 | colon
@@ -78,5 +78,5 @@ _DOT.1          : "."
 _SPACE          : /[\t \f\n]+/
 _NL             : "//"
 MOD             : "@" ( /[tgšnkzicdfvabx]/ | "90" | "45" )
-SIGNCON         : /[×%&@]/
+SIGNCON         : /[+×%&@]/
 _BAR            : "|"

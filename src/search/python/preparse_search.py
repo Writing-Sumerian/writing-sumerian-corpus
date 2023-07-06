@@ -49,7 +49,7 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
             return codes[0]
 
         def sign(sign, spec):
-            if re.search(r'[\.×&%@]', sign):
+            if re.search(r'[\.×&%@]|[0-9][0-9][0-9]$', sign):
                 r = plpy.execute(DB.SIGN_DESCRIPTION_PLAN, [DB.normalizeGlyphs(sign), DB.normalizeGlyphs(spec)])
             else:
                 r = plpy.execute(DB.SIGN_PLAN, [sign, DB.normalizeGlyphs(spec)])
@@ -59,7 +59,7 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
             return codes
         
         def form(sign, spec):
-            if re.search(r'[\.×&%@]', sign):
+            if re.search(r'[\.×&%@]|[0-9][0-9][0-9]$', sign):
                 r = plpy.execute(DB.FORM_DESCRIPTION_PLAN, [DB.normalizeGlyphs(sign), DB.normalizeGlyphs(spec)])
             else:
                 r = plpy.execute(DB.FORM_PLAN, [sign, DB.normalizeGlyphs(spec)])
@@ -129,7 +129,7 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
         def pattern(self, args, meta):
             pattern = f'^{args[0][1:-1]}([0-9]+|x)?$'
             w = args[0] + (f'({args[1]})' if len(args) == 2 else '')
-            codes = DB.value(pattern, args[1] if len(args) == 2 else None)
+            codes = DB.pattern(pattern, args[1] if len(args) == 2 else None)
             s = '|'.join(codes)
             self.wildcardId += 1
             self.wildcards.append((meta.start_pos, self.wildcardId, w, False))
