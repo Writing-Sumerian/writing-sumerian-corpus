@@ -112,13 +112,17 @@ BEGIN
                 EXCEPT SELECT compound_no_ref FROM replace.corpus WHERE transliteration_id = v_transliteration_id AND NOT pattern_compound
             )_;
                 
-            IF v_invalid_sign_nos IS NOT NULL THEN
+            IF NOT v_invalid_sign_nos IS NULL THEN
                 RAISE NOTICE 'Skipping %, %: Invalid replacement near %', v_transliteration_id, v_sign_nos, v_invalid_sign_nos;
-            ELSIF v_invalid_compound_nos IS NOT NULL THEN
+            ELSIF NOT v_invalid_compound_nos IS NULL THEN
                 RAISE NOTICE 'Skipping %, %: Cannot remove compounds %', v_transliteration_id, v_sign_nos, v_invalid_compound_nos;
             ELSE
+                RAISE NOTICE 'Replacing signs % in %...', v_sign_nos, v_transliteration_id;
+                CALL corpus_search_drop_triggers();
                 CALL edit_logged('replace', v_transliteration_id, user_id, internal);
-                RAISE NOTICE 'Replacing signs % in %', v_sign_nos, v_transliteration_id;
+                CALL corpus_search_create_triggers();
+                CALL corpus_search_update_transliteration(v_transliteration_id);
+                RAISE NOTICE 'Done.';
             END IF;
 
             DELETE FROM replace.corpus WHERE transliteration_id = v_transliteration_id;
