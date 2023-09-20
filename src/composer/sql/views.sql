@@ -209,7 +209,7 @@ GROUP BY
     RANGE;
 
 CREATE OR REPLACE VIEW corpus_code_transliterations AS
-WITH a AS (
+WITH a AS NOT MATERIALIZED (
 SELECT
     transliteration_id,
     cun_agg (value, sign, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
@@ -218,7 +218,7 @@ FROM corpus_code
 GROUP BY
     transliteration_id
 ),
-b AS (
+b AS NOT MATERIALIZED (
 SELECT
     lines.transliteration_id,
     block_no,
@@ -231,7 +231,7 @@ GROUP BY
     lines.transliteration_id,
     block_no
 ),
-c AS (
+c AS NOT MATERIALIZED (
 SELECT
     transliteration_id,
     surface_no,
@@ -252,7 +252,7 @@ GROUP BY
     transliteration_id,
     surface_no
 ),
-d AS (
+d AS NOT MATERIALIZED (
 SELECT
     transliteration_id,
     object_no,

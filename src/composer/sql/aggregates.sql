@@ -30,7 +30,7 @@ CREATE OR REPLACE FUNCTION cun_agg_sfunc (
     'cuneiform_cun_agg_sfunc'
     LANGUAGE C
     IMMUTABLE
-    COST 100;
+    COST 1000;
 
 CREATE OR REPLACE FUNCTION cun_agg_finalfunc (internal)
     RETURNS text[]
@@ -40,7 +40,7 @@ CREATE OR REPLACE FUNCTION cun_agg_finalfunc (internal)
     LANGUAGE C
     STRICT 
     IMMUTABLE
-    COST 100;
+    COST 1000;
 
 CREATE AGGREGATE cun_agg (
     text, 
