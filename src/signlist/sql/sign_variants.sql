@@ -165,6 +165,7 @@ CREATE TABLE sign_variants_composition (
     sign_variant_id integer PRIMARY KEY,
     sign_id integer NOT NULL REFERENCES signs (sign_id) DEFERRABLE INITIALLY DEFERRED,
     allomorph_id integer NOT NULL REFERENCES allomorphs (allomorph_id) DEFERRABLE INITIALLY DEFERRED,
+    allograph_ids integer[] NOT NULL,
     grapheme_ids integer[] NOT NULL,
     glyph_ids integer[] NOT NULL,
     graphemes text NOT NULL,
@@ -197,6 +198,7 @@ SELECT
     sign_variant_id,
     sign_id,
     allomorph_id,
+    allograph_ids,
     grapheme_ids,
     glyph_ids,
     graphemes,
@@ -228,6 +230,7 @@ BEGIN
         ON CONFLICT (sign_variant_id) DO UPDATE SET
             sign_id = EXCLUDED.sign_id,
             allomorph_id = EXCLUDED.allomorph_id,
+            allograph_ids = EXCLUDED.allograph_ids,
             grapheme_ids = EXCLUDED.grapheme_ids,
             glyph_ids = EXCLUDED.glyph_ids,
             graphemes = EXCLUDED.graphemes,
@@ -279,6 +282,26 @@ BEGIN
 END;
 $BODY$;
 
+CREATE OR REPLACE FUNCTION sign_variants_composition_allographs_trigger_fun () 
+  RETURNS trigger 
+  VOLATILE
+  LANGUAGE PLPGSQL
+  AS
+$BODY$
+BEGIN
+    UPDATE sign_variants_composition SET
+        graphemes = sign_variants_composition_view.graphemes,
+        glyphs = sign_variants_composition_view.glyphs,
+        unicode = sign_variants_composition_view.unicode,
+        tree = sign_variants_composition_view.tree
+    FROM
+        sign_variants_composition_view
+    WHERE
+        sign_variants_composition_view.sign_variant_id = sign_variants_composition.sign_variant_id
+        AND (NEW).allograph_id = ANY(sign_variants_composition.allograph_ids);
+    RETURN NULL;
+END;
+$BODY$;
 
 
 CREATE OR REPLACE PROCEDURE signlist_create_triggers()
@@ -309,6 +332,10 @@ CREATE TRIGGER sign_variants_composition_glyphs_trigger
   AFTER UPDATE ON glyphs 
   FOR EACH ROW
   EXECUTE FUNCTION sign_variants_composition_glyphs_trigger_fun();
+CREATE TRIGGER sign_variants_composition_allographs_trigger
+  AFTER UPDATE ON allographs 
+  FOR EACH ROW
+  EXECUTE FUNCTION sign_variants_composition_allographs_trigger_fun();
 $BODY$;
 
 
