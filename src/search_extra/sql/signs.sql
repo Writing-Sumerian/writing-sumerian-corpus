@@ -231,6 +231,7 @@ BEGIN
         corpus, texts
     WHERE
         corpus.transliteration_id = ANY(v_transliteration_ids)
+        AND corpus.transliteration_id != (NEW).transliteration_id
         AND texts.text_id = (NEW).text_id
     GROUP BY value_id, period_id, provenience_id, genre_id;
 
@@ -261,6 +262,7 @@ BEGIN
         corpus, texts
     WHERE
         corpus.transliteration_id = ANY(v_transliteration_ids)
+        AND corpus.transliteration_id != (NEW).transliteration_id
         AND texts.text_id = (NEW).text_id
     GROUP BY sign_variant_id, period_id, provenience_id, genre_id;
 
