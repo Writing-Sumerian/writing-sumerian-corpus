@@ -10,6 +10,7 @@ all:
 	make -C encode_corpus
 	make -C loader
 	make -C parser
+	make -C parse_corpus
 	make -C replace
 	make -C search
 	make -C search_extra
@@ -29,6 +30,7 @@ install:
 	make -C encode_corpus install
 	make -C loader install
 	make -C parser install
+	make -C parse_corpus install
 	make -C replace install
 	make -C search install
 	make -C search_extra install
