@@ -349,6 +349,7 @@ DROP TRIGGER sign_variants_allographs_trigger ON allographs;
 DROP TRIGGER sign_variants_composition_sign_variants_trigger ON sign_variants;
 DROP TRIGGER sign_variants_composition_graphemes_trigger ON graphemes;
 DROP TRIGGER sign_variants_composition_glyphs_trigger ON glyphs;
+DROP TRIGGER sign_variants_composition_allographs_trigger ON allographs;
 $BODY$;
 
 
