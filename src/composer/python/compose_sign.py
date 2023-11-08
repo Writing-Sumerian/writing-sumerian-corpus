@@ -8,7 +8,7 @@ def compose_sign_html (tree:jsonb) -> str:
     import re
 
     precedence = {'.': 0, '+': 1, '×': 2, '&': 3, '%': 4, '@': 4}
-    modifiers = {'g': 'gunû', 'š': 'šeššig', 't': 'tenû', 'n': 'nutillû', 'k': 'kabatenû', 'z': 'zidatenû', 'i': 'inversum', 'v': 'var', 'c': 'rounded'}
+    modifiers = {'g': 'gunû', 'š': 'šeššig', 't': 'tenû', 'n': 'nutillû', 'k': 'kabatenû', 'z': 'zidatenû', 'i': 'inversum', 'v': 'var', 'c': 'rounded', '4': 'quad'}
 
     def stack(a, b):
         return f'<span class="stack">{a}<br/>{b}</span>'
