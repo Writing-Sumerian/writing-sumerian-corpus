@@ -1,6 +1,5 @@
 CREATE TABLE corpus_search (
   transliteration_id integer NOT NULL,
-  object_no integer NOT NULL,
   sign_no integer,
   position cun_position,
   word_no integer,
@@ -15,17 +14,17 @@ CREATE TABLE corpus_search (
   phonographic boolean
 );
 
-CREATE INDEX ON corpus_search (transliteration_id, object_no);
+CREATE INDEX ON corpus_search (transliteration_id);
 CREATE INDEX ON corpus_search (value_id) WHERE value_id IS NOT NULL;
-CREATE INDEX ON corpus_search (transliteration_id, object_no, value_id) WHERE value_id IS NOT NULL;
+CREATE INDEX ON corpus_search (transliteration_id, value_id) WHERE value_id IS NOT NULL;
 CREATE INDEX ON corpus_search (sign_variant_id) WHERE sign_variant_id IS NOT NULL;
-CREATE INDEX ON corpus_search (transliteration_id, object_no, sign_variant_id) WHERE sign_variant_id IS NOT NULL;
+CREATE INDEX ON corpus_search (transliteration_id, sign_variant_id) WHERE sign_variant_id IS NOT NULL;
 CREATE INDEX ON corpus_search (grapheme_id) WHERE grapheme_id IS NOT NULL;
-CREATE INDEX ON corpus_search (transliteration_id, object_no, grapheme_id) WHERE grapheme_id IS NOT NULL;
+CREATE INDEX ON corpus_search (transliteration_id, grapheme_id) WHERE grapheme_id IS NOT NULL;
 CREATE INDEX ON corpus_search (glyph_id) WHERE glyph_id IS NOT NULL;
-CREATE INDEX ON corpus_search (transliteration_id, object_no, glyph_id) WHERE glyph_id IS NOT NULL;
-CREATE INDEX corpus_search_transliteration_id_object_no_position_ix ON corpus_search (transliteration_id, object_no, position);
-CLUSTER corpus_search USING corpus_search_transliteration_id_object_no_position_ix;
+CREATE INDEX ON corpus_search (transliteration_id, glyph_id) WHERE glyph_id IS NOT NULL;
+CREATE INDEX corpus_search_transliteration_id_position_ix ON corpus_search (transliteration_id, position);
+CLUSTER corpus_search USING corpus_search_transliteration_id_position_ix;
 
 ALTER TABLE corpus_search ALTER COLUMN value_id SET STATISTICS 1000;
 ALTER TABLE corpus_search ALTER COLUMN sign_variant_id SET STATISTICS 1000;
@@ -34,8 +33,7 @@ ALTER TABLE corpus_search ALTER COLUMN glyph_id SET STATISTICS 1000;
 
 
 CREATE OR REPLACE FUNCTION corpus_search_update_marginals (
-    v_transliteration_id integer,
-    v_object_no integer
+    v_transliteration_id integer
   )
   RETURNS void
   VOLATILE
@@ -45,7 +43,6 @@ $BODY$
   DELETE FROM corpus_search
   WHERE
     transliteration_id = v_transliteration_id
-    AND object_no = v_object_no
     AND sign_no IS NULL;
 
   INSERT INTO corpus_search 
@@ -55,7 +52,6 @@ $BODY$
     corpus_search_view
   WHERE
     transliteration_id = v_transliteration_id
-    AND object_no = v_object_no
     AND sign_no IS NULL;
 $BODY$;
 
@@ -66,10 +62,6 @@ CREATE FUNCTION corpus_search_corpus_trigger_fun ()
   LANGUAGE PLPGSQL
   AS
 $BODY$
-DECLARE
-
-v_object_no integer;
-
 BEGIN
 
   DELETE FROM corpus_search
@@ -89,7 +81,7 @@ BEGIN
   END IF;
 
   PERFORM 
-    corpus_search_update_marginals(transliteration_id, object_no) 
+    corpus_search_update_marginals(transliteration_id) 
   FROM
     lines
     LEFT JOIN blocks USING (transliteration_id, block_no)
@@ -103,145 +95,6 @@ BEGIN
 END;
 $BODY$;
 
-CREATE FUNCTION corpus_search_update_lines_trigger_fun () 
-  RETURNS trigger 
-  VOLATILE
-  LANGUAGE PLPGSQL
-  AS
-$BODY$
-DECLARE
-  v_object_no_new integer;
-  v_object_no_old integer;
-BEGIN
-  SELECT 
-    object_no
-  INTO
-    v_object_no_old
-  FROM
-    blocks
-    LEFT JOIN surfaces USING (transliteration_id, surface_no)
-  WHERE
-    transliteration_id = (OLD).transliteration_id
-    AND block_no = (OLD).block_no;
-
-  SELECT 
-    object_no
-  INTO
-    v_object_no_new
-  FROM
-    blocks
-    LEFT JOIN surfaces USING (transliteration_id, surface_no)
-  WHERE
-    transliteration_id = (NEW).transliteration_id
-    AND block_no = (NEW).block_no;
-
-  IF v_object_no_old != v_object_no_new THEN
-
-    UPDATE corpus_search SET
-      object_no = v_object_no_new
-    FROM
-      corpus
-    WHERE
-      corpus.transliteration_id = (OLD).transliteration_id
-      AND corpus.line_no = (OLD).line_no
-      AND corpus.transliteration_id = corpus_search.transliteration_id
-      AND corpus.sign_no = corpus_search.sign_no;
-
-    PERFORM corpus_search_update_marginals((OLD).transliteration_id, v_object_no_old);
-    PERFORM corpus_search_update_marginals((NEW).transliteration_id, v_object_no_new);
-
-  END IF;
-  
-  RETURN NULL;
-
-END;
-$BODY$;
-
-CREATE FUNCTION corpus_search_update_blocks_trigger_fun () 
-  RETURNS trigger 
-  VOLATILE
-  LANGUAGE PLPGSQL
-  AS
-$BODY$
-DECLARE
-  v_object_no_new integer;
-  v_object_no_old integer;
-BEGIN
-  SELECT 
-    object_no
-  INTO
-    v_object_no_old
-  FROM
-    surfaces
-  WHERE
-    transliteration_id = (OLD).transliteration_id
-    AND surface_no = (OLD).surface_no;
-
-  SELECT 
-    object_no
-  INTO
-    v_object_no_new
-  FROM
-    surfaces
-  WHERE
-    transliteration_id = (NEW).transliteration_id
-    AND surface_no = (NEW).surface_no;
-
-  IF v_object_no_old != v_object_no_new THEN
-
-    UPDATE corpus_search SET
-      object_no = v_object_no_new
-    FROM
-      corpus
-      LEFT JOIN lines USING (transliteration_id, line_no)
-    WHERE
-      corpus.transliteration_id = (OLD).transliteration_id
-      AND lines.block_no = (OLD).block_no
-      AND corpus.transliteration_id = corpus_search.transliteration_id
-      AND corpus.sign_no = corpus_search.sign_no;
-
-    PERFORM corpus_search_update_marginals((OLD).transliteration_id, v_object_no_old);
-    PERFORM corpus_search_update_marginals((NEW).transliteration_id, v_object_no_new);
-
-  END IF;
-
-  RETURN NULL;
-  
-END;
-$BODY$;
-
-
-CREATE FUNCTION corpus_search_update_surfaces_trigger_fun () 
-  RETURNS trigger 
-  VOLATILE
-  LANGUAGE PLPGSQL
-  AS
-$BODY$
-BEGIN
-
-  IF (OLD).object_no != (NEW).object_no THEN
-
-    UPDATE corpus_search SET
-      object_no = (NEW).object_no
-    FROM
-      corpus
-      LEFT JOIN lines USING (transliteration_id, line_no)
-      LEFT JOIN blocks USING (transliteration_id, block_no)
-    WHERE
-      corpus.transliteration_id = (OLD).transliteration_id
-      AND blocks.surface_no = (OLD).surface_no
-      AND corpus.transliteration_id = corpus_search.transliteration_id
-      AND corpus.sign_no = corpus_search.sign_no;
-
-    PERFORM corpus_search_update_marginals((OLD).transliteration_id, (OLD).object_no);
-    PERFORM corpus_search_update_marginals((NEW).transliteration_id, (NEW).object_no);
-
-  END IF;
-
-  RETURN NULL;
-  
-END;
-$BODY$;
 
 CREATE OR REPLACE FUNCTION corpus_search_update_words_trigger_fun () 
   RETURNS trigger 
@@ -265,7 +118,7 @@ BEGIN
       AND corpus.sign_no = corpus_search.sign_no;
 
     PERFORM 
-      corpus_search_update_marginals((OLD).transliteration_id, min(object_no))
+      corpus_search_update_marginals((OLD).transliteration_id)
     FROM
       corpus
       LEFT JOIN lines USING (transliteration_id, line_no)
@@ -332,24 +185,6 @@ $BODY$
     WHEN (NEW.sign_no >= 0 AND NEW.line_no >= 0 AND NEW.word_no >= 0)
     EXECUTE FUNCTION corpus_search_corpus_trigger_fun();
 
-  CREATE TRIGGER corpus_search_update_lines_trigger
-    AFTER UPDATE OF block_no ON lines
-    FOR EACH ROW
-    WHEN (NEW.block_no != OLD.block_no AND NEW.block_no >= 0)
-    EXECUTE FUNCTION corpus_search_update_lines_trigger_fun();
-
-  CREATE TRIGGER corpus_search_update_blocks_trigger
-    AFTER UPDATE OF surface_no ON blocks
-    FOR EACH ROW
-    WHEN (NEW.surface_no != OLD.surface_no AND NEW.surface_no >= 0)
-    EXECUTE FUNCTION corpus_search_update_blocks_trigger_fun();
-
-  CREATE TRIGGER corpus_search_update_surfaces_trigger
-    AFTER UPDATE OF object_no ON surfaces
-    FOR EACH ROW
-    WHEN (NEW.object_no != OLD.object_no AND NEW.object_no >= 0)
-    EXECUTE FUNCTION corpus_search_update_surfaces_trigger_fun();
-
   CREATE TRIGGER corpus_search_update_words_trigger
     AFTER UPDATE OF compound_no ON words
     FOR EACH ROW
@@ -368,9 +203,6 @@ CREATE OR REPLACE PROCEDURE corpus_search_drop_triggers()
 $BODY$
   DROP TRIGGER corpus_search_corpus_trigger ON corpus;
   DROP TRIGGER corpus_search_corpus_index_col_trigger ON corpus;
-  DROP TRIGGER corpus_search_update_lines_trigger ON lines;
-  DROP TRIGGER corpus_search_update_blocks_trigger ON blocks;
-  DROP TRIGGER corpus_search_update_surfaces_trigger ON surfaces;
   DROP TRIGGER corpus_search_update_words_trigger ON words;
   DROP TRIGGER corpus_search_update_sign_variants_composition_trigger ON sign_variants_composition;
 $BODY$;
@@ -380,19 +212,14 @@ CREATE OR REPLACE VIEW corpus_search_view AS (
 WITH x AS NOT MATERIALIZED (
   SELECT
     corpus.*,
-    compound_no,
-    object_no
+    compound_no
   FROM
     corpus
     LEFT JOIN words USING (transliteration_id, word_no)
-    LEFT JOIN lines USING (transliteration_id, line_no)
-    LEFT JOIN blocks USING (transliteration_id, block_no)
-    LEFT JOIN surfaces USING (transliteration_id, surface_no)
 )
 SELECT * FROM (
   SELECT 
     transliteration_id,
-    object_no,
     sign_no,
     cun_position(
       greatest(sign_no + 1, 0),
@@ -416,7 +243,6 @@ SELECT * FROM (
   UNION ALL
   SELECT
     transliteration_id,
-    object_no,
     sign_no,
     cun_position(
       greatest(sign_no + 1, 0),
@@ -437,7 +263,6 @@ SELECT * FROM (
   UNION ALL
   SELECT                      -- pseudo first row
     transliteration_id,
-    object_no,
     NULL AS sign_no,
     cun_position(greatest(min(sign_no), 0), 0, TRUE) AS position,
     min(word_no)-1 AS word_no,
@@ -453,12 +278,10 @@ SELECT * FROM (
   FROM 
     x
   GROUP BY 
-    transliteration_id,
-    object_no
+    transliteration_id
   UNION ALL
   SELECT                      -- pseudo final row
     transliteration_id,
-    object_no,
     NULL AS sign_no,
     cun_position(
       greatest(max(sign_no)+2, 0),
@@ -477,12 +300,10 @@ SELECT * FROM (
   FROM 
     x
   GROUP BY 
-    transliteration_id,
-    object_no
+    transliteration_id
   UNION ALL
   SELECT                      -- placeholder row
     transliteration_id,
-    object_no,
     NULL AS sign_no,
     NULL AS position,
     NULL AS word_no,
@@ -498,10 +319,9 @@ SELECT * FROM (
   FROM 
     x
   GROUP BY 
-    transliteration_id,
-    object_no)
+    transliteration_id)
   a
-ORDER BY transliteration_id, object_no, position);
+ORDER BY transliteration_id, position);
 
 
 CREATE PROCEDURE corpus_search_update_transliteration(v_transliteration_id integer)
@@ -555,7 +375,7 @@ BEGIN
         words,
         lines,
         wildcards
-    FROM ($$ || parse_search (search_term, 'corpus_search', ARRAY['transliteration_id', 'object_no']) || $$) _
+    FROM ($$ || parse_search (search_term, 'corpus_search', ARRAY['transliteration_id']) || $$) _
         LEFT JOIN transliterations USING (transliteration_id)
         LEFT JOIN texts USING (text_id)
     WHERE 
@@ -645,6 +465,7 @@ GROUP BY
 ORDER BY
   corpus_code_clean.transliteration_id
 $BODY$;
+
 
 CREATE OR REPLACE FUNCTION search_lines (search_term text)
   RETURNS TABLE (

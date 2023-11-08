@@ -50,14 +50,9 @@ sections_plan = plpy.prepare(
     ['integer', 'integer', 'text', 'text', 'witness_type']
 )
 
-objects_plan = plpy.prepare(
-    f'INSERT INTO {schema}.objects VALUES ($1, $2, $3, $4, $5)',
-    ['integer', 'integer', 'object_type', 'text', 'text']
-)
-
 surfaces_plan = plpy.prepare(
-    f'INSERT INTO {schema}.surfaces (transliteration_id, surface_no, object_no, surface_type, surface_data, surface_comment) VALUES ($1, $2, $3, $4, $5, $6)',
-    ['integer', 'integer', 'integer', 'surface_type', 'text', 'text']
+    f'INSERT INTO {schema}.surfaces (transliteration_id, surface_no, surface_type, surface_data, surface_comment) VALUES ($1, $2, $3, $4, $5)',
+    ['integer', 'integer', 'surface_type', 'text', 'text']
 )
 
 blocks_plan = plpy.prepare(
@@ -75,7 +70,7 @@ errors_plan = plpy.prepare(
     ['integer', 'integer', 'integer', 'text', 'text']
 )
 
-objects, surfaces, blocks, lines, signs, compounds, words, sections, errors = parseText(code, language, stemmed)
+surfaces, blocks, lines, signs, compounds, words, sections, errors = parseText(code, language, stemmed)
 
 plpy.execute(f"DELETE FROM corpus_parsed_unencoded WHERE transliteration_id = {id}")
 
@@ -86,10 +81,8 @@ for ix, row in compounds.iterrows():
 for ix, row in words.iterrows():
     plpy.execute(words_plan, [id, ix]+[row[key] for key in ['compound_no', 'capitalized']])
 
-for ix, row in objects.iterrows():
-    plpy.execute(objects_plan, [id, ix]+[row[key] for key in ['object', 'data', 'comment']])
 for ix, row in surfaces.iterrows():
-    plpy.execute(surfaces_plan, [id, ix]+[row[key] for key in ['object_no', 'surface', 'data', 'comment']])
+    plpy.execute(surfaces_plan, [id, ix]+[row[key] for key in ['surface', 'data', 'comment']])
 for ix, row in blocks.iterrows():
     plpy.execute(blocks_plan, [id, ix]+[row[key] for key in ['surface_no', 'block', 'data', 'comment']])
 for ix, row in lines.iterrows():

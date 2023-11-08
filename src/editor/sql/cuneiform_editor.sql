@@ -293,7 +293,7 @@ FOR entry_no IN
         transliteration_id,
         target_schema)
     LOOP
-    RETURN QUERY SELECT * FROM adjust_key_col(transliteration_id, entry_no+1, child_target, key_col, key_col, -1, target_schema);
+    RETURN QUERY SELECT * FROM shift_key_col(transliteration_id, entry_no+1, child_target, key_col, -1, target_schema);
     RETURN QUERY SELECT * FROM delete_entry(transliteration_id, entry_no, target, key_col, target_schema);
 END LOOP;
 
@@ -330,10 +330,8 @@ DECLARE
     line_special_col      boolean[]   := '{t,f,f}';
     block_columns         text[]      := '{surface_no, block_type, block_data, block_comment}';
     block_special_col     boolean[]   := '{t,f,f,f}';
-    surface_columns       text[]      := '{object_no, surface_type, surface_data, surface_comment}';
-    surface_special_col   boolean[]   := '{t,f,f,f}';
-    object_columns        text[]      := '{object_type, object_data, object_comment}';
-    object_special_col    boolean[]   := '{f,f,f}';
+    surface_columns       text[]      := '{surface_type, surface_data, surface_comment}';
+    surface_special_col   boolean[]   := '{f,f,f}';
     section_columns       text[]      := '{section_name, composition_id, witness_type}';
     section_special_col   boolean[]   := '{f,f,f}';
 
@@ -475,10 +473,6 @@ BEGIN
     RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'surfaces', 'blocks', 'surface_no', 'block_no', surface_columns, surface_special_col, v_schema, 'public');
     RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'surfaces', 'surface_no', surface_columns, surface_special_col, v_schema, 'public');
 
-    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'objects', 'surfaces', 'object_no', 'public');
-    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'objects', 'surfaces', 'object_no', 'surface_no', object_columns, object_special_col, v_schema, 'public');
-    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'objects', 'object_no', object_columns, object_special_col, v_schema, 'public');
-
     RETURN;
 END;
 
@@ -510,9 +504,11 @@ BEGIN
         v_edit_id,
         ordinality,
         entry_no,
+        key_col,
         target,
         action,
-        query
+        val,
+        val_old
     FROM
         edit(v_schema, v_transliteration_id) WITH ORDINALITY;
 
@@ -578,15 +574,15 @@ v_query text;
 
 BEGIN
 FOR v_query IN 
-    SELECT query 
-    FROM edit_log 
+    SELECT edit_log_undo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val_old)
+    FROM edit_log JOIN edits USING (edit_id)
     WHERE 
         edit_id = v_edit_id
     ORDER BY log_no DESC 
     LOOP
     RAISE INFO USING MESSAGE = v_query;
     DISCARD PLANS;
-    EXECUTE v_query USING v_schema;
+    EXECUTE v_query;
 END LOOP;
 END;
 $BODY$;
@@ -600,20 +596,80 @@ CREATE OR REPLACE PROCEDURE undo (
     LANGUAGE PLPGSQL
     AS 
 $BODY$
+
 DECLARE
 
-v_edit_id integer;
+v_query text;
 
 BEGIN
-FOR v_edit_id IN 
-    SELECT edit_id 
-    FROM edits 
+FOR v_query IN 
+    SELECT edit_log_undo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val_old) 
+    FROM edit_log JOIN edits USING (edit_id)
     WHERE 
         transliteration_id = v_transliteration_id 
         AND timestamp >= v_timestamp
-    ORDER BY timestamp DESC 
+    ORDER BY timestamp DESC, log_no DESC 
     LOOP
-    CALL undo(v_edit_id, v_schema);
+    RAISE INFO USING MESSAGE = v_query;
+    DISCARD PLANS;
+    EXECUTE v_query;
+END LOOP;
+END;
+$BODY$;
+
+
+CREATE OR REPLACE PROCEDURE redo (
+    v_edit_id integer, 
+    v_schema text
+    )
+    LANGUAGE PLPGSQL
+    AS 
+$BODY$
+DECLARE
+
+v_query text;
+
+BEGIN
+FOR v_query IN 
+    SELECT edit_log_redo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val) 
+    FROM edit_log JOIN edits USING (edit_id)
+    WHERE 
+        edit_id = v_edit_id
+    ORDER BY log_no
+    LOOP
+    RAISE INFO USING MESSAGE = v_query;
+    DISCARD PLANS;
+    EXECUTE v_query;
+END LOOP;
+END;
+$BODY$;
+
+
+CREATE OR REPLACE PROCEDURE redo (
+    v_transliteration_id integer, 
+    v_timestamp timestamp, 
+    v_schema text
+    )
+    LANGUAGE PLPGSQL
+    AS 
+$BODY$
+
+DECLARE
+
+v_query text;
+
+BEGIN
+FOR v_query IN 
+    SELECT edit_log_redo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val) 
+    FROM edit_log JOIN edits USING (edit_id)
+    WHERE 
+        transliteration_id = v_transliteration_id 
+        AND timestamp <= v_timestamp
+    ORDER BY timestamp, log_no
+    LOOP
+    RAISE INFO USING MESSAGE = v_query;
+    DISCARD PLANS;
+    EXECUTE v_query;
 END LOOP;
 END;
 $BODY$;

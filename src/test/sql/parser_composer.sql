@@ -8,7 +8,7 @@ DECLARE
 t text[];
 columns text;
 BEGIN
-FOREACH t SLICE 1 IN ARRAY array[['corpus', 'sign_no'], ['words', 'word_no'], ['compounds', 'compound_no'], ['lines', 'line_no'], ['blocks', 'block_no'], ['surfaces', 'surface_no'], ['objects', 'object_no']] LOOP
+FOREACH t SLICE 1 IN ARRAY array[['corpus', 'sign_no'], ['words', 'word_no'], ['compounds', 'compound_no'], ['lines', 'line_no'], ['blocks', 'block_no'], ['surfaces', 'surface_no'], ['sections', 'section_no']] LOOP
     SELECT string_agg(column_name, ', ') INTO columns FROM information_schema.columns WHERE table_schema = 'public' AND table_name = t[1] AND column_name != 'transliteration_id';
     RETURN NEXT results_eq(
         format('SELECT %s FROM %I WHERE transliteration_id = %s ORDER BY %I', columns, t[1], transliteration_id_1, t[2]),

@@ -3,9 +3,10 @@ CREATE TABLE values_present (
     period_id integer,
     provenience_id integer,
     genre_id integer,
+    object_id integer,
     count integer,
     count_norm numeric,
-    UNIQUE (value_id, period_id, provenience_id, genre_id)
+    UNIQUE (value_id, period_id, provenience_id, genre_id, object_id)
 );
 
 CREATE TABLE sign_variants_present (
@@ -13,9 +14,10 @@ CREATE TABLE sign_variants_present (
     period_id integer,
     provenience_id integer,
     genre_id integer,
+    object_id integer,
     count integer,
     count_norm numeric,
-    UNIQUE (sign_variant_id, period_id, provenience_id, genre_id)
+    UNIQUE (sign_variant_id, period_id, provenience_id, genre_id, object_id)
 );
 
 
@@ -24,6 +26,7 @@ CREATE OR REPLACE FUNCTION adjust_value_statistics (
         v_period_id integer,
         v_provenience_id integer,
         v_genre_id integer,
+        v_object_id integer,
         v_val integer,
         v_val_norm numeric
     ) 
@@ -43,6 +46,7 @@ BEGIN
         AND period_id IS NOT DISTINCT FROM v_period_id
         AND provenience_id IS NOT DISTINCT FROM v_provenience_id
         AND genre_id IS NOT DISTINCT FROM v_genre_id
+        AND object_id IS NOT DISTINCT FROM v_object_id
     RETURNING
         count = 0 INTO zero;
 
@@ -52,9 +56,10 @@ BEGIN
             value_id = v_value_id
             AND period_id IS NOT DISTINCT FROM v_period_id
             AND provenience_id IS NOT DISTINCT FROM v_provenience_id
-            AND genre_id IS NOT DISTINCT FROM v_genre_id;
+            AND genre_id IS NOT DISTINCT FROM v_genre_id
+            AND object_id IS NOT DISTINCT FROM v_object_id;
     ELSIF zero IS NULL THEN
-        INSERT INTO values_present VALUES (v_value_id, v_period_id, v_provenience_id, v_genre_id, v_val, v_val_norm);
+        INSERT INTO values_present VALUES (v_value_id, v_period_id, v_provenience_id, v_genre_id, v_object_id, v_val, v_val_norm);
     END IF;
 END;
 $BODY$;
@@ -64,6 +69,7 @@ CREATE OR REPLACE FUNCTION adjust_sign_variant_statistics (
         v_period_id integer,
         v_provenience_id integer,
         v_genre_id integer,
+        v_object_id integer,
         v_val integer,
         v_val_norm numeric
     ) 
@@ -83,6 +89,7 @@ BEGIN
         AND period_id IS NOT DISTINCT FROM v_period_id
         AND provenience_id IS NOT DISTINCT FROM v_provenience_id
         AND genre_id IS NOT DISTINCT FROM v_genre_id
+        AND object_id IS NOT DISTINCT FROM v_object_id
     RETURNING
         count = 0 INTO zero;
 
@@ -92,9 +99,10 @@ BEGIN
             sign_variant_id = v_sign_variant_id
             AND period_id IS NOT DISTINCT FROM v_period_id
             AND provenience_id IS NOT DISTINCT FROM v_provenience_id
-            AND genre_id IS NOT DISTINCT FROM v_genre_id;
+            AND genre_id IS NOT DISTINCT FROM v_genre_id
+            AND object_id IS NOT DISTINCT FROM v_object_id;
     ELSIF zero IS NULL THEN
-        INSERT INTO sign_variants_present VALUES (v_sign_variant_id, v_period_id, v_provenience_id, v_genre_id, v_val, v_val_norm);
+        INSERT INTO sign_variants_present VALUES (v_sign_variant_id, v_period_id, v_provenience_id, v_object_id, v_genre_id, v_val, v_val_norm);
     END IF;
     
 END;
@@ -109,11 +117,11 @@ CREATE OR REPLACE FUNCTION values_present_corpus_trigger_fun ()
 $BODY$
 BEGIN
     IF NOT OLD IS NULL THEN
-        PERFORM adjust_value_statistics((OLD).value_id, min(period_id), min(provenience_id), min(genre_id), -1, -1.0/count(*))
+        PERFORM adjust_value_statistics((OLD).value_id, min(period_id), min(provenience_id), min(genre_id), min(object_id), -1, -1.0/count(*))
             FROM transliterations a JOIN texts USING (text_id) JOIN transliterations b USING (text_id) WHERE a.transliteration_id = (OLD).transliteration_id;
     END IF;
     IF NOT NEW IS NULL THEN
-        PERFORM adjust_value_statistics((NEW).value_id, min(period_id), min(provenience_id), min(genre_id), 1, 1.0/count(*))
+        PERFORM adjust_value_statistics((NEW).value_id, min(period_id), min(provenience_id), min(genre_id), min(object_id), 1, 1.0/count(*))
             FROM transliterations a JOIN texts USING (text_id) JOIN transliterations b USING (text_id) WHERE a.transliteration_id = (NEW).transliteration_id;
     END IF;
     RETURN NULL;
@@ -129,11 +137,11 @@ CREATE OR REPLACE FUNCTION sign_variants_present_corpus_trigger_fun ()
 $BODY$
 BEGIN
     IF NOT OLD IS NULL THEN
-        PERFORM adjust_sign_variant_statistics((OLD).sign_variant_id, min(period_id), min(provenience_id), min(genre_id), -1, -1.0/count(*))
+        PERFORM adjust_sign_variant_statistics((OLD).sign_variant_id, min(period_id), min(provenience_id), min(genre_id), min(object_id), -1, -1.0/count(*))
             FROM transliterations a JOIN texts USING (text_id) JOIN transliterations b USING (text_id) WHERE a.transliteration_id = (OLD).transliteration_id;
     END IF;
     IF NOT NEW IS NULL THEN
-        PERFORM adjust_sign_variant_statistics((NEW).sign_variant_id, min(period_id), min(provenience_id), min(genre_id), 1, 1.0/count(*))
+        PERFORM adjust_sign_variant_statistics((NEW).sign_variant_id, min(period_id), min(provenience_id), min(genre_id), min(object_id), 1, 1.0/count(*))
             FROM transliterations a JOIN texts USING (text_id) JOIN transliterations b USING (text_id) WHERE a.transliteration_id = (NEW).transliteration_id;
     END IF;
     RETURN NULL;
@@ -161,6 +169,7 @@ BEGIN
             period_id, 
             provenience_id, 
             genre_id, 
+            object_id,
             0, 
             count(*)::numeric/(cardinality(v_transliteration_ids) * (cardinality(v_transliteration_ids)+1))
         )
@@ -169,13 +178,14 @@ BEGIN
     WHERE
         corpus.transliteration_id = ANY(v_transliteration_ids)
         AND texts.text_id = (OLD).text_id
-    GROUP BY value_id, period_id, provenience_id, genre_id;
+    GROUP BY value_id, period_id, provenience_id, genre_id, object_id;
 
     PERFORM adjust_value_statistics(
             value_id, 
             period_id, 
             provenience_id, 
             genre_id, 
+            object_id,
             -count(*)::integer, 
             -count(*)::numeric/(cardinality(v_transliteration_ids)+1)
         )
@@ -184,13 +194,14 @@ BEGIN
     WHERE
         corpus.transliteration_id = (OLD).transliteration_id
         AND texts.text_id = (OLD).text_id
-    GROUP BY value_id, period_id, provenience_id, genre_id;
+    GROUP BY value_id, period_id, provenience_id, genre_id, object_id;
 
     PERFORM adjust_sign_variant_statistics(
             sign_variant_id, 
             period_id, 
             provenience_id, 
             genre_id, 
+            object_id,
             0, 
             count(*)::numeric/(cardinality(v_transliteration_ids) * (cardinality(v_transliteration_ids)+1))
         )
@@ -199,13 +210,14 @@ BEGIN
     WHERE
         corpus.transliteration_id = ANY(v_transliteration_ids)
         AND texts.text_id = (OLD).text_id
-    GROUP BY sign_variant_id, period_id, provenience_id, genre_id;
+    GROUP BY sign_variant_id, period_id, provenience_id, genre_id, object_id;
 
     PERFORM adjust_sign_variant_statistics(
             sign_variant_id, 
             period_id, 
             provenience_id, 
             genre_id, 
+            object_id,
             -count(*)::integer, 
             -count(*)::numeric/(cardinality(v_transliteration_ids)+1)
         )
@@ -214,7 +226,7 @@ BEGIN
     WHERE
         corpus.transliteration_id = (OLD).transliteration_id
         AND texts.text_id = (OLD).text_id
-    GROUP BY sign_variant_id, period_id, provenience_id, genre_id;
+    GROUP BY sign_variant_id, period_id, provenience_id, genre_id, object_id;
 
 
     SELECT array_agg(transliteration_id) INTO v_transliteration_ids FROM transliterations WHERE text_id = (NEW).text_id;
@@ -224,6 +236,7 @@ BEGIN
             period_id, 
             provenience_id, 
             genre_id, 
+            object_id,
             0, 
             -count(*)::numeric/(cardinality(v_transliteration_ids) * (cardinality(v_transliteration_ids)-1))
         )
@@ -233,13 +246,14 @@ BEGIN
         corpus.transliteration_id = ANY(v_transliteration_ids)
         AND corpus.transliteration_id != (NEW).transliteration_id
         AND texts.text_id = (NEW).text_id
-    GROUP BY value_id, period_id, provenience_id, genre_id;
+    GROUP BY value_id, period_id, provenience_id, genre_id, object_id;
 
     PERFORM adjust_value_statistics(
             value_id, 
             period_id, 
             provenience_id, 
             genre_id, 
+            object_id,
             count(*)::integer, 
             count(*)::numeric/cardinality(v_transliteration_ids)
         )
@@ -248,13 +262,14 @@ BEGIN
     WHERE
         corpus.transliteration_id = (NEW).transliteration_id
         AND texts.text_id = (NEW).text_id
-    GROUP BY value_id, period_id, provenience_id, genre_id;
+    GROUP BY value_id, period_id, provenience_id, genre_id, object_id;
 
     PERFORM adjust_sign_variant_statistics(
             sign_variant_id, 
             period_id, 
             provenience_id, 
             genre_id, 
+            object_id,
             0, 
             -count(*)::numeric/(cardinality(v_transliteration_ids) * (cardinality(v_transliteration_ids)-1))
         )
@@ -264,13 +279,14 @@ BEGIN
         corpus.transliteration_id = ANY(v_transliteration_ids)
         AND corpus.transliteration_id != (NEW).transliteration_id
         AND texts.text_id = (NEW).text_id
-    GROUP BY sign_variant_id, period_id, provenience_id, genre_id;
+    GROUP BY sign_variant_id, period_id, provenience_id, genre_id, object_id;
 
     PERFORM adjust_sign_variant_statistics(
             sign_variant_id, 
             period_id, 
             provenience_id, 
             genre_id, 
+            object_id,
             count(*)::integer, 
             count(*)::numeric/cardinality(v_transliteration_ids)
         )
@@ -279,7 +295,7 @@ BEGIN
     WHERE
         corpus.transliteration_id = (NEW).transliteration_id
         AND texts.text_id = (NEW).text_id
-    GROUP BY sign_variant_id, period_id, provenience_id, genre_id;
+    GROUP BY sign_variant_id, period_id, provenience_id, genre_id, object_id;
 
 
     RETURN NULL;
@@ -298,7 +314,7 @@ DECLARE
 BEGIN
     SELECT count(*) INTO v_transliteration_count FROM transliterations a JOIN transliterations b USING (text_id) WHERE a.transliteration_id = COALESCE((OLD).text_id, (NEW).text_id);
 
-    PERFORM adjust_value_statistics(value_id, (OLD).period_id, (OLD).provenience_id, (OLD).genre_id, -count(*)::integer, -count(*)::numeric/v_transliteration_count)
+    PERFORM adjust_value_statistics(value_id, (OLD).period_id, (OLD).provenience_id, (OLD).genre_id, (OLD).object_id, -count(*)::integer, -count(*)::numeric/v_transliteration_count)
     FROM
         corpus
         JOIN transliterations USING (transliteration_id)
@@ -306,7 +322,7 @@ BEGIN
         text_id = (OLD).text_id
     GROUP BY value_id;
     
-    PERFORM adjust_value_statistics(value_id, (NEW).period_id, (NEW).provenience_id, (NEW).genre_id, count(*)::integer, count(*)::numeric/v_transliteration_count)
+    PERFORM adjust_value_statistics(value_id, (NEW).period_id, (NEW).provenience_id, (NEW).genre_id, (NEW).object_id, count(*)::integer, count(*)::numeric/v_transliteration_count)
     FROM
         corpus
         JOIN transliterations USING (transliteration_id)
@@ -315,7 +331,7 @@ BEGIN
     GROUP BY value_id;
 
 
-    PERFORM adjust_sign_variant_statistics(sign_variant_id, (OLD).period_id, (OLD).provenience_id, (OLD).genre_id, -count(*)::integer, -count(*)::numeric/v_transliteration_count)
+    PERFORM adjust_sign_variant_statistics(sign_variant_id, (OLD).period_id, (OLD).provenience_id, (OLD).genre_id, (OLD).object_id, -count(*)::integer, -count(*)::numeric/v_transliteration_count)
     FROM
         corpus
         JOIN transliterations USING (transliteration_id)
@@ -323,7 +339,7 @@ BEGIN
         text_id = (OLD).text_id
     GROUP BY sign_variant_id;
     
-    PERFORM adjust_sign_variant_statistics(sign_variant_id, (NEW).period_id, (NEW).provenience_id, (NEW).genre_id, count(*)::integer, count(*)::numeric/v_transliteration_count)
+    PERFORM adjust_sign_variant_statistics(sign_variant_id, (NEW).period_id, (NEW).provenience_id, (NEW).genre_id, (NEW).object_id, count(*)::integer, count(*)::numeric/v_transliteration_count)
     FROM
         corpus
         JOIN transliterations USING (transliteration_id)
@@ -343,6 +359,7 @@ SELECT
     period_id,
     provenience_id,
     genre_id,
+    object_id,
     count(*) AS count,
     sum(1.0/transliteration_count) AS count_norm
 FROM corpus
@@ -355,7 +372,8 @@ GROUP BY
     value_id,
     period_id,
     provenience_id,
-    genre_id;
+    genre_id,
+    object_id;
 
 
 CREATE VIEW sign_variants_present_view AS
@@ -364,6 +382,7 @@ SELECT DISTINCT
   period_id,
   provenience_id,
   genre_id,
+  object_id,
   count(*) AS count,
   sum(1.0/transliteration_count) AS count_norm
 FROM corpus
@@ -374,7 +393,8 @@ GROUP BY
   sign_variant_id,
   period_id,
   provenience_id,
-  genre_id;
+  genre_id,
+  object_id;
 
 
 CREATE TRIGGER values_present_corpus_trigger
@@ -393,6 +413,6 @@ CREATE TRIGGER signs_present_transliterations_trigger
   EXECUTE FUNCTION signs_present_transliterations_trigger_fun();
 
 CREATE TRIGGER signs_present_text_trigger
-  AFTER UPDATE OF period_id, provenience_id, genre_id ON texts
+  AFTER UPDATE OF period_id, provenience_id, genre_id, object_id ON texts
   FOR EACH ROW
   EXECUTE FUNCTION signs_present_texts_trigger_fun();

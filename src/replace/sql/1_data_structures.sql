@@ -58,7 +58,6 @@ CREATE TABLE replace.compounds (LIKE compounds);
 CREATE VIEW replace.lines AS SELECT * FROM lines;
 CREATE VIEW replace.blocks AS SELECT * FROM blocks;
 CREATE VIEW replace.surfaces AS SELECT * FROM surfaces;
-CREATE VIEW replace.objects AS SELECT * FROM objects;
 CREATE VIEW replace.sections AS SELECT * FROM sections;
 
 

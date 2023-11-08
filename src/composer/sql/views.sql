@@ -251,11 +251,9 @@ FROM
 GROUP BY
     transliteration_id,
     surface_no
-),
-d AS NOT MATERIALIZED (
+)
 SELECT
     transliteration_id,
-    object_no,
     string_agg(
         CASE 
             WHEN surface_type != 'surface' OR surface_data IS NOT NULL THEN
@@ -269,25 +267,6 @@ SELECT
 FROM
     c
     RIGHT JOIN surfaces USING (transliteration_id, surface_no)
-GROUP BY
-    transliteration_id,
-    object_no
-)
-SELECT
-    transliteration_id,
-    string_agg(
-        CASE 
-            WHEN object_type != 'object' OR object_data IS NOT NULL THEN
-                '@' || object_type::text || COALESCE(' '||object_data, '') || COALESCE(E'\n# '|| object_comment, '') || COALESCE(E'\n' || content, '')
-            ELSE
-                COALESCE(content, '')
-        END, 
-        E'\n' 
-        ORDER BY object_no
-    ) AS content
-FROM
-    d
-    RIGHT JOIN objects USING (transliteration_id, object_no)
 GROUP BY
     transliteration_id;
 
