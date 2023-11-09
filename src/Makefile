@@ -1,39 +1,39 @@
 all:
-	make -C actions
-	make -C citation
-	make -C composer
-	make -C context
-	make -C database
-	make -C editor
-	make -C editor_log
-	make -C encoder
-	make -C encode_corpus
+	make -C data/signlist
+	make -C data/context
+	make -C data/database
+	make -C data/editor_log
+	make -C modules/sign_properties
+	make -C modules/actions
+	make -C modules/citation
+	make -C modules/composer
+	make -C modules/encoder
+	make -C modules/parser
+	make -C modules/editor
+	make -C modules/search
+	make -C corpus/encode_corpus
+	make -C corpus/parse_corpus
+	make -C corpus/replace
+	make -C corpus/search_extra
 	make -C loader
-	make -C parser
-	make -C parse_corpus
-	make -C replace
-	make -C search
-	make -C search_extra
-	make -C sign_properties
-	make -C signlist
 	make -C test
 
 install:
-	make -C actions install
-	make -C citation install
-	make -C composer install
-	make -C context install
-	make -C database install
-	make -C editor install
-	make -C editor_log install
-	make -C encoder install
-	make -C encode_corpus install
+	make -C data/signlist install
+	make -C data/context install
+	make -C data/database install
+	make -C data/editor_log install
+	make -C modules/sign_properties install
+	make -C modules/actions install
+	make -C modules/citation install
+	make -C modules/composer install
+	make -C modules/encoder install
+	make -C modules/parser install
+	make -C modules/editor install
+	make -C modules/search install
+	make -C corpus/encode_corpus install
+	make -C corpus/parse_corpus install
+	make -C corpus/replace install
+	make -C corpus/search_extra install
 	make -C loader install
-	make -C parser install
-	make -C parse_corpus install
-	make -C replace install
-	make -C search install
-	make -C search_extra install
-	make -C sign_properties install
-	make -C signlist install
 	make -C test install
