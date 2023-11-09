@@ -2,7 +2,7 @@ all:
 	make -C data/signlist
 	make -C data/context
 	make -C data/database
-	make -C data/editor_log
+	make -C data/log
 	make -C modules/sign_properties
 	make -C modules/actions
 	make -C modules/citation
@@ -14,7 +14,7 @@ all:
 	make -C corpus/encode_corpus
 	make -C corpus/parse_corpus
 	make -C corpus/replace
-	make -C corpus/search_extra
+	make -C corpus/search_corpus
 	make -C loader
 	make -C test
 
@@ -22,7 +22,7 @@ install:
 	make -C data/signlist install
 	make -C data/context install
 	make -C data/database install
-	make -C data/editor_log install
+	make -C data/log install
 	make -C modules/sign_properties install
 	make -C modules/actions install
 	make -C modules/citation install
@@ -34,6 +34,6 @@ install:
 	make -C corpus/encode_corpus install
 	make -C corpus/parse_corpus install
 	make -C corpus/replace install
-	make -C corpus/search_extra install
+	make -C corpus/search_corpus install
 	make -C loader install
 	make -C test install

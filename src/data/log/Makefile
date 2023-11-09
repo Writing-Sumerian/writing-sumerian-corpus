@@ -1,4 +1,4 @@
-EXTENSION    		:= cuneiform_editor_log
+EXTENSION    		:= cuneiform_log
 
 version      		:= $(shell grep default_version $(EXTENSION).control | sed -e "s/default_version[[:space:]]*=[[:space:]]*'\\([^']*\\)'/\\1/")
 modules      		:= $(patsubst %.c,%,$(wildcard src/*.c))
