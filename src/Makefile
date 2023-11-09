@@ -4,6 +4,7 @@ all:
 	make -C data/database
 	make -C data/log
 	make -C modules/sign_properties
+	make -C modules/create_corpus
 	make -C modules/actions
 	make -C modules/citation
 	make -C modules/composer
@@ -24,6 +25,7 @@ install:
 	make -C data/database install
 	make -C data/log install
 	make -C modules/sign_properties install
+	make -C modules/create_corpus install
 	make -C modules/actions install
 	make -C modules/citation install
 	make -C modules/composer install

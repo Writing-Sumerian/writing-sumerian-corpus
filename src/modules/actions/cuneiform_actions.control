@@ -1,5 +1,5 @@
-comment = 'Actions to edit Cuneiform Database'
+comment = 'Atomic actions to manipulate a cuneiform corpus'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_actions'
-requires = 'cuneiform_database'
+requires = ''
