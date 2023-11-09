@@ -119,7 +119,7 @@ BEGIN
             ELSE
                 RAISE NOTICE 'Replacing signs % in %...', v_sign_nos, v_transliteration_id;
                 CALL corpus_search_drop_triggers();
-                CALL edit_logged('replace', v_transliteration_id, user_id, internal);
+                CALL edit_corpus('replace', v_transliteration_id, user_id, internal);
                 CALL corpus_search_create_triggers();
                 CALL corpus_search_update_transliteration(v_transliteration_id);
                 RAISE NOTICE 'Done.';

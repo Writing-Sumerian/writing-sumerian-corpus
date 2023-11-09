@@ -12,7 +12,7 @@ CREATE TABLE editor.errors (
 CREATE TYPE levenshtein_op AS ENUM ('NONE', 'INSERT', 'DELETE', 'UPDATE');
 CREATE TYPE wagner_fischer_op AS (op levenshtein_op, pos integer);
 
-CREATE OR REPLACE FUNCTION levenshtein(
+CREATE OR REPLACE FUNCTION levenshtein (
     s anyarray,
     t anyarray,
     OUT cost integer,
@@ -302,7 +302,8 @@ $BODY$;
 
 
 CREATE OR REPLACE FUNCTION edit (
-    v_schema text, 
+    v_source_schema text, 
+    v_target_schema text,
     v_transliteration_id integer
     )
     RETURNS SETOF log_data
@@ -344,12 +345,12 @@ BEGIN
             SELECT 
                 COALESCE(array_agg(COALESCE(value, glyphs, custom_value) ORDER BY sign_no), ARRAY[]::text[]) AS signs 
             FROM 
-                corpus
+                %2$I.corpus
                 LEFT JOIN values USING (value_id) 
                 LEFT JOIN value_variants ON main_variant_id = value_variant_id
                 LEFT JOIN sign_variants_composition USING (sign_variant_id)
             WHERE 
-                corpus.transliteration_id = %2$s
+                corpus.transliteration_id = %3$s
         ),
         b AS (
             SELECT 
@@ -360,13 +361,14 @@ BEGIN
                 LEFT JOIN value_variants ON main_variant_id = value_variant_id
                 LEFT JOIN sign_variants_composition USING (sign_variant_id)
             WHERE 
-                corpus.transliteration_id = %2$s
+                corpus.transliteration_id = %3$s
         )
         SELECT 
             (levenshtein(a.signs, b.signs)).ops
         FROM a, b
         $$,
-        v_schema,
+        v_source_schema,
+        v_target_schema,
         v_transliteration_id)
         INTO ops;
 
@@ -391,13 +393,14 @@ BEGIN
                 FROM
                     %2$I.corpus a
                     LEFT JOIN %2$I.corpus a1 ON a.transliteration_id = a1.transliteration_id AND a1.sign_no = %1$s-2
-                    LEFT JOIN corpus b1 ON a.transliteration_id = b1.transliteration_id AND b1.sign_no = %1$s-2
-                    LEFT JOIN corpus b2 ON a.transliteration_id = b2.transliteration_id AND b2.sign_no = %1$s-1
+                    LEFT JOIN %3$I.corpus b1 ON a.transliteration_id = b1.transliteration_id AND b1.sign_no = %1$s-2
+                    LEFT JOIN %3$I.corpus b2 ON a.transliteration_id = b2.transliteration_id AND b2.sign_no = %1$s-1
                 WHERE
-                    a.transliteration_id = %3$s AND a.sign_no = %1$s-1
+                    a.transliteration_id = %4$s AND a.sign_no = %1$s-1
                 $$,
                 (op).pos,
-                v_schema,
+                v_source_schema,
+                v_target_schema,
                 v_transliteration_id)
             INTO
                 v_word_no,
@@ -408,8 +411,8 @@ BEGIN
                 SELECT 
                     a.transliteration_id,
                     %1$s-1,
-                    %4$s,
                     %5$s,
+                    %6$s,
                     a.value_id,
                     a.sign_variant_id,
                     a.custom_value,
@@ -425,53 +428,54 @@ BEGIN
                     a.ligature
                 FROM 
                     %2$I.corpus a
-                    LEFT JOIN corpus b ON a.transliteration_id = b.transliteration_id AND b.sign_no = %1$s-2
+                    LEFT JOIN %3$I.corpus b ON a.transliteration_id = b.transliteration_id AND b.sign_no = %1$s-2
                 WHERE
-                    a.transliteration_id = %3$s AND a.sign_no = %1$s-1
+                    a.transliteration_id = %4$s AND a.sign_no = %1$s-1
                 $$,
                 (op).pos,
-                v_schema,
+                v_source_schema,
+                v_target_schema,
                 v_transliteration_id,
                 v_line_no,
                 v_word_no)
                 INTO rec;
 
-            RETURN QUERY SELECT * FROM insert_entry(v_transliteration_id, (op).pos-1, 'corpus', 'sign_no', rec, 'public');
+            RETURN QUERY SELECT * FROM insert_entry(v_transliteration_id, (op).pos-1, 'corpus', 'sign_no', rec, v_target_schema);
         ELSIF (op).op = 'DELETE' THEN
-            RETURN QUERY SELECT * FROM delete_entry(v_transliteration_id, (op).pos-1, 'corpus', 'sign_no', 'public');
+            RETURN QUERY SELECT * FROM delete_entry(v_transliteration_id, (op).pos-1, 'corpus', 'sign_no', v_target_schema);
         END IF;
     END LOOP;
 
     FOREACH col IN ARRAY array['custom_value', 'value_id', 'sign_variant_id', 'type', 'indicator_type', 'phonographic', 'stem', 
                                'condition', 'crits', 'comment', 'newline', 'inverted', 'ligature'] LOOP
-        RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'corpus', 'sign_no', col, v_schema, 'public');
+        RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'corpus', 'sign_no', col, v_source_schema, v_target_schema);
     END LOOP;
 
-    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'words', 'corpus', 'word_no', 'public');
-    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'words', 'corpus', 'word_no', 'sign_no', word_columns, word_special_col, v_schema, 'public');
-    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'words', 'word_no', word_columns, word_special_col, v_schema, 'public');   
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'words', 'corpus', 'word_no', v_target_schema);
+    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'words', 'corpus', 'word_no', 'sign_no', word_columns, word_special_col, v_source_schema, v_target_schema);
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'words', 'word_no', word_columns, word_special_col, v_source_schema, v_target_schema);   
 
-    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', 'public');
-    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', 'word_no', compound_columns, compound_special_col, v_schema, 'public');
-    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'compounds', 'compound_no', compound_columns, compound_special_col, v_schema, 'public');
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', v_target_schema);
+    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', 'word_no', compound_columns, compound_special_col, v_source_schema, v_target_schema);
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'compounds', 'compound_no', compound_columns, compound_special_col, v_source_schema, v_target_schema);
 
-    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'sections', 'compounds', 'section_no', 'public');
-    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'sections', 'compounds', 'section_no', 'compound_no', section_columns, section_special_col, v_schema, 'public');
-    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'sections', 'section_no', section_columns, section_special_col, v_schema, 'public');
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'sections', 'compounds', 'section_no', v_target_schema);
+    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'sections', 'compounds', 'section_no', 'compound_no', section_columns, section_special_col, v_source_schema, v_target_schema);
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'sections', 'section_no', section_columns, section_special_col, v_source_schema, v_target_schema);
 
-    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'compounds', 'compound_no', '{section_no}', '{f}'::boolean[], v_schema, 'public');
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'compounds', 'compound_no', '{section_no}', '{f}'::boolean[], v_source_schema, v_target_schema);
 
-    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', 'public');
-    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', 'sign_no', line_columns, line_special_col, v_schema, 'public');
-    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'lines', 'line_no', line_columns, line_special_col, v_schema, 'public');
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', v_target_schema);
+    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', 'sign_no', line_columns, line_special_col, v_source_schema, v_target_schema);
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'lines', 'line_no', line_columns, line_special_col, v_source_schema, v_target_schema);
 
-    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'blocks', 'lines', 'block_no', 'public');
-    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'blocks', 'lines', 'block_no', 'line_no', block_columns, block_special_col, v_schema, 'public');
-    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'blocks', 'block_no', block_columns, block_special_col, v_schema, 'public');
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'blocks', 'lines', 'block_no', v_target_schema);
+    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'blocks', 'lines', 'block_no', 'line_no', block_columns, block_special_col, v_source_schema, v_target_schema);
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'blocks', 'block_no', block_columns, block_special_col, v_source_schema, v_target_schema);
 
-    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'surfaces', 'blocks', 'surface_no', 'public');
-    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'surfaces', 'blocks', 'surface_no', 'block_no', surface_columns, surface_special_col, v_schema, 'public');
-    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'surfaces', 'surface_no', surface_columns, surface_special_col, v_schema, 'public');
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'surfaces', 'blocks', 'surface_no', v_target_schema);
+    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'surfaces', 'blocks', 'surface_no', 'block_no', surface_columns, surface_special_col, v_source_schema, v_target_schema);
+    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'surfaces', 'surface_no', surface_columns, surface_special_col, v_source_schema, v_target_schema);
 
     RETURN;
 END;
@@ -480,7 +484,8 @@ $BODY$;
 
 
 CREATE OR REPLACE PROCEDURE edit_logged (
-    v_schema text, 
+    v_source_schema text, 
+    v_target_schema text,
     v_transliteration_id integer,
     v_user_id integer DEFAULT NULL,
     v_internal boolean DEFAULT false
@@ -510,54 +515,9 @@ BEGIN
         val,
         val_old
     FROM
-        edit(v_schema, v_transliteration_id) WITH ORDINALITY;
+        edit(v_source_schema, v_target_schema, v_transliteration_id) WITH ORDINALITY;
 
 END;
-$BODY$;
-
-
-CREATE OR REPLACE PROCEDURE edit_transliteration (
-    v_code text, 
-    v_transliteration_id integer,
-    v_language language,
-    v_stemmed boolean,
-    v_user_id integer DEFAULT NULL,
-    v_internal boolean DEFAULT false
-    )
-    LANGUAGE PLPGSQL
-AS $BODY$
-
-DECLARE
-
-    v_error text;
-
-BEGIN
-
-    CALL parse(v_code, 'editor', v_language, v_stemmed, v_transliteration_id);
-
-    SELECT string_agg(format('"%s" near %s:%s', message, line, col),  E'\n') INTO v_error FROM editor.errors;
-    IF length(v_error) > 0 THEN
-        RAISE EXCEPTION 'cuneiform_parser syntax error:%', v_error;
-    END IF;
-
-    SELECT 
-        string_agg(format('"%s" in %s:%s-%s', value || COALESCE('('||sign_spec||')', ''), line_no_code, start_col_code, stop_col_code),  E'\n') 
-    INTO 
-        v_error 
-    FROM 
-        corpus_parsed_unencoded
-    WHERE 
-        transliteration_id = v_transliteration_id;
-
-    IF length(v_error) > 0 THEN
-        RAISE EXCEPTION 'cuneiform_parser encoding error:%', v_error;
-    END IF;
-
-    CALL edit_logged('editor', v_transliteration_id, v_user_id, v_internal);
-    CALL delete_transliteration(v_transliteration_id, 'editor');
-
-END;
-
 $BODY$;
 
 

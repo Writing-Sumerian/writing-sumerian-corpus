@@ -149,7 +149,7 @@ SELECT
         CASE WHEN count(*) OVER (PARTITION BY ensemble_id) > 1
             THEN COALESCE('('||type||')', '')
             ELSE ''
-        END
+        END AS extended_citation
 FROM
     texts
     LEFT JOIN objects USING (object_id);

@@ -14,6 +14,7 @@ all:
 	make -C modules/search
 	make -C corpus/encode_corpus
 	make -C corpus/parse_corpus
+	make -C corpus/edit_corpus
 	make -C corpus/replace
 	make -C corpus/search_corpus
 	make -C loader
@@ -35,6 +36,7 @@ install:
 	make -C modules/search install
 	make -C corpus/encode_corpus install
 	make -C corpus/parse_corpus install
+	make -C corpus/edit_corpus install
 	make -C corpus/replace install
 	make -C corpus/search_corpus install
 	make -C loader install
