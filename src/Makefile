@@ -12,10 +12,11 @@ all:
 	make -C modules/parser
 	make -C modules/editor
 	make -C modules/search
+	make -C modules/replace
 	make -C corpus/encode_corpus
 	make -C corpus/parse_corpus
 	make -C corpus/edit_corpus
-	make -C corpus/replace
+	make -C corpus/replace_corpus
 	make -C corpus/search_corpus
 	make -C loader
 	make -C test
@@ -34,10 +35,11 @@ install:
 	make -C modules/parser install
 	make -C modules/editor install
 	make -C modules/search install
+	make -C modules/replace install
 	make -C corpus/encode_corpus install
 	make -C corpus/parse_corpus install
 	make -C corpus/edit_corpus install
-	make -C corpus/replace install
+	make -C corpus/replace_corpus install
 	make -C corpus/search_corpus install
 	make -C loader install
 	make -C test install

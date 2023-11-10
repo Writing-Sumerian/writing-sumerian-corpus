@@ -1,0 +1,5 @@
+comment = 'Replace Functions for Cuneiform Database'
+default_version = '0.0.1'
+relocatable = false
+module_pathname = '$libdir/cuneiform_replace_corpus'
+requires = 'cuneiform_database, cuneiform_replace, cuneiform_search_corpus, cuneiform_edit_corpus'

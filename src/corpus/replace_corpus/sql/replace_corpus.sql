@@ -1,3 +1,18 @@
+CREATE SCHEMA replace;
+
+CREATE TABLE replace.corpus (
+    LIKE corpus_replace_type
+);
+
+CREATE TABLE replace.words (LIKE words);
+CREATE TABLE replace.compounds (LIKE compounds);
+
+CREATE VIEW replace.lines AS SELECT * FROM lines;
+CREATE VIEW replace.blocks AS SELECT * FROM blocks;
+CREATE VIEW replace.surfaces AS SELECT * FROM surfaces;
+CREATE VIEW replace.sections AS SELECT * FROM sections;
+
+
 CREATE OR REPLACE PROCEDURE replace (
     search_term text, 
     pattern text,
@@ -101,9 +116,9 @@ BEGIN
             CONTINUE;
         END IF;
         BEGIN
-            INSERT INTO replace.corpus SELECT * FROM corpus_replace(v_transliteration_id, v_pattern_id, v_sign_nos, v_match_nos, v_reference_ids, v_reference_sign_nos, v_reference_match_nos);
-            INSERT INTO replace.words SELECT * FROM words_replace WHERE transliteration_id = v_transliteration_id;
-            INSERT INTO replace.compounds SELECT * FROM compounds_replace WHERE transliteration_id = v_transliteration_id;
+            INSERT INTO replace.corpus SELECT * FROM corpus_replace(v_transliteration_id, v_pattern_id, v_sign_nos, v_match_nos, v_reference_ids, v_reference_sign_nos, v_reference_match_nos, 'public');
+            INSERT INTO replace.words SELECT * FROM words_replace(v_transliteration_id, 'corpus', 'replace', 'public');
+            INSERT INTO replace.compounds SELECT * FROM compounds_replace(v_transliteration_id, 'corpus', 'replace', 'public');
             
             SELECT array_agg(sign_no) INTO v_invalid_sign_nos FROM replace.corpus WHERE transliteration_id = v_transliteration_id AND NOT valid;
             SELECT array_agg(compound_no) INTO  v_invalid_compound_nos 

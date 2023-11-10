@@ -4,7 +4,6 @@ version      		:= $(shell grep default_version $(EXTENSION).control | sed -e "s/
 modules      		:= $(patsubst %.c,%,$(wildcard src/*.c))
 tests        		:= $(wildcard test/sql/*.sql)
 docs         		:= $(wildcard doc/*.md)
-sql         		:= $(sort $(wildcard sql/*.sql))
 
 DATA         		:= build/$(EXTENSION)--$(version).sql
 PG_CONFIG    		:= pg_config
@@ -24,8 +23,12 @@ endif
 
 include $(PGXS)
 
+sql					:= sql/aggregates.sql sql/data_structures.sql sql/corpus_replace.sql sql/words_replace.sql sql/compounds_replace.sql
+
+
 all: build/$(EXTENSION)--$(version).sql
 
-build/$(EXTENSION)--$(version).sql: $(sql)
+build/$(EXTENSION)--$(version).sql:  python/parse.py $(sql)
 	@mkdir -p build
-	@cat $(sql) > build/$(EXTENSION)--$(version).sql
+	@py2plpy python/parse.py build/$(EXTENSION)--$(version).sql
+	@cat $(sql) >> build/$(EXTENSION)--$(version).sql
