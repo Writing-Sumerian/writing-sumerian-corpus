@@ -2,4 +2,4 @@ comment = 'Edit data in Cuneiform Database'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_edit_corpus'
-requires = 'cuneiform_editor,cuneiform_database'
+requires = 'cuneiform_database, cuneiform_editor, cuneiform_parse_corpus'
