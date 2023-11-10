@@ -96,19 +96,19 @@ WHERE
 
 
 
-CREATE OR REPLACE PROCEDURE create_corpus_encoder (name text, source text, key text[])
+CREATE OR REPLACE PROCEDURE create_corpus_encoder (v_name text, v_source text, v_key text[], v_schema text = 'public')
     LANGUAGE PLPGSQL
     AS 
 $BODY$
 DECLARE
-    key_str text;
+    v_key_str text;
 BEGIN
 
-    SELECT string_agg(format('%I', val), ', ') INTO key_str FROM unnest(key) AS _(val);
+    SELECT string_agg(format('%I', val), ', ') INTO v_key_str FROM unnest(v_key) AS _(val);
 
     EXECUTE format(
         $$
-        CREATE OR REPLACE VIEW %3$I AS
+        CREATE OR REPLACE VIEW %3$I.%4$I AS
             WITH normalized_signs AS NOT MATERIALIZED (
                     WITH x AS (
                         SELECT
@@ -117,7 +117,7 @@ BEGIN
                             glyph_no,
                             normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
                         FROM
-                            %2$I
+                            %3$I.%2$I
                             LEFT JOIN LATERAL split_glyphs(value) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
                             LEFT JOIN LATERAL split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
                             LEFT JOIN sign_map ON component = identifier
@@ -144,7 +144,7 @@ BEGIN
                             glyph_no,
                             normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
                         FROM
-                            %2$I
+                            %3$I.%2$I
                             LEFT JOIN LATERAL split_glyphs(sign_spec) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
                             LEFT JOIN LATERAL split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
                             LEFT JOIN sign_map ON component = identifier
@@ -170,7 +170,7 @@ BEGIN
                     sign_variant_id,
                     type
                 FROM
-                    %2$I s
+                    %3$I.%2$I s
                     LEFT JOIN normalized_sign_specs USING (%1$s, sign_no)
                     JOIN values_encoded ON ( normalized_sign_specs.glyphs IS NOT DISTINCT FROM values_encoded.sign_spec AND s.value = values_encoded.value)
                 WHERE 
@@ -183,16 +183,17 @@ BEGIN
                     sign_variant_id,
                     type
                 FROM
-                    %2$I s
+                    %3$I.%2$I s
                     LEFT JOIN normalized_signs USING (%1$s, sign_no)
                     LEFT JOIN normalized_sign_specs USING (%1$s, sign_no)
                     JOIN signs_encoded ON normalized_signs.glyphs = signs_encoded.sign AND normalized_sign_specs.glyphs IS NOT DISTINCT FROM signs_encoded.sign_spec
                 WHERE 
                     s.type = 'sign'
         $$,
-        key_str,
-        source,
-        name
+        v_key_str,
+        v_source,
+        v_schema,
+        v_name
     );
 END
 $BODY$;
