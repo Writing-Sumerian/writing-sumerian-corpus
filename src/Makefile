@@ -13,6 +13,7 @@ all:
 	make -C modules/editor
 	make -C modules/search
 	make -C modules/replace
+	make -C corpus/cite_corpus
 	make -C corpus/encode_corpus
 	make -C corpus/parse_corpus
 	make -C corpus/edit_corpus
@@ -36,6 +37,7 @@ install:
 	make -C modules/editor install
 	make -C modules/search install
 	make -C modules/replace install
+	make -C corpus/cite_corpus install
 	make -C corpus/encode_corpus install
 	make -C corpus/parse_corpus install
 	make -C corpus/edit_corpus install
