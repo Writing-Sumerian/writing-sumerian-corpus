@@ -2,4 +2,4 @@ comment = 'Replace Functions for Cuneiform Database'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_replace'
-requires = 'cuneiform_create_corpus'
+requires = 'cuneiform_create_corpus, cuneiform_encoder'
