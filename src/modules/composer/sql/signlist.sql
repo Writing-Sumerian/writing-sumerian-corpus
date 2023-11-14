@@ -363,3 +363,45 @@ CREATE TRIGGER values_composed_value_variants_trigger
   EXECUTE FUNCTION values_composed_value_variants_trigger_fun();
 
 
+CREATE VIEW characters_composed AS
+SELECT
+    value_id,
+    sign_variant_id,
+    value_code AS character_code,
+    value_html AS character_html
+FROM
+    values_composed
+UNION ALL
+SELECT
+    NULL AS value_id,
+    sign_variant_id,
+    sign_code AS character_code,
+    sign_html AS character_html
+FROM
+    signs_composed;
+
+
+CREATE OR REPLACE FUNCTION placeholder (type SIGN_TYPE)
+    RETURNS text
+    STRICT
+    IMMUTABLE
+    LANGUAGE SQL
+AS $BODY$
+    SELECT
+        '<span class="placeholder">' 
+        ||
+        CASE type
+        WHEN 'number' THEN
+            'N'
+        WHEN 'description' THEN
+            'DESC'
+        WHEN 'punctuation' THEN
+            '|'
+        WHEN 'damage' THEN
+            '…'
+        ELSE
+            'X'
+        END 
+        ||
+        '</span>'
+$BODY$;

@@ -4,9 +4,32 @@ CREATE OR REPLACE PROCEDURE edit_corpus (
     v_user_id integer DEFAULT NULL,
     v_internal boolean DEFAULT false
     )
-    LANGUAGE SQL
+    LANGUAGE PLPGSQL
 AS $BODY$
-    CALL edit_logged(v_source_schema, 'public', v_transliteration_id, v_user_id, v_internal);
+DECLARE
+    v_edit_id       integer;
+BEGIN
+    INSERT INTO edits (transliteration_id, timestamp, user_id, internal) 
+    SELECT 
+        v_transliteration_id, 
+        CURRENT_TIMESTAMP, 
+        v_user_id,
+        v_internal
+    RETURNING edit_id INTO v_edit_id;
+
+    INSERT INTO edit_log 
+    SELECT
+        v_edit_id,
+        ordinality,
+        entry_no,
+        key_col,
+        target,
+        action,
+        val,
+        val_old
+    FROM
+        edit(v_source_schema, 'public', v_transliteration_id) WITH ORDINALITY;
+END;
 $BODY$;
 
 
@@ -47,7 +70,7 @@ BEGIN
         RAISE EXCEPTION 'cuneiform_parser encoding error:%', v_error;
     END IF;
 
-    CALL edit_logged('editor', 'public', v_transliteration_id, v_user_id, v_internal);
+    CALL edit_corpus('editor', v_transliteration_id, v_user_id, v_internal);
     CALL delete_transliteration(v_transliteration_id, 'editor');
 
 END;

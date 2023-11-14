@@ -1,4 +1,4 @@
-EXTENSION    		:= cuneiform_composer
+EXTENSION    		:= cuneiform_log_tables
 
 version      		:= $(shell grep default_version $(EXTENSION).control | sed -e "s/default_version[[:space:]]*=[[:space:]]*'\\([^']*\\)'/\\1/")
 modules      		:= $(patsubst %.c,%,$(wildcard src/*.c))
@@ -23,12 +23,8 @@ endif
 
 include $(PGXS)
 
-
-sql					:= sql/aggregates.sql sql/signlist.sql
-
 all: build/$(EXTENSION)--$(version).sql
 
-build/$(EXTENSION)--$(version).sql:  python/compose_sign.py $(sql)
+build/$(EXTENSION)--$(version).sql: sql/$(EXTENSION).sql
 	@mkdir -p build
-	@py2plpy python/compose_sign.py build/$(EXTENSION)--$(version).sql
-	@cat $(sql) >> build/$(EXTENSION)--$(version).sql
+	@cp sql/$(EXTENSION).sql build/$(EXTENSION)--$(version).sql
