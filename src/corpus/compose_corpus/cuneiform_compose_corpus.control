@@ -1,0 +1,5 @@
+comment = 'Compose abstract cuneiform into human readable text'
+default_version = '0.0.2'
+relocatable = false
+module_pathname = '$libdir/cuneiform_compose_corpus'
+requires = 'cuneiform_database, cuneiform_composer'
