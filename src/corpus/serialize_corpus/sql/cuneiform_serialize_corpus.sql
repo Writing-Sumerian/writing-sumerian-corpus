@@ -1,7 +1,7 @@
 CREATE OR REPLACE VIEW corpus_code AS
 SELECT
     transliteration_id,
-    COALESCE(character_code, CASE WHEN type = 'sign' THEN regexp_replace(custom_value, '^(\(?[A-ZĜḪŘŠṢṬ]+[0-9]*(@([gštvzn]|90|180))*\)?([×\.%&@\+]\(?[A-ZĜḪŘŠṢṬ]+[0-9]*(@([gštvzn]|90|180))*\)?)*)(?=\(|$)', '|\1|') ELSE custom_value END) AS value,
+    COALESCE(character_print, CASE WHEN type = 'sign' THEN regexp_replace(custom_value, '^(\(?[A-ZĜḪŘŠṢṬ]+[0-9]*(@([gštvzn]|90|180))*\)?([×\.%&@\+]\(?[A-ZĜḪŘŠṢṬ]+[0-9]*(@([gštvzn]|90|180))*\)?)*)(?=\(|$)', '|\1|') ELSE custom_value END) AS value,
     NULL AS sign,
     sign_no, 
     word_no, 
@@ -28,13 +28,13 @@ FROM
     LEFT JOIN words USING (transliteration_id, word_no) 
     LEFT JOIN compounds USING (transliteration_id, compound_no) 
     LEFT JOIN sections USING (transliteration_id, section_no)
-    LEFT JOIN characters_composed ON (corpus.sign_variant_id = characters_composed.sign_variant_id AND corpus.value_id IS NOT DISTINCT FROM characters_composed.value_id);
+    LEFT JOIN characters_code ON (corpus.sign_variant_id = characters_code.sign_variant_id AND corpus.value_id IS NOT DISTINCT FROM characters_code.value_id);
 
 
 CREATE VIEW corpus_code_clean AS
 SELECT
     transliteration_id,
-    COALESCE(character_code, placeholder(type)) AS value,
+    COALESCE(character_print, placeholder_code(type)) AS value,
     NULL AS sign,
     sign_no, 
     word_no, 
@@ -48,63 +48,11 @@ FROM
     corpus
     LEFT JOIN words USING (transliteration_id, word_no) 
     LEFT JOIN compounds USING (transliteration_id, compound_no) 
-    LEFT JOIN characters_composed ON (corpus.sign_variant_id = characters_composed.sign_variant_id AND corpus.value_id IS NOT DISTINCT FROM characters_composed.value_id);
-
-
-CREATE OR REPLACE VIEW corpus_html AS
-SELECT
-    transliteration_id,
-    COALESCE(character_html, custom_value) AS value,
-    NULL AS sign, 
-    sign_no, 
-    word_no, 
-    compound_no, 
-    section_no,
-    line_no, 
-    type,
-    indicator_type,
-    phonographic, 
-    stem, 
-    condition, 
-    language, 
-    inverted, 
-    newline,
-    ligature,
-    crits, 
-    comment, 
-    capitalized,
-    pn_type,
-    section_name,
-    compound_comment
-FROM
-    corpus
-    LEFT JOIN words USING (transliteration_id, word_no) 
-    LEFT JOIN compounds USING (transliteration_id, compound_no) 
-    LEFT JOIN sections USING (transliteration_id, section_no)
-    LEFT JOIN characters_composed ON (corpus.sign_variant_id = characters_composed.sign_variant_id AND corpus.value_id IS NOT DISTINCT FROM characters_composed.value_id);
-
-CREATE VIEW corpus_html_clean AS
-SELECT
-    transliteration_id,
-    COALESCE(character_html, placeholder(type)) AS value,
-    NULL AS sign,
-    sign_no, 
-    word_no, 
-    compound_no, 
-    type,
-    indicator_type,
-    phonographic, 
-    stem,
-    language
-FROM
-    corpus
-    LEFT JOIN words USING (transliteration_id, word_no) 
-    LEFT JOIN compounds USING (transliteration_id, compound_no) 
-    LEFT JOIN characters_composed ON (corpus.sign_variant_id = characters_composed.sign_variant_id AND corpus.value_id IS NOT DISTINCT FROM characters_composed.value_id);
+    LEFT JOIN characters_code ON (corpus.sign_variant_id = characters_code.sign_variant_id AND corpus.value_id IS NOT DISTINCT FROM characters_code.value_id);
 
 
 
-CREATE VIEW corpus_code_range AS
+CREATE VIEW corpus_serialized_range AS
 SELECT
     a.transliteration_id,
     RANGE,
@@ -124,27 +72,8 @@ GROUP BY
     a.transliteration_id,
     RANGE;
 
-CREATE VIEW corpus_html_range AS
-SELECT
-    a.transliteration_id,
-    RANGE,
-    cun_agg_html (value, sign, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
-        inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no)  AS content
-FROM (
-    SELECT
-        a.transliteration_id,
-        int4range(a.sign_no, b.sign_no, '[]') AS RANGE
-    FROM
-        corpus a
-        JOIN corpus b ON a.transliteration_id = b.transliteration_id
-            AND a.sign_no <= b.sign_no) a
-JOIN corpus_html ON a.transliteration_id = corpus_html.transliteration_id
-    AND RANGE @> corpus_html.sign_no
-GROUP BY
-    a.transliteration_id,
-    RANGE;
 
-CREATE VIEW corpus_code_lines AS
+CREATE VIEW lines_serialized AS
 SELECT
     a.transliteration_id,
     RANGE,
@@ -164,7 +93,8 @@ GROUP BY
     a.transliteration_id,
     RANGE;
 
-CREATE OR REPLACE VIEW corpus_code_transliterations AS
+
+CREATE OR REPLACE VIEW transliterations_serialized AS
 WITH a AS NOT MATERIALIZED (
 SELECT
     transliteration_id,
@@ -225,16 +155,3 @@ FROM
     RIGHT JOIN surfaces USING (transliteration_id, surface_no)
 GROUP BY
     transliteration_id;
-
-
-CREATE VIEW corpus_html_transliterations AS
-WITH a AS (
-SELECT
-    transliteration_id,
-    cun_agg_html (value, sign, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
-        inverted, ligature, newline, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no) AS lines
-FROM corpus_html
-GROUP BY
-    transliteration_id
-)
-SELECT transliteration_id, line_no-1 AS line_no, line FROM a, LATERAL UNNEST(lines) WITH ORDINALITY AS content(line, line_no);

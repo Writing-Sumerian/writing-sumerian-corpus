@@ -1,5 +1,5 @@
 comment = 'Compose abstract cuneiform into human readable text'
 default_version = '0.0.2'
 relocatable = false
-module_pathname = '$libdir/cuneiform_composer'
-requires = 'cuneiform_signlist, cuneiform_sign_properties'
+module_pathname = '$libdir/cuneiform_print_html'
+requires = 'cuneiform_signlist, cuneiform_print_core'

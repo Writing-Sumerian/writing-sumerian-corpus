@@ -1,4 +1,4 @@
-EXTENSION    		:= cuneiform_composer
+EXTENSION    		:= cuneiform_print_core
 
 version      		:= $(shell grep default_version $(EXTENSION).control | sed -e "s/default_version[[:space:]]*=[[:space:]]*'\\([^']*\\)'/\\1/")
 modules      		:= $(patsubst %.c,%,$(wildcard src/*.c))
@@ -17,18 +17,15 @@ endif
 ifneq ($(docs),)
 	DOCS     		:= $(docs)
 endif
-ifneq ($(modules),)
-	MODULES			:= $(modules)
-endif
+
+MODULE_big			:= $(EXTENSION)
+OBJS				:= src/$(EXTENSION).o
+HEADERS				:= src/$(EXTENSION).h
 
 include $(PGXS)
 
-
-sql					:= sql/aggregates.sql sql/signlist.sql
-
 all: build/$(EXTENSION)--$(version).sql
 
-build/$(EXTENSION)--$(version).sql:  python/compose_sign.py $(sql)
+build/$(EXTENSION)--$(version).sql:  sql/$(EXTENSION).sql
 	@mkdir -p build
-	@py2plpy python/compose_sign.py build/$(EXTENSION)--$(version).sql
-	@cat $(sql) >> build/$(EXTENSION)--$(version).sql
+	@cp sql/$(EXTENSION).sql build/$(EXTENSION)--$(version).sql

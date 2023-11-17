@@ -19,7 +19,7 @@ RETURN;
 END;
 $BODY$;
 
-CREATE OR REPLACE PROCEDURE test.compose_and_parse (v_transliteration_id integer, v_transliteration_id_new integer)
+CREATE OR REPLACE PROCEDURE test.serialze_and_parse (v_transliteration_id integer, v_transliteration_id_new integer)
     LANGUAGE PLPGSQL
     AS 
 $BODY$
@@ -27,7 +27,7 @@ DECLARE
 code text;
 stemmed boolean;
 BEGIN
-SELECT content INTO code FROM corpus_code_transliterations WHERE transliteration_id = v_transliteration_id;
+SELECT content INTO code FROM transliterations_serialized WHERE transliteration_id = v_transliteration_id;
 IF code IS NULL THEN
     RETURN;
 END IF;
@@ -36,7 +36,7 @@ CALL parse(code, 'public', 'sumerian', stemmed, v_transliteration_id_new);
 END;
 $BODY$;
 
-CREATE OR REPLACE FUNCTION manually_test_parser_composer (v_transliteration_id integer)
+CREATE OR REPLACE FUNCTION manually_test_parse_serialize (v_transliteration_id integer)
     RETURNS SETOF text
     VOLATILE
     LANGUAGE PLPGSQL
@@ -46,7 +46,7 @@ DECLARE
 code text;
 stemmed boolean;
 BEGIN
-CALL @extschema@.compose_and_parse(v_transliteration_id, -1);
+CALL @extschema@.serialize_and_parse(v_transliteration_id, -1);
 RETURN QUERY SELECT @extschema@.compare_transliteration (v_transliteration_id, -1);
 CALL delete_transliteration(-1, 'public');
 RETURN;

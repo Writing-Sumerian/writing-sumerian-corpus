@@ -2,4 +2,4 @@ comment = 'Search Functions for Cuneiform Database'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_search_corpus'
-requires = 'cuneiform_database, cuneiform_composer, cuneiform_search'
+requires = 'cuneiform_database, cuneiform_serialize_corpus, cuneiform_search'

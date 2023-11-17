@@ -7,14 +7,17 @@ all:
 	make -C modules/create_corpus
 	make -C modules/actions
 	make -C modules/citation
-	make -C modules/composer
+	make -C modules/print_core
+	make -C modules/serialize
 	make -C modules/encoder
 	make -C modules/parser
 	make -C modules/editor
 	make -C modules/search
 	make -C modules/replace
+	make -C modules/print_html
 	make -C corpus/cite_corpus
-	make -C corpus/compose_corpus
+	make -C corpus/serialize_corpus
+	make -C corpus/print_corpus
 	make -C corpus/encode_corpus
 	make -C corpus/parse_corpus
 	make -C corpus/log_tables
@@ -33,14 +36,17 @@ install:
 	make -C modules/create_corpus install
 	make -C modules/actions install
 	make -C modules/citation install
-	make -C modules/composer install
+	make -C modules/print_core install
+	make -C modules/serialize install
 	make -C modules/encoder install
 	make -C modules/parser install
 	make -C modules/editor install
 	make -C modules/search install
 	make -C modules/replace install
+	make -C modules/print_html install
 	make -C corpus/cite_corpus install
-	make -C corpus/compose_corpus install
+	make -C corpus/serialize_corpus install
+	make -C corpus/print_corpus install
 	make -C corpus/encode_corpus install
 	make -C corpus/parse_corpus install
 	make -C corpus/log_tables install
