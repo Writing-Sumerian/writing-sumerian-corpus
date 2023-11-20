@@ -189,54 +189,23 @@ bool cun_has_char(const char* s, char c, size_t n)
 }
 
 
-
-State* cun_init_state(FunctionCallInfo fcinfo, MemoryContext memcontext, State* state_old)
+State* cun_init_state(MemoryContext memcontext)
 {
     State* state;
-
-    if(PG_ARGISNULL(0))
-    {
-        state = (State*) MemoryContextAllocZero(memcontext, sizeof(State));
-        state->lines = (Datum*) MemoryContextAllocZero(memcontext, 0);
-        state->line_count = 0;
-        state->string = (text*) MemoryContextAllocZero(memcontext, VARHDRSZ + 1000);
-        state->string_capacity = 1000;
-        SET_VARSIZE(state->string, VARHDRSZ);
-        state->compound_comment = (text*) MemoryContextAllocZero(memcontext, VARHDRSZ + 100);
-        state->compound_comment_capacity = 100;
-        SET_VARSIZE(state->compound_comment, VARHDRSZ);
-        state->word_no = -1;
-        state->capitalize = false;
-    }
-    else
-        state = (State*) PG_GETARG_POINTER(0);
-
-    *state_old = *state;
-
-    state->sign_no = PG_GETARG_INT32(ARG_SIGN_NO);
-    state->word_no = PG_GETARG_INT32(ARG_WORD_NO);
-    state->compound_no = PG_GETARG_INT32(ARG_COMPOUND_NO);
-    state->line_no = PG_GETARG_INT32(ARG_LINE_NO);
-    state->section_no = PG_GETARG_INT32(ARG_SECTION_NO);
-    state->section_null = PG_ARGISNULL(ARG_SECTION_NO);
-    state->type = PG_GETARG_OID(ARG_TYPE);
-    state->phonographic = PG_GETARG_BOOL(ARG_PHONOGRAPHIC);
-    state->phonographic_null = PG_ARGISNULL(ARG_PHONOGRAPHIC);
-    state->indicator_type = PG_GETARG_OID(ARG_INDICATOR_TYPE);
-    state->stem = PG_GETARG_BOOL(ARG_STEM);
-    state->stem_null = PG_ARGISNULL(ARG_STEM);
-    state->condition = PG_GETARG_OID(ARG_CONDITION);
-    state->language = PG_GETARG_OID(ARG_LANGUAGE);
-    state->pn_type = PG_GETARG_OID(ARG_PN_TYPE);
-    state->pn_type_null = PG_ARGISNULL(ARG_PN_TYPE);
-    state->highlight = PG_ARGISNULL(ARG_HIGHLIGHT) ? false : PG_GETARG_BOOL(ARG_HIGHLIGHT);
-
-    state->capitalize = state_old->capitalize || (PG_GETARG_BOOL(ARG_CAPITALIZED) && state_old->word_no != state->word_no);
-
-    state->unknown_reading = state->type == ENUM_TYPE.sign;
-
+    state = (State*) MemoryContextAllocZero(memcontext, sizeof(State));
+    state->lines = (Datum*) MemoryContextAllocZero(memcontext, 0);
+    state->line_count = 0;
+    state->string = (text*) MemoryContextAllocZero(memcontext, VARHDRSZ + 1000);
+    state->string_capacity = 1000;
+    SET_VARSIZE(state->string, VARHDRSZ);
+    state->compound_comment = (text*) MemoryContextAllocZero(memcontext, VARHDRSZ + 100);
+    state->compound_comment_capacity = 100;
+    SET_VARSIZE(state->compound_comment, VARHDRSZ);
+    state->word_no = -1;
+    state->capitalize = false;
     return state;
 }
+
 
 
 int cun_get_changes(const State* s1, const State* s2)
@@ -344,4 +313,22 @@ Oid cun_opened_condition_end(const char* s, size_t n)
         --s;
     }
     return ENUM_CONDITION.intact;
+}
+
+
+void cun_copy_compound_comment(const text* compound_comment, State* state)
+{
+    if(compound_comment != NULL)
+    {
+        const int32 size = VARSIZE_ANY_EXHDR(compound_comment);
+        if(state->compound_comment_capacity < size)
+        {
+            state->compound_comment = (text*)repalloc(state->string, size + VARHDRSZ);
+            state->compound_comment_capacity = size;
+        }
+        cun_memcpy(VARDATA_ANY(state->compound_comment), VARDATA_ANY(compound_comment), size);
+        SET_VARSIZE(state->compound_comment, size+VARHDRSZ); 
+    }
+    else
+        SET_VARSIZE(state->compound_comment, VARHDRSZ);
 }

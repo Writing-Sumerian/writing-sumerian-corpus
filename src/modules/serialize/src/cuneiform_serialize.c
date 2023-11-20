@@ -23,12 +23,13 @@ static cunEnumIndicatorType* (*enum_indicator_type)();
 static cunEnumPN* (*enum_pn)();
 static cunEnumLanguage* (*enum_language)();
 
-static State* (*init_state)(FunctionCallInfo fcinfo, MemoryContext memcontext, State* state_old);
+static State* (*init_state)(MemoryContext memcontext);
 static int (*get_changes)(const State* s1, const State* s2);
 
 static Connector (*determine_connector)(const State* s1, const State* s2, bool inverted, bool newline, bool ligature);
 static Oid (*opened_condition_start)(const char* s, size_t n, bool* no_condition);
 static Oid (*opened_condition_end)(const char* s, size_t n);
+static void (*copy_compound_comment)(const text* compound_comment, State* state);
 
 void _PG_init(void)
 {
@@ -49,18 +50,40 @@ void _PG_init(void)
     determine_connector = load_external_function("cuneiform_print_core", "cun_determine_connector", true, NULL);
     opened_condition_start = load_external_function("cuneiform_print_core", "cun_opened_condition_start", true, NULL);
     opened_condition_end = load_external_function("cuneiform_print_core", "cun_opened_condition_end", true, NULL);
+    copy_compound_comment = load_external_function("cuneiform_print_core", "cun_copy_compound_comment", true, NULL);
 };
 
-#define set_enums set_enums_p
-#define cun_memcpy cun_memcpy_p
-#define cun_strcpy cun_strcpy_p
-#define cun_strcmp cun_strcmp_p
-#define cun_capitalize cun_capitalize_p
+#define set_enums               set_enums_p
+#define cun_memcpy              cun_memcpy_p
+#define cun_strcpy              cun_strcpy_p
+#define cun_strcmp              cun_strcmp_p
+#define cun_capitalize          cun_capitalize_p
 
-#define EXP_LINE_SIZE_CODE  100
-#define MAX_EXTRA_SIZE_CODE  50
+#define EXP_LINE_SIZE_CODE      100
+#define MAX_EXTRA_SIZE_CODE     50
 
-
+#define ARG_VALUE                1
+#define ARG_SIGN                 2
+#define ARG_SIGN_NO              3
+#define ARG_WORD_NO              4
+#define ARG_COMPOUND_NO          5
+#define ARG_SECTION_NO           6
+#define ARG_LINE_NO              7
+#define ARG_TYPE                 8
+#define ARG_INDICATOR_TYPE       9
+#define ARG_PHONOGRAPHIC        10      
+#define ARG_STEM                11
+#define ARG_CONDITION           12
+#define ARG_LANGUAGE            13
+#define ARG_INVERTED            14
+#define ARG_NEWLINE             15
+#define ARG_LIGATURE            16
+#define ARG_CRITICS             17
+#define ARG_COMMENT             18
+#define ARG_CAPITALIZED         19
+#define ARG_PN_TYPE             20
+#define ARG_SECTION             21
+#define ARG_COMPOUND_COMMENT    22
 
 
 // Code
@@ -246,7 +269,34 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
 
     set_enums();
 
-    state = init_state(fcinfo, aggcontext, &state_old);
+    if(PG_ARGISNULL(0))
+        state = init_state(aggcontext);
+    else
+        state = (State*) PG_GETARG_POINTER(0);
+
+    state_old = *state;
+
+    state->sign_no = PG_GETARG_INT32(ARG_SIGN_NO);
+    state->word_no = PG_GETARG_INT32(ARG_WORD_NO);
+    state->compound_no = PG_GETARG_INT32(ARG_COMPOUND_NO);
+    state->line_no = PG_GETARG_INT32(ARG_LINE_NO);
+    state->section_no = PG_GETARG_INT32(ARG_SECTION_NO);
+    state->section_null = PG_ARGISNULL(ARG_SECTION_NO);
+    state->type = PG_GETARG_OID(ARG_TYPE);
+    state->phonographic = PG_GETARG_BOOL(ARG_PHONOGRAPHIC);
+    state->phonographic_null = PG_ARGISNULL(ARG_PHONOGRAPHIC);
+    state->indicator_type = PG_GETARG_OID(ARG_INDICATOR_TYPE);
+    state->stem = PG_GETARG_BOOL(ARG_STEM);
+    state->stem_null = PG_ARGISNULL(ARG_STEM);
+    state->condition = PG_GETARG_OID(ARG_CONDITION);
+    state->language = PG_GETARG_OID(ARG_LANGUAGE);
+    state->pn_type = PG_GETARG_OID(ARG_PN_TYPE);
+    state->pn_type_null = PG_ARGISNULL(ARG_PN_TYPE);
+
+    state->capitalize = state_old.capitalize || (PG_GETARG_BOOL(ARG_CAPITALIZED) && state_old.word_no != state->word_no);
+
+    state->unknown_reading = state->type == enum_type()->sign;
+    
 
     const text* value = PG_ARGISNULL(ARG_VALUE) ? NULL : PG_GETARG_TEXT_PP(ARG_VALUE);
     const text* sign = PG_ARGISNULL(ARG_SIGN) ? (state->unknown_reading ? value : NULL) : PG_GETARG_TEXT_PP(ARG_SIGN);
@@ -257,6 +307,7 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
 
     const text* critics = PG_ARGISNULL(ARG_CRITICS) ? NULL : PG_GETARG_TEXT_PP(ARG_CRITICS);
     const text* comment = PG_ARGISNULL(ARG_COMMENT) ? NULL : PG_GETARG_TEXT_PP(ARG_COMMENT);
+    const text* compound_comment = PG_ARGISNULL(ARG_COMPOUND_COMMENT) ? NULL : PG_GETARG_TEXT_PP(ARG_COMPOUND_COMMENT);
 
     const text* section = PG_ARGISNULL(ARG_SECTION) ? NULL : PG_GETARG_TEXT_PP(ARG_SECTION);
 
@@ -331,21 +382,7 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
         *s++ = ')';
     }
 
-    // Save new word comment
-    if(!PG_ARGISNULL(ARG_COMPOUND_COMMENT))
-    {
-        const text* compound_comment = PG_GETARG_TEXT_PP(ARG_COMPOUND_COMMENT);
-        const int32 size = VARSIZE_ANY_EXHDR(compound_comment);
-        if(state->compound_comment_capacity < size)
-        {
-            state->compound_comment = (text*)repalloc(state->string, size + VARHDRSZ);
-            state->compound_comment_capacity = size;
-        }
-        cun_memcpy(VARDATA_ANY(state->compound_comment), VARDATA_ANY(compound_comment), size);
-        SET_VARSIZE(state->compound_comment, size+VARHDRSZ); 
-    }
-    else
-        SET_VARSIZE(state->compound_comment, VARHDRSZ);
+    copy_compound_comment(compound_comment, state);
 
     if(!no_condition)
         state->condition = opened_condition_end(value ? (char*)VARDATA_ANY(value) : NULL, value_size);

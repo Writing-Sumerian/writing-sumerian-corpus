@@ -1,5 +1,5 @@
-#ifndef CUNEIFORM_COMPOSER_CORE_H
-#define CUNEIFORM_COMPOSER_CORE_H
+#ifndef CUNEIFORM_PRINT_CORE_H
+#define CUNEIFORM_PRINT_CORE_H
 
 #include <postgres.h>
 #include <fmgr.h>
@@ -78,29 +78,6 @@ typedef void (*set_enums_t) (
 #define  INDICATOR           2
 #define  CONDITION           1
 
-#define ARG_VALUE                1
-#define ARG_SIGN                 2
-#define ARG_SIGN_NO              3
-#define ARG_WORD_NO              4
-#define ARG_COMPOUND_NO          5
-#define ARG_SECTION_NO           6
-#define ARG_LINE_NO              7
-#define ARG_TYPE                 8
-#define ARG_INDICATOR_TYPE       9
-#define ARG_PHONOGRAPHIC        10      
-#define ARG_STEM                11
-#define ARG_CONDITION           12
-#define ARG_LANGUAGE            13
-#define ARG_INVERTED            14
-#define ARG_NEWLINE             15
-#define ARG_LIGATURE            16
-#define ARG_CRITICS             17
-#define ARG_COMMENT             18
-#define ARG_CAPITALIZED         19
-#define ARG_PN_TYPE             20
-#define ARG_SECTION             21
-#define ARG_COMPOUND_COMMENT    22
-#define ARG_HIGHLIGHT           23
 
 typedef struct State
 {
@@ -171,11 +148,12 @@ extern PGDLLEXPORT int cun_strcmp(const char* s1, const char* s2);
 extern PGDLLEXPORT void cun_capitalize(char* s);
 extern PGDLLEXPORT bool cun_has_char(const char* s, char c, size_t n);
 
-extern State* cun_init_state(FunctionCallInfo fcinfo, MemoryContext memcontext, State* state_old);
+extern State* cun_init_state(MemoryContext memcontext);
 extern int cun_get_changes(const State* s1, const State* s2);
 
 extern Connector cun_determine_connector(const State* s1, const State* s2, bool inverted, bool newline, bool ligature);
 extern Oid cun_opened_condition_start(const char* s, size_t n, bool* no_condition);
 extern Oid cun_opened_condition_end(const char* s, size_t n);
+extern void cun_copy_compound_comment(const text* compound_comment, State* state);
 
-#endif // CUNEIFORM_COMPOSER_CORE_H
+#endif // CUNEIFORM_PRINT_CORE_H

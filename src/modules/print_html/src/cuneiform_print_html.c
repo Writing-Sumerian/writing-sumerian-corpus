@@ -24,12 +24,13 @@ static cunEnumIndicatorType* (*enum_indicator_type)();
 static cunEnumPN* (*enum_pn)();
 static cunEnumLanguage* (*enum_language)();
 
-static State* (*init_state)(FunctionCallInfo fcinfo, MemoryContext memcontext, State* state_old);
+static State* (*init_state)(MemoryContext memcontext);
 static int (*get_changes)(const State* s1, const State* s2);
 
 static Connector (*determine_connector)(const State* s1, const State* s2, bool inverted, bool newline, bool ligature);
 static Oid (*opened_condition_start)(const char* s, size_t n, bool* no_condition);
 static Oid (*opened_condition_end)(const char* s, size_t n);
+static void (*copy_compound_comment)(const text* compound_comment, State* state);
 
 void _PG_init(void)
 {
@@ -50,6 +51,7 @@ void _PG_init(void)
     determine_connector = load_external_function("cuneiform_print_core", "cun_determine_connector", true, NULL);
     opened_condition_start = load_external_function("cuneiform_print_core", "cun_opened_condition_start", true, NULL);
     opened_condition_end = load_external_function("cuneiform_print_core", "cun_opened_condition_end", true, NULL);
+    copy_compound_comment = load_external_function("cuneiform_print_core", "cun_copy_compound_comment", true, NULL);
 };
 
 #define set_enums set_enums_p
@@ -60,6 +62,30 @@ void _PG_init(void)
 
 #define EXP_LINE_SIZE_HTML 1000
 #define MAX_EXTRA_SIZE_HTML 200
+
+#define ARG_VALUE                1
+#define ARG_SIGN                 2
+#define ARG_SIGN_NO              3
+#define ARG_WORD_NO              4
+#define ARG_COMPOUND_NO          5
+#define ARG_SECTION_NO           6
+#define ARG_LINE_NO              7
+#define ARG_TYPE                 8
+#define ARG_INDICATOR_TYPE       9
+#define ARG_PHONOGRAPHIC        10      
+#define ARG_STEM                11
+#define ARG_CONDITION           12
+#define ARG_LANGUAGE            13
+#define ARG_INVERTED            14
+#define ARG_NEWLINE             15
+#define ARG_LIGATURE            16
+#define ARG_CRITICS             17
+#define ARG_COMMENT             18
+#define ARG_CAPITALIZED         19
+#define ARG_PN_TYPE             20
+#define ARG_SECTION             21
+#define ARG_COMPOUND_COMMENT    22
+#define ARG_HIGHLIGHT           23
 
 
 // HTML
@@ -288,7 +314,34 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
     set_enums();
 
-    state = init_state(fcinfo, aggcontext, &state_old);
+    if(PG_ARGISNULL(0))
+        state = init_state(aggcontext);
+    else
+        state = (State*) PG_GETARG_POINTER(0);
+
+    state_old = *state;
+
+    state->sign_no = PG_GETARG_INT32(ARG_SIGN_NO);
+    state->word_no = PG_GETARG_INT32(ARG_WORD_NO);
+    state->compound_no = PG_GETARG_INT32(ARG_COMPOUND_NO);
+    state->line_no = PG_GETARG_INT32(ARG_LINE_NO);
+    state->section_no = PG_GETARG_INT32(ARG_SECTION_NO);
+    state->section_null = PG_ARGISNULL(ARG_SECTION_NO);
+    state->type = PG_GETARG_OID(ARG_TYPE);
+    state->phonographic = PG_GETARG_BOOL(ARG_PHONOGRAPHIC);
+    state->phonographic_null = PG_ARGISNULL(ARG_PHONOGRAPHIC);
+    state->indicator_type = PG_GETARG_OID(ARG_INDICATOR_TYPE);
+    state->stem = PG_GETARG_BOOL(ARG_STEM);
+    state->stem_null = PG_ARGISNULL(ARG_STEM);
+    state->condition = PG_GETARG_OID(ARG_CONDITION);
+    state->language = PG_GETARG_OID(ARG_LANGUAGE);
+    state->pn_type = PG_GETARG_OID(ARG_PN_TYPE);
+    state->pn_type_null = PG_ARGISNULL(ARG_PN_TYPE);
+    state->highlight = PG_ARGISNULL(ARG_HIGHLIGHT) ? false : PG_GETARG_BOOL(ARG_HIGHLIGHT);
+
+    state->capitalize = state_old.capitalize || (PG_GETARG_BOOL(ARG_CAPITALIZED) && state_old.word_no != state->word_no);
+
+    state->unknown_reading = state->type == enum_type()->sign;
 
     const text* value = PG_ARGISNULL(ARG_VALUE) ? NULL : PG_GETARG_TEXT_PP(ARG_VALUE);
     const text* sign = PG_ARGISNULL(ARG_SIGN) ? NULL : PG_GETARG_TEXT_PP(ARG_SIGN);
@@ -299,6 +352,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
     const text* critics = PG_ARGISNULL(ARG_CRITICS) ? NULL : PG_GETARG_TEXT_PP(ARG_CRITICS);
     const text* comment = PG_ARGISNULL(ARG_COMMENT) ? NULL : PG_GETARG_TEXT_PP(ARG_COMMENT);
+    const text* compound_comment = PG_ARGISNULL(ARG_COMPOUND_COMMENT) ? NULL : PG_GETARG_TEXT_PP(ARG_COMPOUND_COMMENT);
 
     const text* section = PG_ARGISNULL(ARG_SECTION) ? NULL : PG_GETARG_TEXT_PP(ARG_SECTION);
 
@@ -400,21 +454,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         s = cun_strcpy(s, "</span>");
     }
 
-    // Save new word comment
-    if(!PG_ARGISNULL(ARG_COMPOUND_COMMENT))
-    {
-        const text* compound_comment = PG_GETARG_TEXT_PP(ARG_COMPOUND_COMMENT);
-        const int32 size = VARSIZE_ANY_EXHDR(compound_comment);
-        if(state->compound_comment_capacity < size)
-        {
-            state->compound_comment = (text*)repalloc(state->string, size + VARHDRSZ);
-            state->compound_comment_capacity = size;
-        }
-        cun_memcpy(VARDATA_ANY(state->compound_comment), VARDATA_ANY(compound_comment), size);
-        SET_VARSIZE(state->compound_comment, size+VARHDRSZ); 
-    }
-    else
-        SET_VARSIZE(state->compound_comment, VARHDRSZ);
+    copy_compound_comment(compound_comment, state);
 
     if(!no_condition)
         state->condition = opened_condition_end(value ? (char*)VARDATA_ANY(value) : NULL, value_size);
@@ -455,174 +495,4 @@ Datum cuneiform_cun_agg_html_finalfunc(PG_FUNCTION_ARGS)
     ArrayType* a = construct_array(lines, state->line_count+1, 25, -1, false, 'i');
 
     PG_RETURN_ARRAYTYPE_P(a);
-}
-
-
-
-// Code
-
-static char* open_code(char* s, const State* s1, State* s2)
-{
-    if((s1 != NULL && s1->language != s2->language) || (s1 == NULL && s2->language != enum_language()->sumerian))
-    {
-        if(s2->language == enum_language()->akkadian)
-            s = cun_strcpy(s, "%a ");
-        else if(s2->language == enum_language()->eblaite)
-            s = cun_strcpy(s, "%e ");
-        else if(s2->language == enum_language()->hittite)
-            s = cun_strcpy(s, "%h ");
-        else if(s2->language == enum_language()->sumerian)
-            s = cun_strcpy(s, "%s ");
-    }
-    if(!s2->pn_type_null && (s1 == NULL || s1->pn_type != s2->pn_type || s2->pn_type_null || s1->compound_no != s2->compound_no))
-    {
-        if(s2->pn_type == enum_pn()->person)
-            s = cun_strcpy(s, "%person ");
-        else if(s2->pn_type == enum_pn()->god)
-            s = cun_strcpy(s, "%god ");
-        else if(s2->pn_type == enum_pn()->place)
-            s = cun_strcpy(s, "%place ");
-        else if(s2->pn_type == enum_pn()->water)
-            s = cun_strcpy(s, "%water ");
-        else if(s2->pn_type == enum_pn()->field)
-            s = cun_strcpy(s, "%field ");
-        else if(s2->pn_type == enum_pn()->temple)
-            s = cun_strcpy(s, "%temple ");
-        else if(s2->pn_type == enum_pn()->month)
-            s = cun_strcpy(s, "%month ");
-        else if(s2->pn_type == enum_pn()->object)
-            s = cun_strcpy(s, "%object ");
-        else if(s2->pn_type == enum_pn()->ethnicity)
-            s = cun_strcpy(s, "%ethnicity ");
-    }
-
-    if(s1 != NULL && !s1->stem && s2->stem && !s1->stem_null && !s2->stem_null && s1->word_no == s2->word_no)
-        *s++ = ';';
-
-    if(!s2->phonographic_null && !s2->phonographic && s2->indicator_type == enum_indicator_type()->none && (s1 == NULL || s1->phonographic_null || s1->phonographic || s1->indicator_type != enum_indicator_type()->none || s1->line_no != s2->line_no))
-        *s++ = '_';
-
-    if(s1 == NULL || s1->condition != s2->condition || s1->line_no != s2->line_no)
-    {
-        if(s2->condition == enum_condition()->lost)
-            s = cun_strcpy(s, "[");
-        else if(s2->condition == enum_condition()->damaged)
-            s = cun_strcpy(s, "⸢");
-        else if(s2->condition == enum_condition()->inserted)
-            s = cun_strcpy(s, "‹");
-        else if(s2->condition == enum_condition()->deleted)
-            s = cun_strcpy(s, "«");
-    }
-
-    if(s2->capitalize) {
-        *s++ = '&';
-        s2->capitalize = false;
-    }
-
-    if(s2->indicator_type != enum_indicator_type()->none && (s1 == NULL || s1->indicator_type != s2->indicator_type || s1->phonographic != s2->phonographic || s1->phonographic_null || s1->line_no != s2->line_no))
-    {
-        if(s2->phonographic)
-            *s++ = '<';
-        else 
-            *s++ = '{';
-    }
-
-    return s;
-}
-
-
-static char* close_code(char* s, const State* s1, const State* s2)
-{
-    if(s1->indicator_type != enum_indicator_type()->none && (s2 == NULL || s1->indicator_type != s2->indicator_type || s1->phonographic != s2->phonographic || s2->phonographic_null || s1->line_no != s2->line_no))
-    {
-        if(s1->phonographic)
-            *s++ = '>';
-        else 
-            *s++ = '}';
-    }
-
-    if((s2 == NULL || s1->compound_no != s2->compound_no) && s1->compound_comment && VARSIZE_ANY_EXHDR(s1->compound_comment))
-    {
-        *s++ = ' ';
-        *s++ = '(';
-        s = cun_memcpy(s, VARDATA_ANY(s1->compound_comment), VARSIZE_ANY_EXHDR(s1->compound_comment));
-        *s++ = ')';
-    }
-
-    if(s2 == NULL || s1->condition != s2->condition || s1->line_no != s2->line_no)
-    {
-        if(s1->condition == enum_condition()->lost)
-            s = cun_strcpy(s, "]");
-        else if(s1->condition == enum_condition()->damaged)
-            s = cun_strcpy(s, "⸣");
-        else if(s1->condition == enum_condition()->inserted)
-            s = cun_strcpy(s, "›");
-        else if(s1->condition == enum_condition()->deleted)
-            s = cun_strcpy(s, "»");
-    }
-
-    if(!s1->phonographic_null && !s1->phonographic && s1->indicator_type == enum_indicator_type()->none && (s2 == NULL || s2->phonographic_null || s2->phonographic || s2->indicator_type != enum_indicator_type()->none || s1->line_no != s2->line_no))
-        *s++ = '_';
-
-    if(s2 != NULL && s1->stem && !s2->stem && !s1->stem_null && !s2->stem_null && s1->word_no == s2->word_no)
-        *s++ = ';';
-        
-    return s;
-}
-
-
-static char* write_simple_connector_code(char* s, int connector)
-{
-    if(connector == SEP_INDICATOR_L || connector == SEP_DOT || connector == SEP_NUMBER)
-        *s++ = '.';
-    else if(connector == SEP_INDICATOR_P || connector == SEP_DASH)
-        *s++ = '-';
-    else if(connector == SEP_WORD)
-        s = cun_strcpy(s, "--");
-    else if(connector == SEP_COMPOUND)
-        *s++ = ' ';
-    return s;
-}
-
-static char* write_modified_connector_code(char* s, const Connector c)
-{   
-    if(c.ellipsis)
-    {
-        s = write_simple_connector_code(s, c.connector);
-        s = cun_strcpy(s, "…");
-        s = write_simple_connector_code(s, c.connector);
-    }
-    else if(c.modifier == SEP_EXT_LIGATURE)
-    {
-        if(c.connector == SEP_WORD)
-            s = write_simple_connector_code(s, c.connector);
-        *s++ = '+';
-    }
-    else if(c.modifier == SEP_EXT_LINEBREAK)
-    {
-        if(c.connector == SEP_INDICATOR_L || c.connector == SEP_INDICATOR_P || c.connector == SEP_INDICATOR_M || c.connector == SEP_INDICATOR_0)
-            *s++ = '~';
-        else if(c.connector != SEP_COMPOUND)
-            s = write_simple_connector_code(s, c.connector);
-    }
-    else if(c.modifier == SEP_EXT_INVERSION)
-    {
-        if(c.connector == SEP_WORD)
-            s = cun_strcpy(s, "--:");
-        else if(c.connector == SEP_COMPOUND)
-            s = cun_strcpy(s, " : ");
-        else
-            *s++ = ':';
-    }
-    else if(c.modifier == SEP_EXT_NEWLINE)
-    {
-        s = write_simple_connector_code(s, c.connector);
-        *s++ = '/';
-        if(c.connector == SEP_COMPOUND)
-            *s++ = ' ';
-    }
-    else
-        s = write_simple_connector_code(s, c.connector);
-
-    return s;
 }
