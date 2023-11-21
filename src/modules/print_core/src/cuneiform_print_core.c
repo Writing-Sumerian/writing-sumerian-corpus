@@ -206,7 +206,16 @@ State* cun_init_state(MemoryContext memcontext)
     return state;
 }
 
-
+char *cun_add_line(const int32 size, State *state, MemoryContext memcontext)
+{
+    state->line_count += 1;
+    state->lines = (Datum*) repalloc(state->lines, state->line_count * sizeof(Datum));
+    state->lines[state->line_count-1] = PointerGetDatum(state->string);
+    state->string = (text*) MemoryContextAllocZero(memcontext, size + VARHDRSZ);
+    state->string_capacity = size;
+    SET_VARSIZE(state->string, VARHDRSZ);
+    return VARDATA(state->string);
+}
 
 int cun_get_changes(const State* s1, const State* s2)
 {

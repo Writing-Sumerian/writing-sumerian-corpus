@@ -159,12 +159,14 @@ extern int cun_compare_next(const char *s1, const char *s2);
 extern void cun_capitalize(char *s);
 
 typedef State *(*cun_init_state_t)(MemoryContext memcontext);
+typedef char *(*cun_add_line_t)(int32 size, State *state, MemoryContext memcontext);
 typedef int (*cun_get_changes_t)(const State *s1, const State *s2);
 typedef Connector (*cun_determine_connector_t)(const State *s1, const State *s2, bool inverted, bool newline, bool ligature);
 typedef Oid (*cun_opened_condition_start_t)(const char *s, size_t n, bool *no_condition);
 typedef Oid (*cun_opened_condition_end_t)(const char *s, size_t n);
 typedef void (*cun_copy_compound_comment_t)(const text *compound_comment, State *state);
 extern State *cun_init_state(MemoryContext memcontext);
+extern char *cun_add_line(int32 size, State *state, MemoryContext memcontext);
 extern int cun_get_changes(const State *s1, const State *s2);
 extern Connector cun_determine_connector(const State *s1, const State *s2, bool inverted, bool newline, bool ligature);
 extern Oid cun_opened_condition_start(const char *s, size_t n, bool *no_condition);

@@ -24,6 +24,7 @@ static cun_enum_pn_t enum_pn;
 static cun_enum_language_t enum_language;
 
 static cun_init_state_t init_state;
+static cun_add_line_t add_line;
 static cun_get_changes_t get_changes;
 
 static cun_determine_connector_t determine_connector;
@@ -46,6 +47,7 @@ void _PG_init(void)
     enum_language = (cun_enum_language_t)load_external_function("cuneiform_print_core", "cun_enum_language", true, NULL);
 
     init_state = (cun_init_state_t)load_external_function("cuneiform_print_core", "cun_init_state", true, NULL);
+    add_line = (cun_add_line_t)load_external_function("cuneiform_print_core", "cun_add_line", true, NULL);
     get_changes = (cun_get_changes_t)load_external_function("cuneiform_print_core", "cun_get_changes", true, NULL);
     determine_connector = (cun_determine_connector_t)load_external_function("cuneiform_print_core", "cun_determine_connector", true, NULL);
     opened_condition_start = (cun_opened_condition_start_t)load_external_function("cuneiform_print_core", "cun_opened_condition_start", true, NULL);
@@ -392,15 +394,8 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         
         if (state_old.line_no != state->line_no)    // Newline
         {
-            state->line_count += 1;
-            state->lines = (Datum*) repalloc(state->lines, state->line_count * sizeof(Datum));
             SET_VARSIZE(state->string, s-VARDATA(state->string)+VARHDRSZ);
-            state->lines[state->line_count-1] = PointerGetDatum(state->string);
-
-            state->string = (text*) MemoryContextAllocZero(aggcontext, size + EXP_LINE_SIZE_HTML + VARHDRSZ);
-            state->string_capacity = size + EXP_LINE_SIZE_HTML;
-            SET_VARSIZE(state->string, VARHDRSZ);
-            s = VARDATA(state->string);
+            s = add_line(size + EXP_LINE_SIZE_HTML, state, aggcontext);
         }
     }
     else
