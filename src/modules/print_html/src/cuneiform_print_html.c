@@ -34,23 +34,23 @@ static cun_copy_compound_comment_t copy_compound_comment;
 void _PG_init(void)
 {
     set_enums = (cun_set_enums_t)load_external_function("cuneiform_print_core", "cun_set_enums", true, NULL);
-    copy_n = (cun_copy_n_t)("cuneiform_print_core", "cun_copy_n", true, NULL);
+    copy_n = (cun_copy_n_t)load_external_function("cuneiform_print_core", "cun_copy_n", true, NULL);
     copy = (cun_copy_t)load_external_function("cuneiform_print_core", "cun_copy", true, NULL);
-    compare_next = (cun_compare_next_t)("cuneiform_print_core", "cun_compare_next", true, NULL);
-    capitalize = (cun_capitalize_t)("cuneiform_print_core", "cun_capitalize", true, NULL);
+    compare_next = (cun_compare_next_t)load_external_function("cuneiform_print_core", "cun_compare_next", true, NULL);
+    capitalize = (cun_capitalize_t)load_external_function("cuneiform_print_core", "cun_capitalize", true, NULL);
 
     enum_type = (cun_enum_type_t)load_external_function("cuneiform_print_core", "cun_enum_type", true, NULL);
     enum_condition = (cun_enum_condition_t)load_external_function("cuneiform_print_core", "cun_enum_condition", true, NULL);
     enum_indicator_type = (cun_enum_indicator_type_t)load_external_function("cuneiform_print_core", "cun_enum_indicator_type", true, NULL);
-    enum_pn = (cun_enum_pn_t)("cuneiform_print_core", "cun_enum_pn", true, NULL);
+    enum_pn = (cun_enum_pn_t)load_external_function("cuneiform_print_core", "cun_enum_pn", true, NULL);
     enum_language = (cun_enum_language_t)load_external_function("cuneiform_print_core", "cun_enum_language", true, NULL);
 
-    init_state = (cun_init_state_t)("cuneiform_print_core", "cun_init_state", true, NULL);
-    get_changes = (cun_get_changes_t)("cuneiform_print_core", "cun_get_changes", true, NULL);
-    determine_connector = (cun_determine_connector_t)("cuneiform_print_core", "cun_determine_connector", true, NULL);
-    opened_condition_start = (cun_opened_condition_start_t)("cuneiform_print_core", "cun_opened_condition_start", true, NULL);
-    opened_condition_end = (cun_opened_condition_end_t)("cuneiform_print_core", "cun_opened_condition_end", true, NULL);
-    copy_compound_comment = (cun_copy_compound_comment_t)("cuneiform_print_core", "cun_copy_compound_comment", true, NULL);
+    init_state = (cun_init_state_t)load_external_function("cuneiform_print_core", "cun_init_state", true, NULL);
+    get_changes = (cun_get_changes_t)load_external_function("cuneiform_print_core", "cun_get_changes", true, NULL);
+    determine_connector = (cun_determine_connector_t)load_external_function("cuneiform_print_core", "cun_determine_connector", true, NULL);
+    opened_condition_start = (cun_opened_condition_start_t)load_external_function("cuneiform_print_core", "cun_opened_condition_start", true, NULL);
+    opened_condition_end = (cun_opened_condition_end_t)load_external_function("cuneiform_print_core", "cun_opened_condition_end", true, NULL);
+    copy_compound_comment = (cun_copy_compound_comment_t)load_external_function("cuneiform_print_core", "cun_copy_compound_comment", true, NULL);
 };
 
 
