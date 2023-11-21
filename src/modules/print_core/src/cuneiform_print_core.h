@@ -134,26 +134,41 @@ typedef struct Connector
     bool ellipsis;
 } Connector;
 
-extern PGDLLEXPORT void set_enums();
-extern PGDLLEXPORT cunEnumType *cun_enum_type();
-extern PGDLLEXPORT cunEnumIndicatorType *cun_enum_indicator_type();
-extern PGDLLEXPORT cunEnumLanguage *cun_enum_language();
-extern PGDLLEXPORT cunEnumCondition *cun_enum_condition();
-extern PGDLLEXPORT cunEnumVariantType *cun_enum_variant_type();
-extern PGDLLEXPORT cunEnumPN *cun_enum_pn();
+typedef void (*cun_set_enums_t)();
+typedef cunEnumType *(*cun_enum_type_t)();
+typedef cunEnumIndicatorType *(*cun_enum_indicator_type_t)();
+typedef cunEnumLanguage *(*cun_enum_language_t)();
+typedef cunEnumCondition *(*cun_enum_condition_t)();
+typedef cunEnumVariantType *(*cun_enum_variant_type_t)();
+typedef cunEnumPN *(*cun_enum_pn_t)();
+extern void cun_set_enums();
+extern cunEnumType *cun_enum_type();
+extern cunEnumIndicatorType *cun_enum_indicator_type();
+extern cunEnumLanguage *cun_enum_language();
+extern cunEnumCondition *cun_enum_condition();
+extern cunEnumVariantType *cun_enum_variant_type();
+extern cunEnumPN *cun_enum_pn();
 
-extern PGDLLEXPORT char* cun_memcpy(char* s1, const char* s2, size_t n);
-extern PGDLLEXPORT char* cun_strcpy(char* s1, const char* s2);
-extern PGDLLEXPORT int cun_strcmp(const char* s1, const char* s2);
-extern PGDLLEXPORT void cun_capitalize(char* s);
-extern PGDLLEXPORT bool cun_has_char(const char* s, char c, size_t n);
+typedef char *(*cun_copy_n_t)(char *s1, const char *s2, size_t n);
+typedef char *(*cun_copy_t)(char *s1, const char *s2);
+typedef int (*cun_compare_next_t)(const char *s1, const char *s2);
+typedef void (*cun_capitalize_t)(char *s);
+extern char *cun_copy_n(char *s1, const char *s2, size_t n);
+extern char *cun_copy(char *s1, const char *s2);
+extern int cun_compare_next(const char *s1, const char *s2);
+extern void cun_capitalize(char *s);
 
-extern State* cun_init_state(MemoryContext memcontext);
-extern int cun_get_changes(const State* s1, const State* s2);
-
-extern Connector cun_determine_connector(const State* s1, const State* s2, bool inverted, bool newline, bool ligature);
-extern Oid cun_opened_condition_start(const char* s, size_t n, bool* no_condition);
-extern Oid cun_opened_condition_end(const char* s, size_t n);
-extern void cun_copy_compound_comment(const text* compound_comment, State* state);
+typedef State *(*cun_init_state_t)(MemoryContext memcontext);
+typedef int (*cun_get_changes_t)(const State *s1, const State *s2);
+typedef Connector (*cun_determine_connector_t)(const State *s1, const State *s2, bool inverted, bool newline, bool ligature);
+typedef Oid (*cun_opened_condition_start_t)(const char *s, size_t n, bool *no_condition);
+typedef Oid (*cun_opened_condition_end_t)(const char *s, size_t n);
+typedef void (*cun_copy_compound_comment_t)(const text *compound_comment, State *state);
+extern State *cun_init_state(MemoryContext memcontext);
+extern int cun_get_changes(const State *s1, const State *s2);
+extern Connector cun_determine_connector(const State *s1, const State *s2, bool inverted, bool newline, bool ligature);
+extern Oid cun_opened_condition_start(const char *s, size_t n, bool *no_condition);
+extern Oid cun_opened_condition_end(const char *s, size_t n);
+extern void cun_copy_compound_comment(const text *compound_comment, State *state);
 
 #endif // CUNEIFORM_PRINT_CORE_H

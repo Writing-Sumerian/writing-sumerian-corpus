@@ -11,53 +11,48 @@
 #include <tcop/pquery.h>
 
 
-static void (*set_enums_p)();
-static char* (*cun_memcpy_p)(char* s1, const char* s2, size_t n);
-static char* (*cun_strcpy_p)(char* s1, const char* s2);
-static int (*cun_strcmp_p)(const char* s1, const char* s2);
-static void (*cun_capitalize_p)(char* s);
+static cun_set_enums_t set_enums;
+static cun_copy_n_t copy_n;
+static cun_copy_t copy;
+static cun_compare_next_t compare_next;
+static cun_capitalize_t capitalize;
 
-static cunEnumType* (*enum_type)();
-static cunEnumCondition* (*enum_condition)();
-static cunEnumIndicatorType* (*enum_indicator_type)();
-static cunEnumPN* (*enum_pn)();
-static cunEnumLanguage* (*enum_language)();
+static cun_enum_type_t enum_type;
+static cun_enum_condition_t enum_condition;
+static cun_enum_indicator_type_t enum_indicator_type;
+static cun_enum_pn_t enum_pn;
+static cun_enum_language_t enum_language;
 
-static State* (*init_state)(MemoryContext memcontext);
-static int (*get_changes)(const State* s1, const State* s2);
+static cun_init_state_t init_state;
+static cun_get_changes_t get_changes;
 
-static Connector (*determine_connector)(const State* s1, const State* s2, bool inverted, bool newline, bool ligature);
-static Oid (*opened_condition_start)(const char* s, size_t n, bool* no_condition);
-static Oid (*opened_condition_end)(const char* s, size_t n);
-static void (*copy_compound_comment)(const text* compound_comment, State* state);
+static cun_determine_connector_t determine_connector;
+static cun_opened_condition_start_t opened_condition_start;
+static cun_opened_condition_end_t opened_condition_end;
+static cun_copy_compound_comment_t copy_compound_comment;
 
 void _PG_init(void)
 {
-    set_enums_p = load_external_function("cuneiform_print_core", "set_enums", true, NULL);
-    cun_memcpy_p = load_external_function("cuneiform_print_core", "cun_memcpy", true, NULL);
-    cun_strcpy_p = load_external_function("cuneiform_print_core", "cun_strcpy", true, NULL);
-    cun_strcmp_p = load_external_function("cuneiform_print_core", "cun_strcmp", true, NULL);
-    cun_capitalize_p = load_external_function("cuneiform_print_core", "cun_capitalize", true, NULL);
+    set_enums = (cun_set_enums_t)load_external_function("cuneiform_print_core", "cun_set_enums", true, NULL);
+    copy_n = (cun_copy_n_t)("cuneiform_print_core", "cun_copy_n", true, NULL);
+    copy = (cun_copy_t)load_external_function("cuneiform_print_core", "cun_copy", true, NULL);
+    compare_next = (cun_compare_next_t)("cuneiform_print_core", "cun_compare_next", true, NULL);
+    capitalize = (cun_capitalize_t)("cuneiform_print_core", "cun_capitalize", true, NULL);
 
-    enum_type = load_external_function("cuneiform_print_core", "cun_enum_type", true, NULL);
-    enum_condition = load_external_function("cuneiform_print_core", "cun_enum_condition", true, NULL);
-    enum_indicator_type = load_external_function("cuneiform_print_core", "cun_enum_indicator_type", true, NULL);
-    enum_pn = load_external_function("cuneiform_print_core", "cun_enum_pn", true, NULL);
-    enum_language = load_external_function("cuneiform_print_core", "cun_enum_language", true, NULL);
+    enum_type = (cun_enum_type_t)load_external_function("cuneiform_print_core", "cun_enum_type", true, NULL);
+    enum_condition = (cun_enum_condition_t)load_external_function("cuneiform_print_core", "cun_enum_condition", true, NULL);
+    enum_indicator_type = (cun_enum_indicator_type_t)load_external_function("cuneiform_print_core", "cun_enum_indicator_type", true, NULL);
+    enum_pn = (cun_enum_pn_t)("cuneiform_print_core", "cun_enum_pn", true, NULL);
+    enum_language = (cun_enum_language_t)load_external_function("cuneiform_print_core", "cun_enum_language", true, NULL);
 
-    init_state = load_external_function("cuneiform_print_core", "cun_init_state", true, NULL);
-    get_changes = load_external_function("cuneiform_print_core", "cun_get_changes", true, NULL);
-    determine_connector = load_external_function("cuneiform_print_core", "cun_determine_connector", true, NULL);
-    opened_condition_start = load_external_function("cuneiform_print_core", "cun_opened_condition_start", true, NULL);
-    opened_condition_end = load_external_function("cuneiform_print_core", "cun_opened_condition_end", true, NULL);
-    copy_compound_comment = load_external_function("cuneiform_print_core", "cun_copy_compound_comment", true, NULL);
+    init_state = (cun_init_state_t)("cuneiform_print_core", "cun_init_state", true, NULL);
+    get_changes = (cun_get_changes_t)("cuneiform_print_core", "cun_get_changes", true, NULL);
+    determine_connector = (cun_determine_connector_t)("cuneiform_print_core", "cun_determine_connector", true, NULL);
+    opened_condition_start = (cun_opened_condition_start_t)("cuneiform_print_core", "cun_opened_condition_start", true, NULL);
+    opened_condition_end = (cun_opened_condition_end_t)("cuneiform_print_core", "cun_opened_condition_end", true, NULL);
+    copy_compound_comment = (cun_copy_compound_comment_t)("cuneiform_print_core", "cun_copy_compound_comment", true, NULL);
 };
 
-#define set_enums               set_enums_p
-#define cun_memcpy              cun_memcpy_p
-#define cun_strcpy              cun_strcpy_p
-#define cun_strcmp              cun_strcmp_p
-#define cun_capitalize          cun_capitalize_p
 
 #define EXP_LINE_SIZE_CODE      100
 #define MAX_EXTRA_SIZE_CODE     50
@@ -93,34 +88,34 @@ static char* open_code(char* s, const State* s1, State* s2)
     if((s1 != NULL && s1->language != s2->language) || (s1 == NULL && s2->language != enum_language()->sumerian))
     {
         if(s2->language == enum_language()->akkadian)
-            s = cun_strcpy(s, "%a ");
+            s = copy(s, "%a ");
         else if(s2->language == enum_language()->eblaite)
-            s = cun_strcpy(s, "%e ");
+            s = copy(s, "%e ");
         else if(s2->language == enum_language()->hittite)
-            s = cun_strcpy(s, "%h ");
+            s = copy(s, "%h ");
         else if(s2->language == enum_language()->sumerian)
-            s = cun_strcpy(s, "%s ");
+            s = copy(s, "%s ");
     }
     if(!s2->pn_type_null && (s1 == NULL || s1->pn_type != s2->pn_type || s2->pn_type_null || s1->compound_no != s2->compound_no))
     {
         if(s2->pn_type == enum_pn()->person)
-            s = cun_strcpy(s, "%person ");
+            s = copy(s, "%person ");
         else if(s2->pn_type == enum_pn()->god)
-            s = cun_strcpy(s, "%god ");
+            s = copy(s, "%god ");
         else if(s2->pn_type == enum_pn()->place)
-            s = cun_strcpy(s, "%place ");
+            s = copy(s, "%place ");
         else if(s2->pn_type == enum_pn()->water)
-            s = cun_strcpy(s, "%water ");
+            s = copy(s, "%water ");
         else if(s2->pn_type == enum_pn()->field)
-            s = cun_strcpy(s, "%field ");
+            s = copy(s, "%field ");
         else if(s2->pn_type == enum_pn()->temple)
-            s = cun_strcpy(s, "%temple ");
+            s = copy(s, "%temple ");
         else if(s2->pn_type == enum_pn()->month)
-            s = cun_strcpy(s, "%month ");
+            s = copy(s, "%month ");
         else if(s2->pn_type == enum_pn()->object)
-            s = cun_strcpy(s, "%object ");
+            s = copy(s, "%object ");
         else if(s2->pn_type == enum_pn()->ethnicity)
-            s = cun_strcpy(s, "%ethnicity ");
+            s = copy(s, "%ethnicity ");
     }
 
     if(s1 != NULL && !s1->stem && s2->stem && !s1->stem_null && !s2->stem_null && s1->word_no == s2->word_no)
@@ -132,13 +127,13 @@ static char* open_code(char* s, const State* s1, State* s2)
     if(s1 == NULL || s1->condition != s2->condition || s1->line_no != s2->line_no)
     {
         if(s2->condition == enum_condition()->lost)
-            s = cun_strcpy(s, "[");
+            s = copy(s, "[");
         else if(s2->condition == enum_condition()->damaged)
-            s = cun_strcpy(s, "⸢");
+            s = copy(s, "⸢");
         else if(s2->condition == enum_condition()->inserted)
-            s = cun_strcpy(s, "‹");
+            s = copy(s, "‹");
         else if(s2->condition == enum_condition()->deleted)
-            s = cun_strcpy(s, "«");
+            s = copy(s, "«");
     }
 
     if(s2->capitalize) {
@@ -172,20 +167,20 @@ static char* close_code(char* s, const State* s1, const State* s2)
     {
         *s++ = ' ';
         *s++ = '(';
-        s = cun_memcpy(s, VARDATA_ANY(s1->compound_comment), VARSIZE_ANY_EXHDR(s1->compound_comment));
+        s = copy_n(s, VARDATA_ANY(s1->compound_comment), VARSIZE_ANY_EXHDR(s1->compound_comment));
         *s++ = ')';
     }
 
     if(s2 == NULL || s1->condition != s2->condition || s1->line_no != s2->line_no)
     {
         if(s1->condition == enum_condition()->lost)
-            s = cun_strcpy(s, "]");
+            s = copy(s, "]");
         else if(s1->condition == enum_condition()->damaged)
-            s = cun_strcpy(s, "⸣");
+            s = copy(s, "⸣");
         else if(s1->condition == enum_condition()->inserted)
-            s = cun_strcpy(s, "›");
+            s = copy(s, "›");
         else if(s1->condition == enum_condition()->deleted)
-            s = cun_strcpy(s, "»");
+            s = copy(s, "»");
     }
 
     if(!s1->phonographic_null && !s1->phonographic && s1->indicator_type == enum_indicator_type()->none && (s2 == NULL || s2->phonographic_null || s2->phonographic || s2->indicator_type != enum_indicator_type()->none || s1->line_no != s2->line_no))
@@ -205,7 +200,7 @@ static char* write_simple_connector_code(char* s, int connector)
     else if(connector == SEP_INDICATOR_P || connector == SEP_DASH)
         *s++ = '-';
     else if(connector == SEP_WORD)
-        s = cun_strcpy(s, "--");
+        s = copy(s, "--");
     else if(connector == SEP_COMPOUND)
         *s++ = ' ';
     return s;
@@ -216,7 +211,7 @@ static char* write_modified_connector_code(char* s, const Connector c)
     if(c.ellipsis)
     {
         s = write_simple_connector_code(s, c.connector);
-        s = cun_strcpy(s, "…");
+        s = copy(s, "…");
         s = write_simple_connector_code(s, c.connector);
     }
     else if(c.modifier == SEP_EXT_LIGATURE)
@@ -235,9 +230,9 @@ static char* write_modified_connector_code(char* s, const Connector c)
     else if(c.modifier == SEP_EXT_INVERSION)
     {
         if(c.connector == SEP_WORD)
-            s = cun_strcpy(s, "--:");
+            s = copy(s, "--:");
         else if(c.connector == SEP_COMPOUND)
-            s = cun_strcpy(s, " : ");
+            s = copy(s, " : ");
         else
             *s++ = ':';
     }
@@ -352,13 +347,13 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
 
     if(!state->section_null && (!string_size || state_old.section_null || state_old.section_no != state->section_no))
     {
-        s = cun_strcpy(s, "%sec=");
-        s = cun_memcpy(s, VARDATA_ANY(section), section_size);
+        s = copy(s, "%sec=");
+        s = copy_n(s, VARDATA_ANY(section), section_size);
         *s++ = ' ';
     }
     else if(state->section_null && string_size && !state_old.section_null)
     {
-        s = cun_strcpy(s, "%sec ");
+        s = copy(s, "%sec ");
     }
     
     s = open_code(s, string_size ? &state_old : NULL, state);
@@ -367,18 +362,18 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     {
         if(state->type == enum_type()->description)
             *s++ = '"';
-        s = cun_memcpy(s, VARDATA_ANY(value), value_size);
+        s = copy_n(s, VARDATA_ANY(value), value_size);
         if(state->type == enum_type()->description)
             *s++ = '"';
     }
 
     if(critics_size)
-        s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
+        s = copy_n(s, VARDATA_ANY(critics), critics_size);
 
     if(comment_size)
     {
         *s++ = '(';
-        s = cun_memcpy(s, VARDATA_ANY(comment), comment_size);
+        s = copy_n(s, VARDATA_ANY(comment), comment_size);
         *s++ = ')';
     }
 

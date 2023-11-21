@@ -11,54 +11,48 @@
 #include <utils/array.h>
 #include <tcop/pquery.h>
 
+static cun_set_enums_t set_enums;
+static cun_copy_n_t copy_n;
+static cun_copy_t copy;
+static cun_compare_next_t compare_next;
+static cun_capitalize_t capitalize;
 
-static void (*set_enums_p)();
-static char* (*cun_memcpy_p)(char* s1, const char* s2, size_t n);
-static char* (*cun_strcpy_p)(char* s1, const char* s2);
-static int (*cun_strcmp_p)(const char* s1, const char* s2);
-static void (*cun_capitalize_p)(char* s);
+static cun_enum_type_t enum_type;
+static cun_enum_condition_t enum_condition;
+static cun_enum_indicator_type_t enum_indicator_type;
+static cun_enum_pn_t enum_pn;
+static cun_enum_language_t enum_language;
 
-static cunEnumType* (*enum_type)();
-static cunEnumCondition* (*enum_condition)();
-static cunEnumIndicatorType* (*enum_indicator_type)();
-static cunEnumPN* (*enum_pn)();
-static cunEnumLanguage* (*enum_language)();
+static cun_init_state_t init_state;
+static cun_get_changes_t get_changes;
 
-static State* (*init_state)(MemoryContext memcontext);
-static int (*get_changes)(const State* s1, const State* s2);
-
-static Connector (*determine_connector)(const State* s1, const State* s2, bool inverted, bool newline, bool ligature);
-static Oid (*opened_condition_start)(const char* s, size_t n, bool* no_condition);
-static Oid (*opened_condition_end)(const char* s, size_t n);
-static void (*copy_compound_comment)(const text* compound_comment, State* state);
+static cun_determine_connector_t determine_connector;
+static cun_opened_condition_start_t opened_condition_start;
+static cun_opened_condition_end_t opened_condition_end;
+static cun_copy_compound_comment_t copy_compound_comment;
 
 void _PG_init(void)
 {
-    set_enums_p = load_external_function("cuneiform_print_core", "set_enums", true, NULL);
-    cun_memcpy_p = load_external_function("cuneiform_print_core", "cun_memcpy", true, NULL);
-    cun_strcpy_p = load_external_function("cuneiform_print_core", "cun_strcpy", true, NULL);
-    cun_strcmp_p = load_external_function("cuneiform_print_core", "cun_strcmp", true, NULL);
-    cun_capitalize_p = load_external_function("cuneiform_print_core", "cun_capitalize", true, NULL);
+    set_enums = (cun_set_enums_t)load_external_function("cuneiform_print_core", "cun_set_enums", true, NULL);
+    copy_n = (cun_copy_n_t)("cuneiform_print_core", "cun_copy_n", true, NULL);
+    copy = (cun_copy_t)load_external_function("cuneiform_print_core", "cun_copy", true, NULL);
+    compare_next = (cun_compare_next_t)("cuneiform_print_core", "cun_compare_next", true, NULL);
+    capitalize = (cun_capitalize_t)("cuneiform_print_core", "cun_capitalize", true, NULL);
 
-    enum_type = load_external_function("cuneiform_print_core", "cun_enum_type", true, NULL);
-    enum_condition = load_external_function("cuneiform_print_core", "cun_enum_condition", true, NULL);
-    enum_indicator_type = load_external_function("cuneiform_print_core", "cun_enum_indicator_type", true, NULL);
-    enum_pn = load_external_function("cuneiform_print_core", "cun_enum_pn", true, NULL);
-    enum_language = load_external_function("cuneiform_print_core", "cun_enum_language", true, NULL);
+    enum_type = (cun_enum_type_t)load_external_function("cuneiform_print_core", "cun_enum_type", true, NULL);
+    enum_condition = (cun_enum_condition_t)load_external_function("cuneiform_print_core", "cun_enum_condition", true, NULL);
+    enum_indicator_type = (cun_enum_indicator_type_t)load_external_function("cuneiform_print_core", "cun_enum_indicator_type", true, NULL);
+    enum_pn = (cun_enum_pn_t)("cuneiform_print_core", "cun_enum_pn", true, NULL);
+    enum_language = (cun_enum_language_t)load_external_function("cuneiform_print_core", "cun_enum_language", true, NULL);
 
-    init_state = load_external_function("cuneiform_print_core", "cun_init_state", true, NULL);
-    get_changes = load_external_function("cuneiform_print_core", "cun_get_changes", true, NULL);
-    determine_connector = load_external_function("cuneiform_print_core", "cun_determine_connector", true, NULL);
-    opened_condition_start = load_external_function("cuneiform_print_core", "cun_opened_condition_start", true, NULL);
-    opened_condition_end = load_external_function("cuneiform_print_core", "cun_opened_condition_end", true, NULL);
-    copy_compound_comment = load_external_function("cuneiform_print_core", "cun_copy_compound_comment", true, NULL);
+    init_state = (cun_init_state_t)("cuneiform_print_core", "cun_init_state", true, NULL);
+    get_changes = (cun_get_changes_t)("cuneiform_print_core", "cun_get_changes", true, NULL);
+    determine_connector = (cun_determine_connector_t)("cuneiform_print_core", "cun_determine_connector", true, NULL);
+    opened_condition_start = (cun_opened_condition_start_t)("cuneiform_print_core", "cun_opened_condition_start", true, NULL);
+    opened_condition_end = (cun_opened_condition_end_t)("cuneiform_print_core", "cun_opened_condition_end", true, NULL);
+    copy_compound_comment = (cun_copy_compound_comment_t)("cuneiform_print_core", "cun_copy_compound_comment", true, NULL);
 };
 
-#define set_enums set_enums_p
-#define cun_memcpy cun_memcpy_p
-#define cun_strcpy cun_strcpy_p
-#define cun_strcmp cun_strcmp_p
-#define cun_capitalize cun_capitalize_p
 
 #define EXP_LINE_SIZE_HTML 1000
 #define MAX_EXTRA_SIZE_HTML 200
@@ -95,50 +89,50 @@ static char* open_html(char* s, int changes, const State* state)
     if(changes >= LANGUAGE && state->language != enum_language()->sumerian)
     {
         if(state->language == enum_language()->akkadian)
-            s = cun_strcpy(s, "<span class='akkadian'>");
+            s = copy(s, "<span class='akkadian'>");
         else if(state->language == enum_language()->hittite)
-            s = cun_strcpy(s, "<span class='hittite'>");
+            s = copy(s, "<span class='hittite'>");
         else if(state->language == enum_language()->eblaite)
-            s = cun_strcpy(s, "<span class='eblaite'>");
+            s = copy(s, "<span class='eblaite'>");
         else
-            s = cun_strcpy(s, "<span class='otherlanguage'>");
+            s = copy(s, "<span class='otherlanguage'>");
     }
     if(changes >= STEM && state->stem && !state->stem_null)
-        s = cun_strcpy(s, "<span class='stem'>");
+        s = copy(s, "<span class='stem'>");
     if(changes >= HIGHLIGHT && state->highlight)
-        s = cun_strcpy(s, "<span class='highlight'>");
+        s = copy(s, "<span class='highlight'>");
     if(changes >= PHONOGRAPHIC && !state->phonographic_null)
     {
         if(state->phonographic && state->language == enum_language()->sumerian)
-            s = cun_strcpy(s, "<span class='phonographic'>");
+            s = copy(s, "<span class='phonographic'>");
         else if(!state->phonographic && state->language != enum_language()->sumerian)
-            s = cun_strcpy(s, "<span class='logographic'>");
+            s = copy(s, "<span class='logographic'>");
     }
     if(changes >= TYPE && (state->type != enum_type()->value || state->unknown_reading)  && state->type != enum_type()->punctuation)
     {
         if(state->type == enum_type()->number)
-            s = cun_strcpy(s, "<span class='number'>");
+            s = copy(s, "<span class='number'>");
         else if(state->type == enum_type()->description)
-            s = cun_strcpy(s, "<span class='description'>");
+            s = copy(s, "<span class='description'>");
         else if(state->type == enum_type()->damage)
-            s = cun_strcpy(s, "<span class='damage'>");
+            s = copy(s, "<span class='damage'>");
         else if(state->unknown_reading)
-            s = cun_strcpy(s, "<span class='unknown_reading'>");
+            s = copy(s, "<span class='unknown_reading'>");
     }
     if(changes >= INDICATOR && state->indicator_type != enum_indicator_type()->none)
-        s = cun_strcpy(s, "<span class='indicator'>");
+        s = copy(s, "<span class='indicator'>");
     if(changes >= CONDITION && state->condition != enum_condition()->intact)
     {
         if(state->condition == enum_condition()->lost)
-            s = cun_strcpy(s, "<span class='lost'>");
+            s = copy(s, "<span class='lost'>");
         else if(state->condition == enum_condition()->damaged)
-            s = cun_strcpy(s, "<span class='damaged'>");
+            s = copy(s, "<span class='damaged'>");
         else if(state->condition == enum_condition()->inserted)
-            s = cun_strcpy(s, "<span class='inserted'>");
+            s = copy(s, "<span class='inserted'>");
         else if(state->condition == enum_condition()->deleted)
-            s = cun_strcpy(s, "<span class='deleted'>");
+            s = copy(s, "<span class='deleted'>");
         else if(state->condition == enum_condition()->erased)
-            s = cun_strcpy(s, "<span class='erased'>");
+            s = copy(s, "<span class='erased'>");
     }
     return s;
 }
@@ -146,19 +140,19 @@ static char* open_html(char* s, int changes, const State* state)
 static char* close_html(char* s, int changes, const State* state)
 {
     if(changes >= CONDITION && state->condition != enum_condition()->intact)
-        s = cun_strcpy(s, "</span>");
+        s = copy(s, "</span>");
     if(changes >= INDICATOR && state->indicator_type != enum_indicator_type()->none)
-        s = cun_strcpy(s, "</span>");
+        s = copy(s, "</span>");
     if(changes >= TYPE && (state->type != enum_type()->value || state->unknown_reading) && state->type != enum_type()->punctuation)
-        s = cun_strcpy(s, "</span>");
+        s = copy(s, "</span>");
     if(changes >= PHONOGRAPHIC && !state->phonographic_null && (state->phonographic == (state->language == enum_language()->sumerian)))
-        s = cun_strcpy(s, "</span>");
+        s = copy(s, "</span>");
     if(changes >= HIGHLIGHT && state->highlight)
-        s = cun_strcpy(s, "</span>");
+        s = copy(s, "</span>");
     if(changes >= STEM && state->stem && !state->stem_null)
-        s = cun_strcpy(s, "</span>");
+        s = copy(s, "</span>");
     if(changes >= LANGUAGE && state->language != enum_language()->sumerian)
-        s = cun_strcpy(s, "</span>");
+        s = copy(s, "</span>");
     return s;
 }
 
@@ -166,30 +160,30 @@ static char* close_html(char* s, int changes, const State* state)
 static char* open_condition_html(char* s, Oid condition)
 {
     if(condition == enum_condition()->lost)
-        s = cun_strcpy(s, "<span class='open-lost'></span>");
+        s = copy(s, "<span class='open-lost'></span>");
     else if(condition == enum_condition()->damaged)
-        s = cun_strcpy(s, "<span class='open-damaged'></span>");
+        s = copy(s, "<span class='open-damaged'></span>");
     else if(condition == enum_condition()->inserted)
-        s = cun_strcpy(s, "<span class='open-inserted'></span>");
+        s = copy(s, "<span class='open-inserted'></span>");
     else if(condition == enum_condition()->deleted)
-        s = cun_strcpy(s, "<span class='open-deleted'></span>");
+        s = copy(s, "<span class='open-deleted'></span>");
     else if(condition == enum_condition()->erased)
-        s = cun_strcpy(s, "<span class='open-erased'></span>");
+        s = copy(s, "<span class='open-erased'></span>");
     return s;
 }
 
 static char* close_condition_html(char* s, Oid condition)
 {
     if(condition == enum_condition()->lost)
-        s = cun_strcpy(s, "<span class='close-lost'></span>");
+        s = copy(s, "<span class='close-lost'></span>");
     else if(condition == enum_condition()->damaged)
-        s = cun_strcpy(s, "<span class='close-damaged'></span>");
+        s = copy(s, "<span class='close-damaged'></span>");
     else if(condition == enum_condition()->inserted)
-        s = cun_strcpy(s, "<span class='close-inserted'></span>");
+        s = copy(s, "<span class='close-inserted'></span>");
     else if(condition == enum_condition()->deleted)
-        s = cun_strcpy(s, "<span class='close-deleted'></span>");
+        s = copy(s, "<span class='close-deleted'></span>");
     else if(condition == enum_condition()->erased)
-        s = cun_strcpy(s, "<span class='close-erased'></span>");
+        s = copy(s, "<span class='close-erased'></span>");
     return s;
 }
 
@@ -199,11 +193,11 @@ static char* write_simple_connector_html(char* s, int connector)
     if(connector == SEP_INDICATOR_L || connector == SEP_DOT || connector == SEP_NUMBER)
         *s++ = '.';
     else if(connector == SEP_INDICATOR_M)
-        s = cun_strcpy(s, "<span class='indicator'>.</span>");
+        s = copy(s, "<span class='indicator'>.</span>");
     else if(connector == SEP_INDICATOR_P || connector == SEP_DASH)
         *s++ = '-';
     else if(connector == SEP_WORD)
-        s = cun_strcpy(s, "–");
+        s = copy(s, "–");
     else if(connector == SEP_COMPOUND)
         *s++ = ' ';
     return s;
@@ -214,13 +208,13 @@ static char* write_modified_connector_html(char* s, const Connector c)
     if(c.ellipsis)
     {
         s = write_simple_connector_html(s, c.connector);
-        s = cun_strcpy(s, "…");
+        s = copy(s, "…");
         s = write_simple_connector_html(s, c.connector);
     }
     else if(c.modifier == SEP_EXT_LIGATURE)
     {
         if(c.modifier == SEP_INDICATOR_M)
-            s = cun_strcpy(s, "<span class='indicator'>+</span>");
+            s = copy(s, "<span class='indicator'>+</span>");
         else
             *s++ = '+';
     }
@@ -232,11 +226,11 @@ static char* write_modified_connector_html(char* s, const Connector c)
     else if(c.modifier == SEP_EXT_INVERSION)
     {
         if(c.connector == SEP_WORD)
-            s = cun_strcpy(s, "—:");
+            s = copy(s, "—:");
         else if(c.connector == SEP_COMPOUND)
-            s = cun_strcpy(s, " : ");
+            s = copy(s, " : ");
         else if(c.modifier == SEP_INDICATOR_M)
-            s = cun_strcpy(s, "<span class='indicator'>:</span>");
+            s = copy(s, "<span class='indicator'>:</span>");
         else
             *s++ = ':';
     }
@@ -253,19 +247,19 @@ static size_t calculate_value_size_replacing_conditions_html(const char* s, size
     {
         if(*s == ']')
             size += strlen("</span><span class='close-lost'></span>");
-        else if(n+1 >= strlen("⸣") && !cun_strcmp(s, "⸣"))
+        else if(n+1 >= strlen("⸣") && !compare_next(s, "⸣"))
             size += strlen("</span><span class='close-damaged'></span>");
-        else if(n+1 >= strlen("›") && !cun_strcmp(s, "›"))
+        else if(n+1 >= strlen("›") && !compare_next(s, "›"))
             size += strlen("</span><span class='close-inserted'></span>");
-        else if(n+1 >= strlen("»") && !cun_strcmp(s, "»"))
+        else if(n+1 >= strlen("»") && !compare_next(s, "»"))
             size += strlen("</span><span class='close-deleted'></span>");
         else if(*s == '[') 
             size += strlen("<span class='open-lost'></span><span class='lost'>");
-        else if(n+1 >= strlen("⸢") && !cun_strcmp(s, "⸢"))
+        else if(n+1 >= strlen("⸢") && !compare_next(s, "⸢"))
             size += strlen("<span class='close-damaged'><span class='damaged'>");
-        else if(n+1 >= strlen("‹") && !cun_strcmp(s, "‹"))
+        else if(n+1 >= strlen("‹") && !compare_next(s, "‹"))
             size += strlen("<span class='close-inserted'><span class='inserted'>");
-        else if(n+1 >= strlen("«") && !cun_strcmp(s, "«"))
+        else if(n+1 >= strlen("«") && !compare_next(s, "«"))
             size += strlen("<span class='close-deleted'><span class='deleted'>");
         else
             ++size;
@@ -278,21 +272,21 @@ static char* write_value_replacing_conditions_html(char* s, const char* v, size_
     while(n-- != 0)
     {
         if(*s == ']')
-            s = cun_strcpy(s, "</span><span class='close-lost'></span>");
-        else if(n+1 >= strlen("⸣") && !cun_strcmp(s, "⸣"))
-            s = cun_strcpy(s, "</span><span class='close-damaged'></span>");
-        else if(n+1 >= strlen("›") && !cun_strcmp(s, "›"))
-            s = cun_strcpy(s, "</span><span class='close-inserted'></span>");
-        else if(n+1 >= strlen("»") && !cun_strcmp(s, "»"))
-            s = cun_strcpy(s, "</span><span class='close-deleted'></span>");
+            s = copy(s, "</span><span class='close-lost'></span>");
+        else if(n+1 >= strlen("⸣") && !compare_next(s, "⸣"))
+            s = copy(s, "</span><span class='close-damaged'></span>");
+        else if(n+1 >= strlen("›") && !compare_next(s, "›"))
+            s = copy(s, "</span><span class='close-inserted'></span>");
+        else if(n+1 >= strlen("»") && !compare_next(s, "»"))
+            s = copy(s, "</span><span class='close-deleted'></span>");
         else if(*s == '[') 
-            s = cun_strcpy(s, "<span class='open-lost'></span><span class='lost'>");
-        else if(n+1 >= strlen("⸢") && !cun_strcmp(s, "⸢"))
-            s = cun_strcpy(s, "<span class='close-damaged'><span class='damaged'>");
-        else if(n+1 >= strlen("‹") && !cun_strcmp(s, "‹"))
-            s = cun_strcpy(s, "<span class='close-inserted'><span class='inserted'>");
-        else if(n+1 >= strlen("«") && !cun_strcmp(s, "«"))
-            s = cun_strcpy(s, "<span class='close-deleted'><span class='deleted'>");
+            s = copy(s, "<span class='open-lost'></span><span class='lost'>");
+        else if(n+1 >= strlen("⸢") && !compare_next(s, "⸢"))
+            s = copy(s, "<span class='close-damaged'><span class='damaged'>");
+        else if(n+1 >= strlen("‹") && !compare_next(s, "‹"))
+            s = copy(s, "<span class='close-inserted'><span class='inserted'>");
+        else if(n+1 >= strlen("«") && !compare_next(s, "«"))
+            s = copy(s, "<span class='close-deleted'><span class='deleted'>");
         else
             *s++ = *v;
         ++v;
@@ -386,9 +380,9 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         if(state_old.compound_no != state->compound_no && compound_comment_size)  // Word comments
         {
             *s++ = ' ';
-            s = cun_strcpy(s, "<span class='word-comment'>");
-            s = cun_memcpy(s, VARDATA_ANY(state_old.compound_comment), compound_comment_size);
-            s = cun_strcpy(s, "</span>");
+            s = copy(s, "<span class='word-comment'>");
+            s = copy_n(s, VARDATA_ANY(state_old.compound_comment), compound_comment_size);
+            s = copy(s, "</span>");
         }
 
         s = close_html(s, changes, &state_old);
@@ -413,7 +407,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         changes = INT_MAX;   
 
     if(newline)   
-        s = cun_strcpy(s, "<br class='internal-linebreak'>");   
+        s = copy(s, "<br class='internal-linebreak'>");   
 
     if(PG_ARGISNULL(0) || state->condition != state_old.condition || state_old.line_no != state->line_no)
         s = open_condition_html(s, state->condition);
@@ -421,20 +415,20 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
     if(value)
     {
-        if(!cun_strcmp(VARDATA_ANY(value), "||"))
-            s = cun_strcpy(s, "<span class='hspace'></span>");
-        else if(!cun_strcmp(VARDATA_ANY(value), "="))
-            s = cun_strcpy(s, "<span class='vspace'></span>");
-        else if(!cun_strcmp(VARDATA_ANY(value), "|"))
-            s = cun_strcpy(s, "<span class='hline'></span>");
-        else if(!cun_strcmp(VARDATA_ANY(value), "–"))
-            s = cun_strcpy(s, "<span class='vline'></span>");
+        if(!compare_next(VARDATA_ANY(value), "||"))
+            s = copy(s, "<span class='hspace'></span>");
+        else if(!compare_next(VARDATA_ANY(value), "="))
+            s = copy(s, "<span class='vspace'></span>");
+        else if(!compare_next(VARDATA_ANY(value), "|"))
+            s = copy(s, "<span class='hline'></span>");
+        else if(!compare_next(VARDATA_ANY(value), "–"))
+            s = copy(s, "<span class='vline'></span>");
         else
         {
             char* s_ = s;
             s = write_value_replacing_conditions_html(s, VARDATA_ANY(value), value_size);
             if(state->capitalize && state->indicator_type == enum_indicator_type()->none) {
-                cun_capitalize(s_);
+                capitalize(s_);
                 state->capitalize = false;
             }
         } 
@@ -442,16 +436,16 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
     if(critics_size)
     {
-        s = cun_strcpy(s, "<span class='critics'>");
-        s = cun_memcpy(s, VARDATA_ANY(critics), critics_size);
-        s = cun_strcpy(s, "</span>");
+        s = copy(s, "<span class='critics'>");
+        s = copy_n(s, VARDATA_ANY(critics), critics_size);
+        s = copy(s, "</span>");
     }
     
     if(comment_size)
     {
-        s = cun_strcpy(s, "<span class='comment'>");
-        s = cun_memcpy(s, VARDATA_ANY(comment), comment_size);
-        s = cun_strcpy(s, "</span>");
+        s = copy(s, "<span class='comment'>");
+        s = copy_n(s, VARDATA_ANY(comment), comment_size);
+        s = copy(s, "</span>");
     }
 
     copy_compound_comment(compound_comment, state);
@@ -482,9 +476,9 @@ Datum cuneiform_cun_agg_html_finalfunc(PG_FUNCTION_ARGS)
     if(VARSIZE_ANY_EXHDR(state->compound_comment))  // Compound comments
     {
         *s++ = ' ';
-        s = cun_strcpy(s, "<span class='word-comment'>");
-        s = cun_memcpy(s, VARDATA_ANY(state->compound_comment), VARSIZE_ANY_EXHDR(state->compound_comment));
-        s = cun_strcpy(s, "</span>");
+        s = copy(s, "<span class='word-comment'>");
+        s = copy_n(s, VARDATA_ANY(state->compound_comment), VARSIZE_ANY_EXHDR(state->compound_comment));
+        s = copy(s, "</span>");
     }
 
     s = close_html(s, INT_MAX, state);

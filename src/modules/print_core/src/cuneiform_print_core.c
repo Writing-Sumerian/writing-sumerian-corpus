@@ -15,7 +15,7 @@ static cunEnumPN ENUM_PN;
 static bool enums_set = false;
 
 
-void set_enums()
+void cun_set_enums()
 {
     bool isnull;
 
@@ -131,21 +131,21 @@ cunEnumPN *cun_enum_pn()
 }
 
 
-char* cun_memcpy(char* s1, const char* s2, size_t n)
+char* cun_copy_n(char* s1, const char* s2, size_t n)
 {
     while(n-- != 0)
         *s1++ = *s2++;
     return s1;
 }
 
-char* cun_strcpy(char* s1, const char* s2)
+char* cun_copy(char* s1, const char* s2)
 {
     while(*s2 != '\0')
         *s1++ = *s2++;
     return s1;
 }
 
-int cun_strcmp(const char* s1, const char* s2)
+int cun_compare_next(const char* s1, const char* s2)
 {
     while(*s2 != '\0')
     {
@@ -161,20 +161,20 @@ void cun_capitalize(char* s)
 {
     if(*s & (1 << 8))
     {
-        if(!cun_strcmp(s, "’"))
+        if(!cun_compare_next(s, "’"))
             cun_capitalize(s+strlen("’"));
-        else if(!cun_strcmp(s, "ḫ"))
-            cun_strcpy(s,"Ḫ");
-        else if(!cun_strcmp(s, "š"))
-            cun_strcpy(s,"Š");
-        else if(!cun_strcmp(s, "ĝ"))
-            cun_strcpy(s,"Ĝ");
-        else if(!cun_strcmp(s, "ř"))
-            cun_strcpy(s,"Ř");
-        else if(!cun_strcmp(s, "ṣ"))
-            cun_strcpy(s,"Ṣ");
-        else if(!cun_strcmp(s, "ṭ"))
-            cun_strcpy(s,"Ṭ");
+        else if(!cun_compare_next(s, "ḫ"))
+            cun_copy(s,"Ḫ");
+        else if(!cun_compare_next(s, "š"))
+            cun_copy(s,"Š");
+        else if(!cun_compare_next(s, "ĝ"))
+            cun_copy(s,"Ĝ");
+        else if(!cun_compare_next(s, "ř"))
+            cun_copy(s,"Ř");
+        else if(!cun_compare_next(s, "ṣ"))
+            cun_copy(s,"Ṣ");
+        else if(!cun_compare_next(s, "ṭ"))
+            cun_copy(s,"Ṭ");
     }
     else
         *s = toupper(*s);
@@ -268,19 +268,19 @@ Oid cun_opened_condition_start(const char* s, size_t n, bool* no_condition)
     {
         if(*s == ']')
             return ENUM_CONDITION.lost;
-        if(n+1 >= strlen("⸣") && !cun_strcmp(s, "⸣"))
+        if(n+1 >= strlen("⸣") && !cun_compare_next(s, "⸣"))
             return ENUM_CONDITION.damaged;
-        if(n+1 >= strlen("›") && !cun_strcmp(s, "›"))
+        if(n+1 >= strlen("›") && !cun_compare_next(s, "›"))
             return ENUM_CONDITION.inserted;
-        if(n+1 >= strlen("»") && !cun_strcmp(s, "»"))
+        if(n+1 >= strlen("»") && !cun_compare_next(s, "»"))
             return ENUM_CONDITION.deleted;
         if(*s == '[') 
             return ENUM_CONDITION.intact;
-        if(n+1 >= strlen("⸢") && !cun_strcmp(s, "⸢"))
+        if(n+1 >= strlen("⸢") && !cun_compare_next(s, "⸢"))
             return ENUM_CONDITION.intact;
-        if(n+1 >= strlen("‹") && !cun_strcmp(s, "‹"))
+        if(n+1 >= strlen("‹") && !cun_compare_next(s, "‹"))
             return ENUM_CONDITION.intact;
-        if(n+1 >= strlen("«") && !cun_strcmp(s, "«"))
+        if(n+1 >= strlen("«") && !cun_compare_next(s, "«"))
             return ENUM_CONDITION.intact;
         ++s;
     }
@@ -296,19 +296,19 @@ Oid cun_opened_condition_end(const char* s, size_t n)
     {
         if(*s == ']')
             return ENUM_CONDITION.intact;
-        if(i+1 >= strlen("⸣") && !cun_strcmp(s, "⸣"))
+        if(i+1 >= strlen("⸣") && !cun_compare_next(s, "⸣"))
             return ENUM_CONDITION.intact;
-        if(i+1 >= strlen("›") && !cun_strcmp(s, "›"))
+        if(i+1 >= strlen("›") && !cun_compare_next(s, "›"))
             return ENUM_CONDITION.intact;
-        if(i+1 >= strlen("»") && !cun_strcmp(s, "»"))
+        if(i+1 >= strlen("»") && !cun_compare_next(s, "»"))
             return ENUM_CONDITION.intact;
         if(*s == '[') 
             return ENUM_CONDITION.lost;
-        if(i+1 >= strlen("⸢") && !cun_strcmp(s, "⸢"))
+        if(i+1 >= strlen("⸢") && !cun_compare_next(s, "⸢"))
             return ENUM_CONDITION.damaged;
-        if(i+1 >= strlen("‹") && !cun_strcmp(s, "‹"))
+        if(i+1 >= strlen("‹") && !cun_compare_next(s, "‹"))
             return ENUM_CONDITION.inserted;
-        if(i+1 >= strlen("«") && !cun_strcmp(s, "«"))
+        if(i+1 >= strlen("«") && !cun_compare_next(s, "«"))
             return ENUM_CONDITION.deleted;
         --s;
     }
@@ -326,7 +326,7 @@ void cun_copy_compound_comment(const text* compound_comment, State* state)
             state->compound_comment = (text*)repalloc(state->string, size + VARHDRSZ);
             state->compound_comment_capacity = size;
         }
-        cun_memcpy(VARDATA_ANY(state->compound_comment), VARDATA_ANY(compound_comment), size);
+        cun_copy_n(VARDATA_ANY(state->compound_comment), VARDATA_ANY(compound_comment), size);
         SET_VARSIZE(state->compound_comment, size+VARHDRSZ); 
     }
     else
