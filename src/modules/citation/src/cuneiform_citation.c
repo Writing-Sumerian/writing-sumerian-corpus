@@ -13,14 +13,14 @@
 int32 dash_size = strlen("–");
 int32 dot_size = strlen("; ");
 
-char* cun_memcpy(char* s1, const char* s2, size_t n)
+char* cun_copy_n(char* s1, const char* s2, size_t n)
 {
     while(n-- != 0)
         *s1++ = *s2++;
     return s1;
 }
 
-char* cun_strcpy(char* s1, const char* s2)
+char* cun_copy(char* s1, const char* s2)
 {
     while(*s2 != '\0')
         *s1++ = *s2++;
@@ -92,36 +92,36 @@ text* assamble_range(const State* state, text* string)
 
     
     if(string_size)
-        s = cun_strcpy(s, "; ");
+        s = cun_copy(s, "; ");
 
     if((changes > 3 || state->print_surface) && state->surface_start)
     {
-        s = cun_memcpy(s, VARDATA(state->surface_start), VARSIZE_ANY_EXHDR(state->surface_start));
-        s = cun_strcpy(s, " ");
+        s = cun_copy_n(s, VARDATA(state->surface_start), VARSIZE_ANY_EXHDR(state->surface_start));
+        s = cun_copy(s, " ");
     }
     if((changes > 1 || state->print_block) && state->block_start)
     {
-        s = cun_memcpy(s, VARDATA(state->block_start), VARSIZE_ANY_EXHDR(state->block_start));
-        s = cun_strcpy(s, " ");
+        s = cun_copy_n(s, VARDATA(state->block_start), VARSIZE_ANY_EXHDR(state->block_start));
+        s = cun_copy(s, " ");
     }
     if(state->line_start)
-        s = cun_memcpy(s, VARDATA(state->line_start), VARSIZE_ANY_EXHDR(state->line_start));
+        s = cun_copy_n(s, VARDATA(state->line_start), VARSIZE_ANY_EXHDR(state->line_start));
     if(changes > 1)
-        s = cun_strcpy(s, " – ");
+        s = cun_copy(s, " – ");
     else if(changes > 0)
-        s = cun_strcpy(s, "–");
+        s = cun_copy(s, "–");
     if(changes > 3 && state->surface)
     {
-        s = cun_memcpy(s, VARDATA(state->surface), VARSIZE_ANY_EXHDR(state->surface));
-        s = cun_strcpy(s, " ");
+        s = cun_copy_n(s, VARDATA(state->surface), VARSIZE_ANY_EXHDR(state->surface));
+        s = cun_copy(s, " ");
     }
     if(changes > 1 && state->block)
     {
-        s = cun_memcpy(s, VARDATA(state->block), VARSIZE_ANY_EXHDR(state->block));
-        s = cun_strcpy(s, " ");
+        s = cun_copy_n(s, VARDATA(state->block), VARSIZE_ANY_EXHDR(state->block));
+        s = cun_copy(s, " ");
     }
     if(changes > 0 && state->line)
-        s = cun_memcpy(s, VARDATA(state->line), VARSIZE_ANY_EXHDR(state->line));
+        s = cun_copy_n(s, VARDATA(state->line), VARSIZE_ANY_EXHDR(state->line));
     
     SET_VARSIZE(string, s-VARDATA(string)+VARHDRSZ);
 
