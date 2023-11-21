@@ -358,9 +358,8 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     const int32 sign_size = sign ? VARSIZE_ANY_EXHDR(sign) : 0;
     const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
     const int32 comment_size = comment ? VARSIZE_ANY_EXHDR(comment) : 0;
-    const int32 compound_comment_size = state_old.compound_comment ? VARSIZE_ANY_EXHDR(state_old.compound_comment) : 0;
     const int32 section_size = section ? VARSIZE_ANY_EXHDR(section) : 0;
-    const int32 size = value_size_final + sign_size + critics_size + comment_size + compound_comment_size + section_size;
+    const int32 size = value_size_final + sign_size + critics_size + comment_size + state_old.compound_comment_len + section_size;
     if(state->string_capacity < string_size + size + MAX_EXTRA_SIZE_HTML)
     {
         state->string = (text*)repalloc(state->string, string_size + size + EXP_LINE_SIZE_HTML + VARHDRSZ);
@@ -379,11 +378,11 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     { 
         changes = get_changes(&state_old, state);
 
-        if(state_old.compound_no != state->compound_no && compound_comment_size)  // Word comments
+        if(state_old.compound_no != state->compound_no && state_old.compound_comment_len)  // Word comments
         {
             *s++ = ' ';
             s = copy(s, "<span class='word-comment'>");
-            s = copy_n(s, VARDATA_ANY(state_old.compound_comment), compound_comment_size);
+            s = copy_n(s, state_old.compound_comment, state_old.compound_comment_len);
             s = copy(s, "</span>");
         }
 
@@ -395,7 +394,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
         if (state_old.line_no != state->line_no)    // Newline
         {
             SET_VARSIZE(state->string, s-VARDATA(state->string)+VARHDRSZ);
-            s = add_line(size + EXP_LINE_SIZE_HTML, state, aggcontext);
+            s = add_line(size + EXP_LINE_SIZE_HTML, state, CurrentMemoryContext);
         }
     }
     else
@@ -468,11 +467,11 @@ Datum cuneiform_cun_agg_html_finalfunc(PG_FUNCTION_ARGS)
     memcpy(lines, state->lines, state->line_count * sizeof(Datum));
     lines[state->line_count] = PointerGetDatum(string);
 
-    if(VARSIZE_ANY_EXHDR(state->compound_comment))  // Compound comments
+    if(state->compound_comment_len)  // Compound comments
     {
         *s++ = ' ';
         s = copy(s, "<span class='word-comment'>");
-        s = copy_n(s, VARDATA_ANY(state->compound_comment), VARSIZE_ANY_EXHDR(state->compound_comment));
+        s = copy_n(s, state->compound_comment, state->compound_comment_len);
         s = copy(s, "</span>");
     }
 

@@ -165,11 +165,11 @@ static char* close_code(char* s, const State* s1, const State* s2)
             *s++ = '}';
     }
 
-    if((s2 == NULL || s1->compound_no != s2->compound_no) && s1->compound_comment && VARSIZE_ANY_EXHDR(s1->compound_comment))
+    if((s2 == NULL || s1->compound_no != s2->compound_no) && s1->compound_comment_len)
     {
         *s++ = ' ';
         *s++ = '(';
-        s = copy_n(s, VARDATA_ANY(s1->compound_comment), VARSIZE_ANY_EXHDR(s1->compound_comment));
+        s = copy_n(s, s1->compound_comment, s1->compound_comment_len);
         *s++ = ')';
     }
 
@@ -313,9 +313,8 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     const int32 sign_size = sign ? VARSIZE_ANY_EXHDR(sign) : 0;
     const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
     const int32 comment_size = comment ? VARSIZE_ANY_EXHDR(comment) : 0;
-    const int32 compound_comment_size = state_old.compound_comment ? VARSIZE_ANY_EXHDR(state_old.compound_comment) : 0;
     const int32 section_size = section ? VARSIZE_ANY_EXHDR(section) : 0;
-    const int32 size = value_size + sign_size + critics_size + comment_size + compound_comment_size + section_size;
+    const int32 size = value_size + sign_size + critics_size + comment_size + state_old.compound_comment_len + section_size;
     if(state->string_capacity < string_size + size + MAX_EXTRA_SIZE_CODE)
     {
         state->string = (text*)repalloc(state->string, string_size + size + EXP_LINE_SIZE_CODE + VARHDRSZ);
@@ -337,7 +336,7 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
         if(state_old.line_no != state->line_no)    // Newline
         {
             SET_VARSIZE(state->string, s-VARDATA(state->string)+VARHDRSZ);
-            s = add_line(size + EXP_LINE_SIZE_CODE, state, aggcontext);
+            s = add_line(size + EXP_LINE_SIZE_CODE, state, CurrentMemoryContext);
         }
     }    
 

@@ -86,8 +86,9 @@ typedef struct State
     text* string;
     size_t string_capacity;
 
-    text* compound_comment;
+    char* compound_comment;
     size_t compound_comment_capacity;
+    int compound_comment_len;
 
     int32 sign_no;
     int32 word_no;

@@ -198,9 +198,9 @@ State* cun_init_state(MemoryContext memcontext)
     state->string = (text*) MemoryContextAllocZero(memcontext, VARHDRSZ + 1000);
     state->string_capacity = 1000;
     SET_VARSIZE(state->string, VARHDRSZ);
-    state->compound_comment = (text*) MemoryContextAllocZero(memcontext, VARHDRSZ + 100);
+    state->compound_comment = (char *) MemoryContextAllocZero(memcontext, 100);
+    state->compound_comment_len = 0;
     state->compound_comment_capacity = 100;
-    SET_VARSIZE(state->compound_comment, VARHDRSZ);
     state->word_no = -1;
     state->capitalize = false;
     return state;
@@ -329,15 +329,15 @@ void cun_copy_compound_comment(const text* compound_comment, State* state)
 {
     if(compound_comment != NULL)
     {
-        const int32 size = VARSIZE_ANY_EXHDR(compound_comment);
-        if(state->compound_comment_capacity < size)
+        const int len = VARSIZE_ANY_EXHDR(compound_comment);
+        if(state->compound_comment_capacity < len)
         {
-            state->compound_comment = (text*)repalloc(state->string, size + VARHDRSZ);
-            state->compound_comment_capacity = size;
+            state->compound_comment = (char *) repalloc(state->compound_comment, len);
+            state->compound_comment_capacity = len;
         }
-        cun_copy_n(VARDATA_ANY(state->compound_comment), VARDATA_ANY(compound_comment), size);
-        SET_VARSIZE(state->compound_comment, size+VARHDRSZ); 
+        cun_copy_n(state->compound_comment, VARDATA_ANY(compound_comment), len);
+        state->compound_comment_len = len;
     }
     else
-        SET_VARSIZE(state->compound_comment, VARHDRSZ);
+        state->compound_comment_len = 0;
 }
