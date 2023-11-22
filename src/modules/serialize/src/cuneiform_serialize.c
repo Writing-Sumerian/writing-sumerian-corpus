@@ -25,7 +25,9 @@ static cun_enum_language_t enum_language;
 
 static cun_init_state_t init_state;
 static cun_add_line_t add_line;
+static cun_get_cursor_t get_cursor;
 static cun_get_changes_t get_changes;
+static cun_copy_print_result_t copy_print_result;
 
 static cun_determine_connector_t determine_connector;
 static cun_opened_condition_start_t opened_condition_start;
@@ -48,7 +50,9 @@ void _PG_init(void)
 
     init_state = (cun_init_state_t)load_external_function("cuneiform_print_core", "cun_init_state", true, NULL);
     add_line = (cun_add_line_t)load_external_function("cuneiform_print_core", "cun_add_line", true, NULL);
+    get_cursor = (cun_get_cursor_t)load_external_function("cuneiform_print_core", "cun_get_cursor", true, NULL);
     get_changes = (cun_get_changes_t)load_external_function("cuneiform_print_core", "cun_get_changes", true, NULL);
+    copy_print_result = (cun_copy_print_result_t)load_external_function("cuneiform_print_core", "cun_copy_print_result", true, NULL);
     determine_connector = (cun_determine_connector_t)load_external_function("cuneiform_print_core", "cun_determine_connector", true, NULL);
     opened_condition_start = (cun_opened_condition_start_t)load_external_function("cuneiform_print_core", "cun_opened_condition_start", true, NULL);
     opened_condition_end = (cun_opened_condition_end_t)load_external_function("cuneiform_print_core", "cun_opened_condition_end", true, NULL);
@@ -56,8 +60,8 @@ void _PG_init(void)
 };
 
 
-#define EXP_LINE_SIZE_CODE      100
-#define MAX_EXTRA_SIZE_CODE     50
+#define EXP_LINE_LEN           100
+#define MAX_EXTRA_LINE_LEN      50
 
 #define ARG_VALUE                1
 #define ARG_SIGN                 2
@@ -83,7 +87,6 @@ void _PG_init(void)
 #define ARG_COMPOUND_COMMENT    22
 
 
-// Code
 
 static char* open_code(char* s, const State* s1, State* s2)
 {
@@ -208,6 +211,7 @@ static char* write_simple_connector_code(char* s, int connector)
     return s;
 }
 
+
 static char* write_modified_connector_code(char* s, const Connector c)
 {   
     if(c.ellipsis)
@@ -258,6 +262,30 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     State* state;
     State state_old;
 
+    char *s;
+    bool no_condition;
+    Oid inner_condition;
+
+    const bool first_call = PG_ARGISNULL(0);
+
+    const text* value = PG_ARGISNULL(ARG_VALUE) ? NULL : PG_GETARG_TEXT_PP(ARG_VALUE);
+
+    const bool inverted = PG_GETARG_BOOL(ARG_INVERTED);
+    const bool newline = PG_GETARG_BOOL(ARG_NEWLINE);
+    const bool ligature = PG_GETARG_BOOL(ARG_LIGATURE);
+
+    const text* critics = PG_ARGISNULL(ARG_CRITICS) ? NULL : PG_GETARG_TEXT_PP(ARG_CRITICS);
+    const text* comment = PG_ARGISNULL(ARG_COMMENT) ? NULL : PG_GETARG_TEXT_PP(ARG_COMMENT);
+    const text* compound_comment = PG_ARGISNULL(ARG_COMPOUND_COMMENT) ? NULL : PG_GETARG_TEXT_PP(ARG_COMPOUND_COMMENT);
+
+    const text* section = PG_ARGISNULL(ARG_SECTION) ? NULL : PG_GETARG_TEXT_PP(ARG_SECTION);
+
+    const int32 value_size = value ? VARSIZE_ANY_EXHDR(value) : 0;
+    const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
+    const int32 comment_size = comment ? VARSIZE_ANY_EXHDR(comment) : 0;
+    const int32 section_size = section ? VARSIZE_ANY_EXHDR(section) : 0;
+    const int32 size = value_size + critics_size + comment_size + section_size;
+
     if (!AggCheckCallContext(fcinfo, &aggcontext))
     {
         /* cannot be called directly because of internal-type argument */
@@ -266,8 +294,8 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
 
     set_enums();
 
-    if(PG_ARGISNULL(0))
-        state = init_state(aggcontext);
+    if(first_call)
+        state = init_state(EXP_LINE_LEN, aggcontext);
     else
         state = (State*) PG_GETARG_POINTER(0);
 
@@ -289,69 +317,39 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     state->language = PG_GETARG_OID(ARG_LANGUAGE);
     state->pn_type = PG_GETARG_OID(ARG_PN_TYPE);
     state->pn_type_null = PG_ARGISNULL(ARG_PN_TYPE);
-
     state->capitalize = state_old.capitalize || (PG_GETARG_BOOL(ARG_CAPITALIZED) && state_old.word_no != state->word_no);
-
     state->unknown_reading = state->type == enum_type()->sign;
-    
 
-    const text* value = PG_ARGISNULL(ARG_VALUE) ? NULL : PG_GETARG_TEXT_PP(ARG_VALUE);
-    const text* sign = PG_ARGISNULL(ARG_SIGN) ? (state->unknown_reading ? value : NULL) : PG_GETARG_TEXT_PP(ARG_SIGN);
+    s = get_cursor(size + state_old.compound_comment_len + MAX_EXTRA_LINE_LEN, state);
 
-    const bool inverted = PG_GETARG_BOOL(ARG_INVERTED);
-    const bool newline = PG_GETARG_BOOL(ARG_NEWLINE);
-    const bool ligature = PG_GETARG_BOOL(ARG_LIGATURE);
-
-    const text* critics = PG_ARGISNULL(ARG_CRITICS) ? NULL : PG_GETARG_TEXT_PP(ARG_CRITICS);
-    const text* comment = PG_ARGISNULL(ARG_COMMENT) ? NULL : PG_GETARG_TEXT_PP(ARG_COMMENT);
-    const text* compound_comment = PG_ARGISNULL(ARG_COMPOUND_COMMENT) ? NULL : PG_GETARG_TEXT_PP(ARG_COMPOUND_COMMENT);
-
-    const text* section = PG_ARGISNULL(ARG_SECTION) ? NULL : PG_GETARG_TEXT_PP(ARG_SECTION);
-
-    const int32 string_size = VARSIZE_ANY_EXHDR(state->string);
-    const int32 value_size = value ? VARSIZE_ANY_EXHDR(value) : 0;
-    const int32 sign_size = sign ? VARSIZE_ANY_EXHDR(sign) : 0;
-    const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
-    const int32 comment_size = comment ? VARSIZE_ANY_EXHDR(comment) : 0;
-    const int32 section_size = section ? VARSIZE_ANY_EXHDR(section) : 0;
-    const int32 size = value_size + sign_size + critics_size + comment_size + state_old.compound_comment_len + section_size;
-    if(state->string_capacity < string_size + size + MAX_EXTRA_SIZE_CODE)
-    {
-        state->string = (text*)repalloc(state->string, string_size + size + EXP_LINE_SIZE_CODE + VARHDRSZ);
-        state->string_capacity += size + EXP_LINE_SIZE_CODE;
-    }
-
-    char* s = VARDATA(state->string)+string_size;
-
-    bool no_condition;
-    const Oid inner_condition = opened_condition_start(value ? (char*)VARDATA_ANY(value) : NULL, value_size, &no_condition);
+    inner_condition = opened_condition_start(value ? (char*)VARDATA_ANY(value) : NULL, value_size, &no_condition);
     if(!no_condition)
         state->condition = inner_condition;
 
-    if(string_size)
+    if(!first_call)
     { 
         s = close_code(s, &state_old, state);
         s = write_modified_connector_code(s, determine_connector(&state_old, state, inverted, newline, ligature));        
 
         if(state_old.line_no != state->line_no)    // Newline
         {
-            SET_VARSIZE(state->string, s-VARDATA(state->string)+VARHDRSZ);
-            s = add_line(size + EXP_LINE_SIZE_CODE, state, CurrentMemoryContext);
+            state->line_lens[state->line_count-1] = s - state->lines[state->line_count-1];
+            s = add_line(size + EXP_LINE_LEN, state, aggcontext);
         }
     }    
 
-    if(!state->section_null && (!string_size || state_old.section_null || state_old.section_no != state->section_no))
+    if(!state->section_null && (first_call || state_old.section_null || state_old.section_no != state->section_no))
     {
         s = copy(s, "%sec=");
         s = copy_n(s, VARDATA_ANY(section), section_size);
         *s++ = ' ';
     }
-    else if(state->section_null && string_size && !state_old.section_null)
+    else if(state->section_null && !first_call && !state_old.section_null)
     {
         s = copy(s, "%sec ");
     }
     
-    s = open_code(s, string_size ? &state_old : NULL, state);
+    s = open_code(s, first_call ? NULL : &state_old, state);
 
     if(value)
     {
@@ -377,31 +375,33 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     if(!no_condition)
         state->condition = opened_condition_end(value ? (char*)VARDATA_ANY(value) : NULL, value_size);
 
-    SET_VARSIZE(state->string, s-VARDATA(state->string)+VARHDRSZ); 
+    state->line_lens[state->line_count-1] = s - state->lines[state->line_count-1];
 
     PG_RETURN_POINTER(state);
 }
 
+
 Datum cuneiform_cun_agg_finalfunc(PG_FUNCTION_ARGS)
 {
+    const State* state;
+    Datum* lines;
+    text* string;
+    char* s;
+
     Assert(AggCheckCallContext(fcinfo, NULL));
 
-    const State* state = PG_ARGISNULL(0) ? NULL : (State*) PG_GETARG_POINTER(0);
-    if(state == NULL)
+    if(PG_ARGISNULL(0))
         PG_RETURN_NULL();
 
-    // the finalfunc may not alter state, therefore we need to copy everything
-    text* string = (text*) palloc0(VARSIZE(state->string) + 500);
-    char* s = (char*)memcpy(VARDATA(string), VARDATA(state->string), VARSIZE_ANY_EXHDR(state->string)) + VARSIZE_ANY_EXHDR(state->string);
-    Datum* lines = (Datum*) palloc0((state->line_count+1) * sizeof(Datum));
-    memcpy(lines, state->lines, state->line_count * sizeof(Datum));
-    lines[state->line_count] = PointerGetDatum(string);
+    state = (State*) PG_GETARG_POINTER(0);
+    
+    lines = copy_print_result(state);
+
+    string = DatumGetTextPP(lines[state->line_count-1]);
+    s = VARDATA(string) + state->line_lens[state->line_count-1];
 
     s = close_code(s, state, NULL);
 
     SET_VARSIZE(string, s-VARDATA(string)+VARHDRSZ);
-       
-    ArrayType* a = construct_array(lines, state->line_count+1, 25, -1, false, 'i');
-
-    PG_RETURN_ARRAYTYPE_P(a);
+    PG_RETURN_ARRAYTYPE_P(construct_array(lines, state->line_count, TEXTOID, -1, false, 'i'));
 }

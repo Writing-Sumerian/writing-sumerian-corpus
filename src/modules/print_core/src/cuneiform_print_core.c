@@ -180,24 +180,20 @@ void cun_capitalize(char* s)
         *s = toupper(*s);
 }
 
-bool cun_has_char(const char* s, char c, size_t n)
-{
-    while(n-- != 0)
-        if(s[n] == c)
-            return true;
-    return false;
-}
 
-
-State* cun_init_state(MemoryContext memcontext)
+State* cun_init_state(const int line_capacity, MemoryContext memcontext)
 {
     State* state;
     state = (State*) MemoryContextAllocZero(memcontext, sizeof(State));
-    state->lines = (Datum*) MemoryContextAllocZero(memcontext, 0);
-    state->line_count = 0;
-    state->string = (text*) MemoryContextAllocZero(memcontext, VARHDRSZ + 1000);
+
+    state->lines = (char **) MemoryContextAllocZero(memcontext, 10*sizeof(char *));
+    state->line_lens = (int *) MemoryContextAllocZero(memcontext, 10*sizeof(int));
+    state->line_count = 1;
+    state->line_capacity = 10;
+    state->lines[0] = (char *) MemoryContextAllocZero(memcontext, line_capacity);
+    state->line_lens[0] = 0;
     state->string_capacity = 1000;
-    SET_VARSIZE(state->string, VARHDRSZ);
+
     state->compound_comment = (char *) MemoryContextAllocZero(memcontext, 100);
     state->compound_comment_len = 0;
     state->compound_comment_capacity = 100;
@@ -206,16 +202,32 @@ State* cun_init_state(MemoryContext memcontext)
     return state;
 }
 
-char *cun_add_line(const int32 size, State *state, MemoryContext memcontext)
+char *cun_add_line(const int capacity, State *state, MemoryContext memcontext)
 {
+    if(state->line_count == state->line_capacity)
+    {
+        state->line_capacity *= 2;
+        state->lines = (char **) repalloc(state->lines, state->line_capacity * sizeof(char *));
+        state->line_lens = (int *) repalloc(state->line_lens, state->line_capacity * sizeof(int));   
+    }
+    state->lines[state->line_count] = (char *) MemoryContextAllocZero(memcontext, capacity);
+    state->line_lens[state->line_count] = 0;
     state->line_count += 1;
-    state->lines = (Datum*) repalloc(state->lines, state->line_count * sizeof(Datum));
-    state->lines[state->line_count-1] = PointerGetDatum(state->string);
-    state->string = (text*) MemoryContextAllocZero(memcontext, size + VARHDRSZ);
-    state->string_capacity = size;
-    SET_VARSIZE(state->string, VARHDRSZ);
-    return VARDATA(state->string);
+    state->string_capacity = capacity;
+    return state->lines[state->line_count-1];
 }
+
+char *cun_get_cursor(const int len, State *state)
+{
+    const int i = state->line_count-1;
+    while(state->string_capacity < state->line_lens[i] + len)
+    {
+        state->string_capacity = 2*state->string_capacity;
+        state->lines[i] = (char *)repalloc(state->lines[i], state->string_capacity);
+    }
+    return state->lines[i] + state->line_lens[i];
+}
+
 
 int cun_get_changes(const State* s1, const State* s2)
 {
@@ -237,6 +249,26 @@ int cun_get_changes(const State* s1, const State* s2)
     if(s1->language != s2->language)
         changes += LANGUAGE;
     return changes;
+}
+
+
+Datum* cun_copy_print_result(const State *state)
+{
+    char *p;
+    Datum* lines = (Datum*) palloc0(state->line_count * sizeof(Datum));
+    int texts_size = 500;
+    for(int i = 0; i < state->line_count; ++i)
+        texts_size += state->line_lens[i] + VARHDRSZ;
+    p = palloc0(texts_size);
+    for(int i = 0; i < state->line_count; ++i)
+    {
+        text *t = (text *) p;
+        SET_VARSIZE(t, state->line_lens[i] + VARHDRSZ);
+        memcpy(VARDATA(t), state->lines[i], state->line_lens[i]);
+        lines[i] = PointerGetDatum(t);
+        p += state->line_lens[i] + VARHDRSZ;
+    }
+    return lines;
 }
 
 
@@ -299,8 +331,8 @@ Oid cun_opened_condition_start(const char* s, size_t n, bool* no_condition)
 
 Oid cun_opened_condition_end(const char* s, size_t n)
 {
-    s += n-1;
     size_t i = 0;
+    s += n-1;
     while(i++ != n)
     {
         if(*s == ']')

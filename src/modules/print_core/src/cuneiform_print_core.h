@@ -81,20 +81,21 @@ typedef void (*set_enums_t) (
 
 typedef struct State
 {
-    Datum* lines;
-    int32 line_count;
-    text* string;
+    char** lines;
+    int* line_lens;
+    int line_count;
+    size_t line_capacity;
     size_t string_capacity;
 
     char* compound_comment;
     size_t compound_comment_capacity;
     int compound_comment_len;
 
-    int32 sign_no;
-    int32 word_no;
-    int32 compound_no;
-    int32 line_no;
-    int32 section_no;
+    int sign_no;
+    int word_no;
+    int compound_no;
+    int line_no;
+    int section_no;
     bool section_null;
     Oid type;
     bool phonographic;
@@ -135,20 +136,20 @@ typedef struct Connector
     bool ellipsis;
 } Connector;
 
-typedef void (*cun_set_enums_t)();
-typedef cunEnumType *(*cun_enum_type_t)();
-typedef cunEnumIndicatorType *(*cun_enum_indicator_type_t)();
-typedef cunEnumLanguage *(*cun_enum_language_t)();
-typedef cunEnumCondition *(*cun_enum_condition_t)();
-typedef cunEnumVariantType *(*cun_enum_variant_type_t)();
-typedef cunEnumPN *(*cun_enum_pn_t)();
-extern void cun_set_enums();
-extern cunEnumType *cun_enum_type();
-extern cunEnumIndicatorType *cun_enum_indicator_type();
-extern cunEnumLanguage *cun_enum_language();
-extern cunEnumCondition *cun_enum_condition();
-extern cunEnumVariantType *cun_enum_variant_type();
-extern cunEnumPN *cun_enum_pn();
+typedef void (*cun_set_enums_t)(void);
+typedef cunEnumType *(*cun_enum_type_t)(void);
+typedef cunEnumIndicatorType *(*cun_enum_indicator_type_t)(void);
+typedef cunEnumLanguage *(*cun_enum_language_t)(void);
+typedef cunEnumCondition *(*cun_enum_condition_t)(void);
+typedef cunEnumVariantType *(*cun_enum_variant_type_t)(void);
+typedef cunEnumPN *(*cun_enum_pn_t)(void);
+extern void cun_set_enums(void);
+extern cunEnumType *cun_enum_type(void);
+extern cunEnumIndicatorType *cun_enum_indicator_type(void);
+extern cunEnumLanguage *cun_enum_language(void);
+extern cunEnumCondition *cun_enum_condition(void);
+extern cunEnumVariantType *cun_enum_variant_type(void);
+extern cunEnumPN *cun_enum_pn(void);
 
 typedef char *(*cun_copy_n_t)(char *s1, const char *s2, size_t n);
 typedef char *(*cun_copy_t)(char *s1, const char *s2);
@@ -159,16 +160,20 @@ extern char *cun_copy(char *s1, const char *s2);
 extern int cun_compare_next(const char *s1, const char *s2);
 extern void cun_capitalize(char *s);
 
-typedef State *(*cun_init_state_t)(MemoryContext memcontext);
-typedef char *(*cun_add_line_t)(int32 size, State *state, MemoryContext memcontext);
+typedef State *(*cun_init_state_t)(int line_capacity, MemoryContext memcontext);
+typedef char *(*cun_add_line_t)(int capacity, State *state, MemoryContext memcontext);
+typedef char *(*cun_get_cursor_t)(int len, State *state);
 typedef int (*cun_get_changes_t)(const State *s1, const State *s2);
+typedef Datum *(*cun_copy_print_result_t)(const State *state);
 typedef Connector (*cun_determine_connector_t)(const State *s1, const State *s2, bool inverted, bool newline, bool ligature);
 typedef Oid (*cun_opened_condition_start_t)(const char *s, size_t n, bool *no_condition);
 typedef Oid (*cun_opened_condition_end_t)(const char *s, size_t n);
 typedef void (*cun_copy_compound_comment_t)(const text *compound_comment, State *state);
-extern State *cun_init_state(MemoryContext memcontext);
-extern char *cun_add_line(int32 size, State *state, MemoryContext memcontext);
+extern State *cun_init_state(int line_capacity, MemoryContext memcontext);
+extern char *cun_add_line(int capacity, State *state, MemoryContext memcontext);
+extern char *cun_get_cursor(int len, State *state);
 extern int cun_get_changes(const State *s1, const State *s2);
+extern Datum* cun_copy_print_result(const State *state);
 extern Connector cun_determine_connector(const State *s1, const State *s2, bool inverted, bool newline, bool ligature);
 extern Oid cun_opened_condition_start(const char *s, size_t n, bool *no_condition);
 extern Oid cun_opened_condition_end(const char *s, size_t n);
