@@ -2,7 +2,6 @@ CREATE OR REPLACE VIEW corpus_code AS
 SELECT
     transliteration_id,
     COALESCE(character_print, CASE WHEN type = 'sign' THEN regexp_replace(custom_value, '^(\(?[A-ZĜḪŘŠṢṬ]+[0-9]*(@([gštvzn]|90|180))*\)?([×\.%&@\+]\(?[A-ZĜḪŘŠṢṬ]+[0-9]*(@([gštvzn]|90|180))*\)?)*)(?=\(|$)', '|\1|') ELSE custom_value END) AS value,
-    NULL AS sign,
     sign_no, 
     word_no, 
     compound_no, 
@@ -35,7 +34,6 @@ CREATE VIEW corpus_code_clean AS
 SELECT
     transliteration_id,
     COALESCE(character_print, placeholder_code(type)) AS value,
-    NULL AS sign,
     sign_no, 
     word_no, 
     compound_no, 
@@ -56,8 +54,8 @@ CREATE VIEW corpus_serialized_range AS
 SELECT
     a.transliteration_id,
     RANGE,
-    cun_agg (value, sign, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
-        inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no) AS content
+    cun_agg (value, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
+        inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment ORDER BY sign_no) AS content
 FROM (
     SELECT
         a.transliteration_id,
@@ -77,8 +75,8 @@ CREATE VIEW lines_serialized AS
 SELECT
     a.transliteration_id,
     RANGE,
-    cun_agg (value, sign, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
-        inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no) AS content
+    cun_agg (value, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
+        inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment ORDER BY sign_no) AS content
 FROM (
     SELECT DISTINCT
         a.transliteration_id,
@@ -98,8 +96,8 @@ CREATE OR REPLACE VIEW transliterations_serialized AS
 WITH a AS NOT MATERIALIZED (
 SELECT
     transliteration_id,
-    cun_agg (value, sign, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
-        inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no) AS lines
+    cun_agg (value, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
+        inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment ORDER BY sign_no) AS lines
 FROM corpus_code
 GROUP BY
     transliteration_id

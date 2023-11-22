@@ -64,28 +64,27 @@ void _PG_init(void)
 #define MAX_EXTRA_LINE_LEN     200
 
 #define ARG_VALUE                1
-#define ARG_SIGN                 2
-#define ARG_SIGN_NO              3
-#define ARG_WORD_NO              4
-#define ARG_COMPOUND_NO          5
-#define ARG_SECTION_NO           6
-#define ARG_LINE_NO              7
-#define ARG_TYPE                 8
-#define ARG_INDICATOR_TYPE       9
-#define ARG_PHONOGRAPHIC        10      
-#define ARG_STEM                11
-#define ARG_CONDITION           12
-#define ARG_LANGUAGE            13
-#define ARG_INVERTED            14
-#define ARG_NEWLINE             15
-#define ARG_LIGATURE            16
-#define ARG_CRITICS             17
-#define ARG_COMMENT             18
-#define ARG_CAPITALIZED         19
-#define ARG_PN_TYPE             20
-#define ARG_SECTION             21
-#define ARG_COMPOUND_COMMENT    22
-#define ARG_HIGHLIGHT           23
+#define ARG_SIGN_NO              2
+#define ARG_WORD_NO              3
+#define ARG_COMPOUND_NO          4
+#define ARG_SECTION_NO           5
+#define ARG_LINE_NO              6
+#define ARG_TYPE                 7
+#define ARG_INDICATOR_TYPE       8
+#define ARG_PHONOGRAPHIC         9      
+#define ARG_STEM                10
+#define ARG_CONDITION           11
+#define ARG_LANGUAGE            12
+#define ARG_INVERTED            13
+#define ARG_NEWLINE             14
+#define ARG_LIGATURE            15
+#define ARG_CRITICS             16
+#define ARG_COMMENT             17
+#define ARG_CAPITALIZED         18
+#define ARG_PN_TYPE             19
+#define ARG_SECTION             20
+#define ARG_COMPOUND_COMMENT    21
+#define ARG_HIGHLIGHT           22
 
 
 // HTML

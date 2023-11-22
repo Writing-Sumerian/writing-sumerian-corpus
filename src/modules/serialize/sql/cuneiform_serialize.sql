@@ -1,7 +1,6 @@
 CREATE OR REPLACE FUNCTION cun_agg_sfunc (
     internal, 
     text, 
-    text,
     integer, 
     integer, 
     integer, 
@@ -21,8 +20,7 @@ CREATE OR REPLACE FUNCTION cun_agg_sfunc (
     boolean,
     pn_type,
     text,
-    text,
-    boolean
+    text
     )
     RETURNS internal
     AS 'cuneiform_serialize'
@@ -44,7 +42,6 @@ CREATE OR REPLACE FUNCTION cun_agg_finalfunc (internal)
 
 CREATE AGGREGATE cun_agg (
     text, 
-    text,
     integer, 
     integer, 
     integer, 
@@ -64,8 +61,7 @@ CREATE AGGREGATE cun_agg (
     boolean,
     pn_type,
     text,
-    text,
-    boolean
+    text
     ) (
     SFUNC = cun_agg_sfunc,
     STYPE = internal,

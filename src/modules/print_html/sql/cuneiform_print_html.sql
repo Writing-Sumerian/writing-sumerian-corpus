@@ -1,7 +1,6 @@
 CREATE OR REPLACE FUNCTION cun_agg_html_sfunc (
     internal, 
     text, 
-    text,
     integer, 
     integer, 
     integer, 
@@ -44,7 +43,6 @@ CREATE OR REPLACE FUNCTION cun_agg_html_finalfunc (internal)
 
 CREATE AGGREGATE cun_agg_html (
     text, 
-    text,
     integer, 
     integer, 
     integer, 

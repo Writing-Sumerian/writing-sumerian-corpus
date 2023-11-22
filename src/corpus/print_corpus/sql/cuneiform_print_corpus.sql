@@ -2,7 +2,6 @@ CREATE OR REPLACE VIEW corpus_html AS
 SELECT
     transliteration_id,
     COALESCE(character_print, custom_value) AS value,
-    NULL AS sign, 
     sign_no, 
     word_no, 
     compound_no, 
@@ -34,7 +33,6 @@ CREATE VIEW corpus_html_clean AS
 SELECT
     transliteration_id,
     COALESCE(character_print, placeholder_html(type)) AS value,
-    NULL AS sign,
     sign_no, 
     word_no, 
     compound_no, 
@@ -54,7 +52,7 @@ CREATE VIEW corpus_html_range AS
 SELECT
     a.transliteration_id,
     RANGE,
-    cun_agg_html (value, sign, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
+    cun_agg_html (value, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
         inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no)  AS content
 FROM (
     SELECT
@@ -75,7 +73,7 @@ CREATE VIEW corpus_html_transliterations AS
 WITH a AS (
 SELECT
     transliteration_id,
-    cun_agg_html (value, sign, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
+    cun_agg_html (value, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
         inverted, ligature, newline, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no) AS lines
 FROM corpus_html
 GROUP BY
