@@ -9,6 +9,7 @@
 #include <access/htup_details.h>
 #include <catalog/pg_type.h>
 #include <utils/array.h>
+#include <utils/arrayaccess.h>
 #include <tcop/pquery.h>
 
 static cun_set_enums_t set_enums;
@@ -85,12 +86,64 @@ void _PG_init(void)
 #define ARG_SECTION             20
 #define ARG_COMPOUND_COMMENT    21
 #define ARG_HIGHLIGHT           22
+#define ARG_EXTRA               23
 
 
-// HTML
+typedef struct HTMLState {
+    State *state;
+    int *extra;
+    bool *extra_null;
+    int *extra_old;
+    bool *extra_null_old;
+    int len_extra;
+} htmlState;
 
-static char* open_html(char* s, int changes, const State* state)
+
+static htmlState *init_htmlstate(const int len_extra, MemoryContext memcontext)
 {
+    htmlState *htmlstate = (htmlState *) MemoryContextAlloc(memcontext, sizeof(htmlState));
+    htmlstate->state = init_state(EXP_LINE_LEN, memcontext);
+    htmlstate->extra = (int *) MemoryContextAlloc(memcontext, len_extra * sizeof(int));
+    htmlstate->extra_null = (bool *) MemoryContextAlloc(memcontext, len_extra * sizeof(bool));
+    htmlstate->extra_old = (int *) MemoryContextAlloc(memcontext, len_extra * sizeof(int));
+    htmlstate->extra_null_old = (bool *) MemoryContextAlloc(memcontext, len_extra * sizeof(bool));
+    htmlstate->len_extra = len_extra;
+    return htmlstate;
+}
+
+static void load_extra(const AnyArrayType *extra, htmlState *state)
+{
+    array_iter it;
+    int *const extra_swap = state->extra;
+    bool *const extra_null_swap = state->extra_null;
+    state->extra = state->extra_old;
+    state->extra_null = state->extra_null_old;
+    state->extra_old = extra_swap;
+    state->extra_null_old = extra_null_swap;
+    array_iter_setup(&it, (AnyArrayType *) extra);
+    for(int i = 0; i < state->len_extra; ++i)
+    {
+        const Datum d = array_iter_next(&it, &(state->extra_null[i]), i, 4, true, TYPALIGN_INT);
+        state->extra[i] = DatumGetInt32(d);
+    }
+}
+
+static int get_extra_changes(const htmlState *state)
+{
+    int changes = 0;
+    for(int i = 0; i < state->len_extra; ++i)
+        if(state->extra_null[i] != state->extra_null_old[i] || (!state->extra_null[i] && state->extra[i] != state->extra_old[i]))
+            changes += 1 << i;
+    return changes;
+}
+
+
+static char* open_html(char* s, int changes, const State* state, const int *extra, const bool *extra_null, const int len_extra)
+{
+    for(int i = 0; i < len_extra; ++i)
+        if(changes >= LANGUAGE * (2 << i) && !extra_null[i])
+            s += sprintf(s, "<span class='extra%d-%d'>", i, extra[i]);
+
     if(changes >= LANGUAGE && state->language != enum_language()->sumerian)
     {
         if(state->language == enum_language()->akkadian)
@@ -142,7 +195,8 @@ static char* open_html(char* s, int changes, const State* state)
     return s;
 }
 
-static char* close_html(char* s, int changes, const State* state)
+
+static char* close_html(char* s, int changes, const State* state, const int *extra, const bool *extra_null, const int len_extra)
 {
     if(changes >= CONDITION && state->condition != enum_condition()->intact)
         s = copy(s, "</span>");
@@ -158,6 +212,9 @@ static char* close_html(char* s, int changes, const State* state)
         s = copy(s, "</span>");
     if(changes >= LANGUAGE && state->language != enum_language()->sumerian)
         s = copy(s, "</span>");
+    for(int i = 0; i < len_extra; ++i)
+        if(changes >= LANGUAGE * (2 << i) && !extra_null[i])
+            s = copy(s, "</span>");
     return s;
 }
 
@@ -176,6 +233,7 @@ static char* open_condition_html(char* s, Oid condition)
         s = copy(s, "<span class='open-erased'></span>");
     return s;
 }
+
 
 static char* close_condition_html(char* s, Oid condition)
 {
@@ -207,6 +265,7 @@ static char* write_simple_connector_html(char* s, int connector)
         *s++ = ' ';
     return s;
 }
+
 
 static char* write_modified_connector_html(char* s, const Connector c)
 {   
@@ -245,6 +304,7 @@ static char* write_modified_connector_html(char* s, const Connector c)
     return s;
 }
 
+
 static size_t calculate_value_size_replacing_conditions_html(const char* s, size_t n)
 {
     size_t size = 0;
@@ -271,6 +331,7 @@ static size_t calculate_value_size_replacing_conditions_html(const char* s, size
     }
     return size;
 }
+
 
 static char* write_value_replacing_conditions_html(char* s, const char* v, size_t n)
 {
@@ -299,9 +360,11 @@ static char* write_value_replacing_conditions_html(char* s, const char* v, size_
     return s;
 }
 
+
 Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 {
     MemoryContext aggcontext;
+    htmlState* htmlstate;
     State* state;
     State state_old;
 
@@ -324,6 +387,8 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
     const text* section = PG_ARGISNULL(ARG_SECTION) ? NULL : PG_GETARG_TEXT_PP(ARG_SECTION);
 
+    const AnyArrayType* extra = PG_GETARG_ANY_ARRAY_P(ARG_EXTRA);
+
     const int32 value_size = value ? VARSIZE_ANY_EXHDR(value) : 0;
     const int32 value_size_final = calculate_value_size_replacing_conditions_html(value ? VARDATA_ANY(value) : NULL, value_size);
     const int32 critics_size = critics ? VARSIZE_ANY_EXHDR(critics) : 0;
@@ -340,10 +405,11 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     set_enums();
 
     if(PG_ARGISNULL(0))
-        state = init_state(EXP_LINE_LEN, aggcontext);
+        htmlstate = init_htmlstate(ArrayGetNItems(AARR_NDIM(extra), AARR_DIMS(extra)), aggcontext);
     else
-        state = (State*) PG_GETARG_POINTER(0);
+        htmlstate = (htmlState*) PG_GETARG_POINTER(0);
 
+    state = htmlstate->state;
     state_old = *state;
 
     state->sign_no = PG_GETARG_INT32(ARG_SIGN_NO);
@@ -366,6 +432,8 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     state->capitalize = state_old.capitalize || (PG_GETARG_BOOL(ARG_CAPITALIZED) && state_old.word_no != state->word_no);
     state->unknown_reading = state->type == enum_type()->sign;
 
+    load_extra(extra, htmlstate);
+
     s = get_cursor(size + state_old.compound_comment_len + MAX_EXTRA_LINE_LEN, state);
 
     inner_condition = opened_condition_start(value ? (char*)VARDATA_ANY(value) : NULL, value_size, &no_condition);
@@ -374,7 +442,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
     if(!first_call)
     { 
-        changes = get_changes(&state_old, state);
+        changes = get_changes(&state_old, state) + 2*LANGUAGE*get_extra_changes(htmlstate);
 
         if(state_old.compound_no != state->compound_no && state_old.compound_comment_len)  // Word comments
         {
@@ -384,7 +452,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
             s = copy(s, "</span>");
         }
 
-        s = close_html(s, changes, &state_old);
+        s = close_html(s, changes, &state_old, htmlstate->extra_old, htmlstate->extra_null_old, htmlstate->len_extra);
         if(state->condition != state_old.condition || state_old.line_no != state->line_no)
             s = close_condition_html(s,state_old.condition);
         s = write_modified_connector_html(s, determine_connector(&state_old, state, inverted, newline, ligature));
@@ -403,7 +471,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
     if(first_call || state->condition != state_old.condition || state_old.line_no != state->line_no)
         s = open_condition_html(s, state->condition);
-    s = open_html(s, changes, state);
+    s = open_html(s, changes, state, htmlstate->extra, htmlstate->extra_null, htmlstate->len_extra);
 
     if(value)
     {
@@ -448,11 +516,12 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
     state->line_lens[state->line_count-1] = s - state->lines[state->line_count-1];
 
-    PG_RETURN_POINTER(state);
+    PG_RETURN_POINTER(htmlstate);
 }
 
 Datum cuneiform_cun_agg_html_finalfunc(PG_FUNCTION_ARGS)
 {
+    const htmlState* htmlstate;
     const State* state;
     Datum* lines;
     text* string;
@@ -463,7 +532,8 @@ Datum cuneiform_cun_agg_html_finalfunc(PG_FUNCTION_ARGS)
     if(PG_ARGISNULL(0))
         PG_RETURN_NULL();
 
-    state = (State*) PG_GETARG_POINTER(0);
+    htmlstate = (htmlState*) PG_GETARG_POINTER(0);
+    state = htmlstate->state;
     
     lines = copy_print_result(state);
 
@@ -478,7 +548,7 @@ Datum cuneiform_cun_agg_html_finalfunc(PG_FUNCTION_ARGS)
         s = copy(s, "</span>");
     }
 
-    s = close_html(s, INT_MAX, state);
+    s = close_html(s, INT_MAX, state, htmlstate->extra, htmlstate->extra_null, htmlstate->len_extra);
     s = close_condition_html(s, state->condition);
        
     SET_VARSIZE(string, s-VARDATA(string)+VARHDRSZ);

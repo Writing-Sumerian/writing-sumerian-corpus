@@ -53,7 +53,7 @@ SELECT
     a.transliteration_id,
     RANGE,
     cun_agg_html (value, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
-        inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no)  AS content
+        inverted, newline, ligature, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE, VARIADIC ARRAY[]::integer[] ORDER BY sign_no)  AS content
 FROM (
     SELECT
         a.transliteration_id,
@@ -74,7 +74,7 @@ WITH a AS (
 SELECT
     transliteration_id,
     cun_agg_html (value, sign_no, word_no, compound_no, section_no, line_no, type, indicator_type, phonographic, stem, condition, language, 
-        inverted, ligature, newline, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE ORDER BY sign_no) AS lines
+        inverted, ligature, newline, crits, comment, capitalized, pn_type, section_name, compound_comment, FALSE, VARIADIC ARRAY[]::integer[] ORDER BY sign_no) AS lines
 FROM corpus_html
 GROUP BY
     transliteration_id

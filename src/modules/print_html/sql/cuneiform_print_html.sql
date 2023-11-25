@@ -21,7 +21,8 @@ CREATE OR REPLACE FUNCTION cun_agg_html_sfunc (
     pn_type,
     text,
     text,
-    boolean
+    boolean,
+    VARIADIC integer[]
     )
     RETURNS internal
     AS 'cuneiform_print_html'
@@ -63,7 +64,8 @@ CREATE AGGREGATE cun_agg_html (
     pn_type,
     text,
     text,
-    boolean
+    boolean,
+    VARIADIC integer[]
     ) (
     SFUNC = cun_agg_html_sfunc,
     STYPE = internal,
