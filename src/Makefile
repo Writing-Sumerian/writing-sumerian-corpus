@@ -21,6 +21,7 @@ all:
 	make -C corpus/encode_corpus
 	make -C corpus/parse_corpus
 	make -C corpus/log_tables
+	make -C corpus/log_corpus
 	make -C corpus/edit_corpus
 	make -C corpus/replace_corpus
 	make -C corpus/search_corpus
@@ -50,6 +51,7 @@ install:
 	make -C corpus/encode_corpus install
 	make -C corpus/parse_corpus install
 	make -C corpus/log_tables install
+	make -C corpus/log_corpus install
 	make -C corpus/edit_corpus install
 	make -C corpus/replace_corpus install
 	make -C corpus/search_corpus install
