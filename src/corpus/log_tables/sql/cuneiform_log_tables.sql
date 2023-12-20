@@ -2,7 +2,7 @@ CREATE TABLE edits (
     edit_id BIGSERIAL PRIMARY KEY,
     transliteration_id integer REFERENCES transliterations(transliteration_id) ON DELETE CASCADE,
     timestamp timestamp,
-    user_id text,
+    user_id integer,
     internal boolean
 );
 
