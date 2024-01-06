@@ -99,21 +99,27 @@ CREATE TYPE corpus_type AS (
 );
 
 
-CREATE OR REPLACE PROCEDURE create_corpus (schema text)
+CREATE OR REPLACE PROCEDURE create_corpus (v_schema text, v_temp boolean DEFAULT FALSE)
     LANGUAGE PLPGSQL
     AS 
 $BODY$
+DECLARE
+
+v_temp_clause text := CASE WHEN v_temp THEN 'TEMPORARY' ELSE '' END;
+v_on_commit_clause text := CASE WHEN v_temp THEN 'ON COMMIT DROP' ELSE '' END;
 
 BEGIN
 
 EXECUTE format(
     $$
-    CREATE TABLE %1$I.sections (
+    CREATE %1$s TABLE %2$I.sections (
         LIKE sections_type,
         PRIMARY KEY (transliteration_id, section_no)
-    )
+    ) %3$s
     $$,
-    schema);
+    v_temp_clause,
+    v_schema,
+    v_on_commit_clause);
 EXECUTE format(
     $$
     ALTER TABLE %1$I.sections 
@@ -121,95 +127,109 @@ EXECUTE format(
         ALTER COLUMN composition_id SET NOT NULL,
         ALTER COLUMN witness_type SET NOT NULL
     $$,
-    schema);
+    v_schema);
 
 EXECUTE format(
     $$
-    CREATE TABLE %1$I.compounds (
+    CREATE %1$s TABLE %2$I.compounds (
         LIKE compounds_type,
         PRIMARY KEY (transliteration_id, compound_no),
-        FOREIGN KEY (transliteration_id, section_no) REFERENCES %1$I.sections (transliteration_id, section_no) DEFERRABLE INITIALLY IMMEDIATE
-    )
+        FOREIGN KEY (transliteration_id, section_no) REFERENCES %2$I.sections (transliteration_id, section_no) DEFERRABLE INITIALLY IMMEDIATE
+    ) %3$s
     $$,
-    schema);
+    v_temp_clause,
+    v_schema,
+    v_on_commit_clause);
 
 EXECUTE format(
     $$
-    CREATE TABLE %1$I.words (
+    CREATE %1$s TABLE %2$I.words (
         LIKE words_type,
         PRIMARY KEY (transliteration_id, word_no),
-        FOREIGN KEY (transliteration_id, compound_no) REFERENCES %1$I.compounds (transliteration_id, compound_no) DEFERRABLE INITIALLY IMMEDIATE
-    )
+        FOREIGN KEY (transliteration_id, compound_no) REFERENCES %2$I.compounds (transliteration_id, compound_no) DEFERRABLE INITIALLY IMMEDIATE
+    ) %3$s
     $$,
-    schema);
+    v_temp_clause,
+    v_schema,
+    v_on_commit_clause);
 EXECUTE format(
     $$
     ALTER TABLE %1$I.words 
         ALTER COLUMN compound_no SET NOT NULL,
         ALTER COLUMN capitalized SET NOT NULL
     $$,
-    schema);
+    v_schema);
 
 EXECUTE format(
     $$
-    CREATE TABLE %1$I.surfaces (
+    CREATE %1$s TABLE %2$I.surfaces (
         LIKE surfaces_type,
         PRIMARY KEY (transliteration_id, surface_no)
-    )
+    ) %3$s
     $$,
-    schema);
+    v_temp_clause,
+    v_schema,
+    v_on_commit_clause);
 EXECUTE format(
     $$
     ALTER TABLE %1$I.surfaces 
         ALTER COLUMN surface_type SET NOT NULL
     $$,
-    schema);
+    v_schema);
 
 EXECUTE format(
     $$
-    CREATE TABLE %1$I.blocks (
+    CREATE %1$s TABLE %2$I.blocks (
         LIKE blocks_type,
         PRIMARY KEY (transliteration_id, block_no),
-        FOREIGN KEY (transliteration_id, surface_no) REFERENCES %1$I.surfaces (transliteration_id, surface_no) DEFERRABLE INITIALLY IMMEDIATE
-    )
+        FOREIGN KEY (transliteration_id, surface_no) REFERENCES %2$I.surfaces (transliteration_id, surface_no) DEFERRABLE INITIALLY IMMEDIATE
+    ) %3$s
     $$,
-    schema);
+    v_temp_clause,
+    v_schema,
+    v_on_commit_clause);
 EXECUTE format(
     $$
     ALTER TABLE %1$I.blocks 
         ALTER COLUMN surface_no SET NOT NULL,
         ALTER COLUMN block_type SET NOT NULL
     $$,
-    schema);
+    v_schema);
 
 EXECUTE format(
     $$
-    CREATE TABLE %1$I.lines (
+    CREATE %1$s TABLE %2$I.lines (
         LIKE lines_type,
         PRIMARY KEY (transliteration_id, line_no),
-        FOREIGN KEY (transliteration_id, block_no) REFERENCES %1$I.blocks (transliteration_id, block_no) DEFERRABLE INITIALLY IMMEDIATE
-    )
+        FOREIGN KEY (transliteration_id, block_no) REFERENCES %2$I.blocks (transliteration_id, block_no) DEFERRABLE INITIALLY IMMEDIATE
+    ) %3$s
     $$,
-    schema);
+    v_temp_clause,
+    v_schema,
+    v_on_commit_clause);
 EXECUTE format(
     $$
     ALTER TABLE %1$I.lines 
         ALTER COLUMN block_no SET NOT NULL
     $$,
-    schema);
+    v_schema);
 
 EXECUTE format(
     $$
-    CREATE TABLE %1$I.corpus (
+    CREATE %1$s TABLE %2$I.corpus (
         LIKE corpus_type,
         PRIMARY KEY (transliteration_id, sign_no),
-        FOREIGN KEY (value_id) REFERENCES values DEFERRABLE INITIALLY IMMEDIATE,
-        FOREIGN KEY (sign_variant_id) REFERENCES sign_variants DEFERRABLE INITIALLY IMMEDIATE,
-        FOREIGN KEY (transliteration_id, word_no) REFERENCES %1$I.words (transliteration_id, word_no) DEFERRABLE INITIALLY IMMEDIATE,
-        FOREIGN KEY (transliteration_id, line_no) REFERENCES %1$I.lines (transliteration_id, line_no) DEFERRABLE INITIALLY IMMEDIATE
-    )
+         %4$s
+         %5$s
+        FOREIGN KEY (transliteration_id, word_no) REFERENCES %2$I.words (transliteration_id, word_no) DEFERRABLE INITIALLY IMMEDIATE,
+        FOREIGN KEY (transliteration_id, line_no) REFERENCES %2$I.lines (transliteration_id, line_no) DEFERRABLE INITIALLY IMMEDIATE
+    ) %3$s
     $$,
-    schema);
+    v_temp_clause,
+    v_schema,
+    v_on_commit_clause,
+    CASE WHEN v_temp THEN '' ELSE 'FOREIGN KEY (value_id) REFERENCES values DEFERRABLE INITIALLY IMMEDIATE,' END,
+    CASE WHEN v_temp THEN '' ELSE 'FOREIGN KEY (sign_variant_id) REFERENCES sign_variants DEFERRABLE INITIALLY IMMEDIATE,' END);
 EXECUTE format(
     $$
     ALTER TABLE %1$I.corpus 
@@ -221,7 +241,7 @@ EXECUTE format(
         ALTER COLUMN inverted SET NOT NULL,
         ALTER COLUMN ligature SET NOT NULL
     $$,
-    schema);
+    v_schema);
 
 END;
 
