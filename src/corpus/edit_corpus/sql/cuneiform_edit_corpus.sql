@@ -50,9 +50,18 @@ DECLARE
 
 BEGIN
 
-    CALL parse(v_code, 'editor', v_language, v_stemmed, v_transliteration_id);
+    CALL create_corpus('pg_temp', TRUE);
+    CREATE TEMPORARY TABLE errors (
+        transliteration_id integer,
+        line integer,
+        col integer,
+        symbol text,
+        message text
+    );
 
-    SELECT string_agg(format('"%s" near %s:%s', message, line, col),  E'\n') INTO v_error FROM editor.errors;
+    CALL parse(v_code, 'pg_temp', v_language, v_stemmed, v_transliteration_id);
+
+    SELECT string_agg(format('"%s" near %s:%s', message, line, col),  E'\n') INTO v_error FROM errors;
     IF length(v_error) > 0 THEN
         RAISE EXCEPTION 'cuneiform_parser syntax error:%', v_error;
     END IF;
@@ -70,8 +79,7 @@ BEGIN
         RAISE EXCEPTION 'cuneiform_parser encoding error:%', v_error;
     END IF;
 
-    CALL edit_corpus('editor', v_transliteration_id, v_user_id, v_internal);
-    CALL delete_transliteration(v_transliteration_id, 'editor');
+    CALL edit_corpus('pg_temp', v_transliteration_id, v_user_id, v_internal);
 
 END;
 

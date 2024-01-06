@@ -1,14 +1,3 @@
-CREATE SCHEMA editor;
-
-CALL create_corpus('editor');
-CREATE TABLE editor.errors (
-    transliteration_id integer,
-    line integer,
-    col integer,
-    symbol text,
-    message text
-);
-
 CREATE TYPE levenshtein_op AS ENUM ('NONE', 'INSERT', 'DELETE', 'UPDATE');
 CREATE TYPE wagner_fischer_op AS (op levenshtein_op, pos integer);
 
