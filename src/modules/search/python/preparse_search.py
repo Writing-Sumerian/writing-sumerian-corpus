@@ -88,7 +88,7 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
             return f"[{s}]", f"[{w}]"
 
         @v_args(meta=True)
-        def paren(self, args, meta):
+        def paren(self, meta, args):
             s, w = [''.join(x) for x in zip(*args)]
             self.wildcardId += 1
             self.wildcards.append((meta.start_pos, self.wildcardId, w, True))
@@ -115,7 +115,7 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
             return re.sub(r'([vsgcxXnp])', r'P\1', s), f'<{w}>'
 
         @v_args(meta=True)
-        def value(self, args, meta):
+        def value(self, meta, args):
             w = args[0] + (f'({args[1]})' if len(args) == 2 else '')
             codes = DB.value(args[0], args[1] if len(args) == 2 else None)
             s = '|'.join(codes)
@@ -126,7 +126,7 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
             return s, w
       
         @v_args(meta=True)
-        def pattern(self, args, meta):
+        def pattern(self, meta, args):
             pattern = f'^{args[0][1:-1]}([0-9]+|x)?$'
             w = args[0] + (f'({args[1]})' if len(args) == 2 else '')
             codes = DB.pattern(pattern, args[1] if len(args) == 2 else None)
@@ -137,7 +137,7 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
             return s, w
 
         @v_args(meta=True)
-        def sign(self, args, meta):
+        def sign(self, meta, args):
             w = args[0] + (f'({args[1]})' if len(args) == 2 else '')
             codes = DB.sign(args[0], args[1] if len(args) == 2 else None)
             s = '|'.join(codes)
@@ -147,7 +147,7 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
             return s, w
 
         @v_args(meta=True)
-        def form(self, args, meta):
+        def form(self, meta, args):
             w = args[0] + (f'({args[1]})' if len(args) == 2 else '')
             codes = DB.form(args[0], args[1] if len(args) == 2 else None)
             s = '('+')|('.join(codes)+')'
@@ -157,13 +157,13 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
             return s, w
 
         @v_args(meta=True)     
-        def signx(self, args, meta):
+        def signx(self, meta, args):
             self.wildcardId += 1
             self.wildcards.append((meta.start_pos, self.wildcardId, 'X', False))
             return f'X@{self.wildcardId}', 'X'
 
         @v_args(meta=True)
-        def valuex(self, args, meta):
+        def valuex(self, meta, args):
             self.wildcardId += 1
             if len(args) == 1:
                 self.wildcards.append((meta.start_pos, self.wildcardId, 'x', False))
@@ -174,7 +174,7 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
             return f'{code}@{self.wildcardId}', w
 
         @v_args(meta=True)   
-        def n(self, args, meta):
+        def n(self, meta, args):
             self.wildcardId += 1
             self.wildcards.append((meta.start_pos, self.wildcardId, 'n', False))
             return f'n@{self.wildcardId}', 'n'
@@ -265,7 +265,7 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
     tr = str.maketrans('cjvCJV', 'šĝřŠĜŘ')
     searchTerm = re.sub(r'(?<!@)[cjvCJV]', lambda m: m.group().translate(tr), search_term)
 
-    l = Lark(grammar, lexer='standard', propagate_positions=True)
+    l = Lark(grammar, lexer='basic', propagate_positions=True)
     try:
         tree = l.parse(searchTerm)
         code, wildcards = T().transform(tree)
