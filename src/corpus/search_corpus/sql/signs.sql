@@ -102,7 +102,7 @@ BEGIN
             AND genre_id IS NOT DISTINCT FROM v_genre_id
             AND object_id IS NOT DISTINCT FROM v_object_id;
     ELSIF zero IS NULL THEN
-        INSERT INTO sign_variants_present VALUES (v_sign_variant_id, v_period_id, v_provenience_id, v_object_id, v_genre_id, v_val, v_val_norm);
+        INSERT INTO sign_variants_present VALUES (v_sign_variant_id, v_period_id, v_provenience_id, v_genre_id, v_object_id, v_val, v_val_norm);
     END IF;
     
 END;
