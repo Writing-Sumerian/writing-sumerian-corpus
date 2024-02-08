@@ -251,6 +251,84 @@ END;
 $BODY$;
 
 
+CREATE OR REPLACE FUNCTION align_sections (
+        v_transliteration_id integer,
+        v_source_schema text, 
+        v_target_schema text
+    )
+    RETURNS SETOF log_data
+    VOLATILE
+    LANGUAGE 'plpgsql'
+AS $BODY$
+DECLARE
+
+v_max_section_no_target integer;
+v_compound_no integer;
+v_section_no_diff integer;
+v_row_count integer;
+
+BEGIN
+
+EXECUTE format($$
+    SELECT COALESCE(max(section_no), -1) FROM %2$I.sections WHERE transliteration_id = %1$s
+    $$,
+    v_transliteration_id,
+    v_target_schema)
+INTO v_max_section_no_target;
+
+RETURN QUERY EXECUTE format($$
+    SELECT (insert_entry).* FROM (
+        SELECT 
+            insert_entry(
+                transliteration_id, 
+                section_no, 
+                'sections', 
+                'section_no', 
+                sections, 
+                %2$L
+            ) 
+        FROM 
+            %3$I.sections 
+        WHERE 
+            transliteration_id = %1$s
+            AND section_no > %4$s) _
+    $$,
+    v_transliteration_id,
+    v_target_schema,
+    v_source_schema,
+    v_max_section_no_target);
+
+LOOP
+    EXECUTE format($$
+        SELECT 
+            compound_no,
+            b.section_no - a.section_no
+        FROM 
+            %2$I.compounds a 
+            JOIN %3$I.compounds b USING (transliteration_id, compound_no)
+        WHERE 
+            a.transliteration_id = %1$s
+            AND a.section_no != b.section_no
+        ORDER BY compound_no LIMIT 1
+        $$,
+        v_transliteration_id,
+        v_target_schema,
+        v_source_schema)
+    INTO
+        v_compound_no,
+        v_section_no_diff;
+
+    GET DIAGNOSTICS v_row_count = ROW_COUNT;
+    EXIT WHEN v_row_count = 0;
+
+    RETURN QUERY SELECT * FROM adjust_key_col(v_transliteration_id, v_compound_no, 'compounds', 'compound_no', 'section_no', v_section_no_diff, v_target_schema);
+
+END LOOP;
+RETURN;
+END;
+$BODY$;
+
+
 CREATE OR REPLACE FUNCTION delete_empty_entries (
     transliteration_id integer,
     target text,
@@ -314,7 +392,7 @@ DECLARE
     word_special_col      boolean[]   := '{t,f}';
     word_noupdate_col     boolean[]   := '{t,f}';
     compound_columns      text[]      := '{pn_type, language, section_no, compound_comment}';
-    compound_special_col  boolean[]   := '{f,f,t,f}';
+    compound_special_col  boolean[]   := '{f,f,f,f}';
     compound_noupdate_col boolean[]   := '{f,f,f,f}';
     line_columns          text[]      := '{block_no, line, line_comment}';
     line_special_col      boolean[]   := '{t,f,f}';
@@ -446,13 +524,9 @@ BEGIN
 
     RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', v_target_schema);
     RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', 'word_no', compound_columns, compound_special_col, v_source_schema, v_target_schema);
+    RETURN QUERY SELECT * FROM align_sections(v_transliteration_id, v_source_schema, v_target_schema);
     RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'compounds', 'compound_no', compound_columns, compound_special_col, v_source_schema, v_target_schema);
-
-    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'sections', 'compounds', 'section_no', v_target_schema);
-    RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'sections', 'compounds', 'section_no', 'compound_no', section_columns, section_special_col, v_source_schema, v_target_schema);
     RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'sections', 'section_no', section_columns, section_special_col, v_source_schema, v_target_schema);
-
-    RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'compounds', 'compound_no', '{section_no}', '{f}'::boolean[], v_source_schema, v_target_schema);
 
     RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', v_target_schema);
     RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'lines', 'corpus', 'line_no', 'sign_no', line_columns, line_special_col, v_source_schema, v_target_schema);
