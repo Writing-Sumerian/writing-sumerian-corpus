@@ -38,6 +38,10 @@ $BODY$
 DECLARE
     zero boolean;
 BEGIN
+    IF v_val = 0 THEN
+        RETURN;
+    END IF;
+
     UPDATE values_present SET
         count = count + v_val,
         count_norm = count_norm + v_val_norm
@@ -162,7 +166,7 @@ BEGIN
         RETURN null;
     END IF;
 
-    SELECT array_agg(transliteration_id) INTO v_transliteration_ids FROM transliterations WHERE text_id = (OLD).text_id;
+    SELECT array_agg(transliteration_id) INTO v_transliteration_ids FROM (SELECT transliteration_id FROM transliterations WHERE text_id = (OLD).text_id UNION ALL SELECT (OLD).transliteration_id) _;
 
     PERFORM adjust_value_statistics(
             value_id, 
@@ -170,8 +174,8 @@ BEGIN
             provenience_id, 
             genre_id, 
             object_id,
-            0, 
-            count(*)::numeric/(cardinality(v_transliteration_ids) * (cardinality(v_transliteration_ids)+1))
+            -count(*)::integer, 
+            -count(*)::numeric/(cardinality(v_transliteration_ids))
         )
     FROM
         corpus, texts
@@ -186,13 +190,14 @@ BEGIN
             provenience_id, 
             genre_id, 
             object_id,
-            -count(*)::integer, 
-            -count(*)::numeric/(cardinality(v_transliteration_ids)+1)
+            count(*)::integer,
+            count(*)::numeric/(cardinality(v_transliteration_ids)-1)
         )
     FROM
         corpus, texts
     WHERE
-        corpus.transliteration_id = (OLD).transliteration_id
+        corpus.transliteration_id = ANY(v_transliteration_ids)
+        AND corpus.transliteration_id != (OLD).transliteration_id
         AND texts.text_id = (OLD).text_id
     GROUP BY value_id, period_id, provenience_id, genre_id, object_id;
 
@@ -202,8 +207,8 @@ BEGIN
             provenience_id, 
             genre_id, 
             object_id,
-            0, 
-            count(*)::numeric/(cardinality(v_transliteration_ids) * (cardinality(v_transliteration_ids)+1))
+            -count(*)::integer, 
+            -count(*)::numeric/(cardinality(v_transliteration_ids))
         )
     FROM
         corpus, texts
@@ -218,13 +223,14 @@ BEGIN
             provenience_id, 
             genre_id, 
             object_id,
-            -count(*)::integer, 
-            -count(*)::numeric/(cardinality(v_transliteration_ids)+1)
+            count(*)::integer,
+            count(*)::numeric/(cardinality(v_transliteration_ids)-1)
         )
     FROM
         corpus, texts
     WHERE
-        corpus.transliteration_id = (OLD).transliteration_id
+        corpus.transliteration_id = ANY(v_transliteration_ids)
+        AND corpus.transliteration_id != (OLD).transliteration_id
         AND texts.text_id = (OLD).text_id
     GROUP BY sign_variant_id, period_id, provenience_id, genre_id, object_id;
 
@@ -237,8 +243,8 @@ BEGIN
             provenience_id, 
             genre_id, 
             object_id,
-            0, 
-            -count(*)::numeric/(cardinality(v_transliteration_ids) * (cardinality(v_transliteration_ids)-1))
+            -count(*)::integer, 
+            -count(*)::numeric/(cardinality(v_transliteration_ids-1))
         )
     FROM
         corpus, texts
@@ -270,8 +276,8 @@ BEGIN
             provenience_id, 
             genre_id, 
             object_id,
-            0, 
-            -count(*)::numeric/(cardinality(v_transliteration_ids) * (cardinality(v_transliteration_ids)-1))
+            -count(*)::integer, 
+            -count(*)::numeric/(cardinality(v_transliteration_ids-1))
         )
     FROM
         corpus, texts
