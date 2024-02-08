@@ -128,11 +128,11 @@ static void load_extra(const AnyArrayType *extra, htmlState *state)
     }
 }
 
-static int get_extra_changes(const htmlState *state)
+static int get_extra_changes(const htmlState *state, const bool newline)
 {
     int changes = 0;
     for(int i = 0; i < state->len_extra; ++i)
-        if(state->extra_null[i] != state->extra_null_old[i] || (!state->extra_null[i] && state->extra[i] != state->extra_old[i]))
+        if(newline || state->extra_null[i] != state->extra_null_old[i] || (!state->extra_null[i] && state->extra[i] != state->extra_old[i]))
             changes += 1 << i;
     return changes;
 }
@@ -442,7 +442,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
 
     if(!first_call)
     { 
-        changes = get_changes(&state_old, state) + 2*LANGUAGE*get_extra_changes(htmlstate);
+        changes = get_changes(&state_old, state) + 2*LANGUAGE*get_extra_changes(htmlstate, state_old.line_no != state->line_no);
 
         if(state_old.compound_no != state->compound_no && state_old.compound_comment_len)  // Word comments
         {
