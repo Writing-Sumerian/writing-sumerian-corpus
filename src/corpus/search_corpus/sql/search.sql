@@ -175,18 +175,18 @@ CREATE OR REPLACE PROCEDURE corpus_search_create_triggers()
   AS
 $BODY$
   CREATE TRIGGER corpus_search_corpus_trigger
-    AFTER DELETE OR INSERT OR UPDATE OF transliteration_id, value_id, sign_variant_id, type, indicator_type, phonographic ON @extschema:cuneiform_database@.corpus 
+    AFTER DELETE OR INSERT OR UPDATE OF transliteration_id, value_id, sign_variant_id, type, indicator_type, phonographic ON public.corpus 
     FOR EACH ROW
     EXECUTE FUNCTION corpus_search_corpus_trigger_fun();
 
   CREATE TRIGGER corpus_search_corpus_index_col_trigger
-    AFTER UPDATE OF sign_no, word_no, line_no ON @extschema:cuneiform_database@.corpus 
+    AFTER UPDATE OF sign_no, word_no, line_no ON public.corpus 
     FOR EACH ROW
     WHEN (NEW.sign_no >= 0 AND NEW.line_no >= 0 AND NEW.word_no >= 0)
     EXECUTE FUNCTION corpus_search_corpus_trigger_fun();
 
   CREATE TRIGGER corpus_search_update_words_trigger
-    AFTER UPDATE OF compound_no ON @extschema:cuneiform_database@.words
+    AFTER UPDATE OF compound_no ON public.words
     FOR EACH ROW
     WHEN (NEW.compound_no != OLD.compound_no AND NEW.compound_no >= 0)
     EXECUTE FUNCTION corpus_search_update_words_trigger_fun();
@@ -201,9 +201,9 @@ CREATE OR REPLACE PROCEDURE corpus_search_drop_triggers()
   LANGUAGE SQL
   AS
 $BODY$
-  DROP TRIGGER corpus_search_corpus_trigger ON @extschema:cuneiform_database@.corpus;
-  DROP TRIGGER corpus_search_corpus_index_col_trigger ON @extschema:cuneiform_database@.corpus;
-  DROP TRIGGER corpus_search_update_words_trigger ON @extschema:cuneiform_database@.words;
+  DROP TRIGGER corpus_search_corpus_trigger ON public.corpus;
+  DROP TRIGGER corpus_search_corpus_index_col_trigger ON public.corpus;
+  DROP TRIGGER corpus_search_update_words_trigger ON public.words;
   DROP TRIGGER corpus_search_update_sign_variants_composition_trigger ON sign_variants_composition;
 $BODY$;
 

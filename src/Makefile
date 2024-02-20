@@ -24,6 +24,7 @@ all:
 	make -C corpus/log_corpus
 	make -C corpus/edit_corpus
 	make -C corpus/replace_corpus
+	make -C corpus/corpus_statistics
 	make -C corpus/search_corpus
 	make -C loader
 	make -C test
@@ -54,6 +55,7 @@ install:
 	make -C corpus/log_corpus install
 	make -C corpus/edit_corpus install
 	make -C corpus/replace_corpus install
+	make -C corpus/corpus_statistics install
 	make -C corpus/search_corpus install
 	make -C loader install
 	make -C test install

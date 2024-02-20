@@ -1,4 +1,4 @@
-EXTENSION    		:= cuneiform_search_corpus
+EXTENSION    		:= cuneiform_corpus_statistics
 
 version      		:= $(shell grep default_version $(EXTENSION).control | sed -e "s/default_version[[:space:]]*=[[:space:]]*'\\([^']*\\)'/\\1/")
 modules      		:= $(patsubst %.c,%,$(wildcard src/*.c))
@@ -25,6 +25,6 @@ include $(PGXS)
 
 all: build/$(EXTENSION)--$(version).sql
 
-build/$(EXTENSION)--$(version).sql: sql/search.sql
+build/$(EXTENSION)--$(version).sql: sql/transliterations.sql sql/signs_count.sql sql/signs_present.sql
 	@mkdir -p build
-	@cat sql/search.sql > build/$(EXTENSION)--$(version).sql
+	@cat sql/transliterations.sql sql/signs_count.sql sql/signs_present.sql > build/$(EXTENSION)--$(version).sql
