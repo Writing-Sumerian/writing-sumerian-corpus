@@ -34,3 +34,17 @@ FROM
 GROUP BY
     transliteration_id,
     sign_no;
+
+
+CREATE OR REPLACE PROCEDURE revert_corpus_to (
+    v_transliteration_id integer, 
+    v_timestamp timestamp
+    )
+    LANGUAGE PLPGSQL
+    AS 
+$BODY$
+BEGIN
+    CALL revert_to(v_transliteration_id, v_timestamp, 'public');
+    DELETE FROM edits WHERE transliteration_id = v_transliteration_id AND timestamp > v_timestamp;
+END;
+$BODY$;
