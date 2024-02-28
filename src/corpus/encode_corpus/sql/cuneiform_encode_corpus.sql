@@ -2,7 +2,7 @@
 -- corpus
 
 CREATE TABLE corpus_unencoded (
-    transliteration_id integer,
+   transliteration_id integer,
     sign_no integer,
     value text,
     sign_spec text,
@@ -11,6 +11,21 @@ CREATE TABLE corpus_unencoded (
 );
 
 CREATE INDEX ON corpus_unencoded (type);
+
+
+CREATE OR REPLACE VIEW corpus_unencoded_view AS
+SELECT
+    transliteration_id,
+    sign_no,
+    a[1] AS value,
+    left(a[2], -1) AS sign_spec,
+    type
+FROM
+    corpus
+    LEFT JOIN LATERAL regexp_split_to_array(custom_value, '(?<=[0-9a-zA-ZŠšḪḫŘřĝĜṣṢṭṬ])\(') AS _(a) ON TRUE
+WHERE
+    custom_value IS NOT NULL
+    AND (type = 'value' OR type = 'sign');
 
 CALL create_corpus_encoder('corpus_encoder', 'corpus_unencoded', '{transliteration_id}');
 
