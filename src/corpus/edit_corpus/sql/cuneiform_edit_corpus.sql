@@ -57,7 +57,7 @@ BEGIN
         col integer,
         symbol text,
         message text
-    );
+    ) ON COMMIT DROP;
 
     CALL parse(v_code, 'pg_temp', v_language, v_stemmed, v_transliteration_id);
 
