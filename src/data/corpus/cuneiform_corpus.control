@@ -1,0 +1,5 @@
+comment = 'Core data structures for Cuneiform Corpus'
+default_version = '0.0.1'
+relocatable = false
+module_pathname = '$libdir/cuneiform_corpus'
+requires = 'cuneiform_create_corpus, cuneiform_context'

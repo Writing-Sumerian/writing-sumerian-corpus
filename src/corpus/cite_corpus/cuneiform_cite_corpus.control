@@ -2,4 +2,4 @@ comment = 'Cuneiform citation'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_cite_corpus'
-requires = 'cuneiform_database, cuneiform_citation'
+requires = 'cuneiform_corpus, cuneiform_citation'

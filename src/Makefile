@@ -1,7 +1,7 @@
 all:
 	make -C data/signlist
 	make -C data/context
-	make -C data/database
+	make -C data/corpus
 	make -C data/log_tables
 	make -C modules/log
 	make -C modules/sign_properties
@@ -32,7 +32,7 @@ all:
 install:
 	make -C data/signlist install
 	make -C data/context install
-	make -C data/database install
+	make -C data/corpus install
 	make -C data/log_tables install
 	make -C modules/log install
 	make -C modules/sign_properties install

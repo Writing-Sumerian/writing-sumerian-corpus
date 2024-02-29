@@ -2,4 +2,4 @@ comment = 'Encode a cuneiform corpus'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_encode_corpus'
-requires = 'cuneiform_database, cuneiform_encoder'
+requires = 'cuneiform_corpus, cuneiform_encoder'
