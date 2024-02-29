@@ -17,12 +17,13 @@ EXECUTE format('COPY graphemes(grapheme_id, grapheme, mzl_no) FROM %L CSV NULL '
 EXECUTE format('COPY allographs(allograph_id, grapheme_id, glyph_id, variant_type, specific) FROM %L CSV NULL ''\N''', path || 'allographs.csv');
 EXECUTE format('COPY allomorphs(allomorph_id, sign_id, variant_type, specific) FROM %L CSV NULL ''\N''', path || 'allomorphs.csv');
 EXECUTE format('COPY allomorph_components(allomorph_id, pos, grapheme_id) FROM %L CSV NULL ''\N''', path || 'allomorph_components.csv');
-EXECUTE format('COPY value_variants(value_variant_id, value_id, value) FROM %L CSV NULL ''\N''', path || 'value_variants.csv');
-EXECUTE format('COPY values(value_id, sign_id, main_variant_id, phonographic) FROM %L CSV NULL ''\N''', path || 'values.csv');
 
 INSERT INTO signs SELECT DISTINCT sign_id FROM allomorphs;
 EXECUTE format('COPY sign_variants(sign_variant_id, sign_id, allomorph_id, allograph_ids, variant_type, specific) FROM %L CSV NULL ''\N''', path || 'sign_variants.csv');
 INSERT INTO sign_variants_composition SELECT * FROM sign_variants_composition_view;
+
+EXECUTE format('COPY value_variants(value_variant_id, value_id, value) FROM %L CSV NULL ''\N''', path || 'value_variants.csv');
+EXECUTE format('COPY values(value_id, sign_id, main_variant_id, phonographic) FROM %L CSV NULL ''\N''', path || 'values.csv');
 
 PERFORM setval('glyphs_glyph_id_seq', max(glyph_id)) FROM glyphs;
 PERFORM setval('graphemes_grapheme_id_seq', max(grapheme_id)) FROM graphemes;
