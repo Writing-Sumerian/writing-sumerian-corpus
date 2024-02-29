@@ -4,7 +4,6 @@
 
 #include <libpq/pqformat.h>
 #include <common/hashfn.h>
-#include <utils/int8.h>
 #include <utils/array.h>
 #include <utils/lsyscache.h>
 #include <catalog/pg_type.h>

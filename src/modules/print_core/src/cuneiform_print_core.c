@@ -3,8 +3,6 @@
 #include <fmgr.h>
 #include <executor/spi.h>
 
-PG_MODULE_MAGIC;
-
 static cunEnumType ENUM_TYPE;
 static cunEnumIndicatorType ENUM_INDICATOR_TYPE;
 static cunEnumLanguage ENUM_LANGUAGE;
@@ -13,7 +11,6 @@ static cunEnumVariantType ENUM_VARIANT_TYPE;
 static cunEnumPN ENUM_PN;
 
 static bool enums_set = false;
-
 
 void cun_set_enums()
 {

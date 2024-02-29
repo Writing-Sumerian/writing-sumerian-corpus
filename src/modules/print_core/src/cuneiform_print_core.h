@@ -4,6 +4,10 @@
 #include <postgres.h>
 #include <fmgr.h>
 
+#ifdef PG_MODULE_MAGIC
+PG_MODULE_MAGIC;
+#endif
+
 typedef struct CunEnumType {
     Oid value;
     Oid sign;
@@ -143,22 +147,23 @@ typedef cunEnumLanguage *(*cun_enum_language_t)(void);
 typedef cunEnumCondition *(*cun_enum_condition_t)(void);
 typedef cunEnumVariantType *(*cun_enum_variant_type_t)(void);
 typedef cunEnumPN *(*cun_enum_pn_t)(void);
-extern void cun_set_enums(void);
-extern cunEnumType *cun_enum_type(void);
-extern cunEnumIndicatorType *cun_enum_indicator_type(void);
-extern cunEnumLanguage *cun_enum_language(void);
-extern cunEnumCondition *cun_enum_condition(void);
-extern cunEnumVariantType *cun_enum_variant_type(void);
-extern cunEnumPN *cun_enum_pn(void);
+extern PGDLLEXPORT void cun_set_enums(void);
+extern PGDLLEXPORT cunEnumType *cun_enum_type(void);
+extern PGDLLEXPORT cunEnumIndicatorType *cun_enum_indicator_type(void);
+extern PGDLLEXPORT cunEnumLanguage *cun_enum_language(void);
+extern PGDLLEXPORT cunEnumCondition *cun_enum_condition(void);
+extern PGDLLEXPORT cunEnumVariantType *cun_enum_variant_type(void);
+extern PGDLLEXPORT cunEnumPN *cun_enum_pn(void);
+
 
 typedef char *(*cun_copy_n_t)(char *s1, const char *s2, size_t n);
 typedef char *(*cun_copy_t)(char *s1, const char *s2);
 typedef int (*cun_compare_next_t)(const char *s1, const char *s2);
 typedef void (*cun_capitalize_t)(char *s);
-extern char *cun_copy_n(char *s1, const char *s2, size_t n);
-extern char *cun_copy(char *s1, const char *s2);
-extern int cun_compare_next(const char *s1, const char *s2);
-extern void cun_capitalize(char *s);
+extern PGDLLEXPORT char *cun_copy_n(char *s1, const char *s2, size_t n);
+extern PGDLLEXPORT char *cun_copy(char *s1, const char *s2);
+extern PGDLLEXPORT int cun_compare_next(const char *s1, const char *s2);
+extern PGDLLEXPORT void cun_capitalize(char *s);
 
 typedef State *(*cun_init_state_t)(int line_capacity, MemoryContext memcontext);
 typedef char *(*cun_add_line_t)(int capacity, State *state, MemoryContext memcontext);
@@ -169,14 +174,14 @@ typedef Connector (*cun_determine_connector_t)(const State *s1, const State *s2,
 typedef Oid (*cun_opened_condition_start_t)(const char *s, size_t n, bool *no_condition);
 typedef Oid (*cun_opened_condition_end_t)(const char *s, size_t n);
 typedef void (*cun_copy_compound_comment_t)(const text *compound_comment, State *state);
-extern State *cun_init_state(int line_capacity, MemoryContext memcontext);
-extern char *cun_add_line(int capacity, State *state, MemoryContext memcontext);
-extern char *cun_get_cursor(int len, State *state);
-extern int cun_get_changes(const State *s1, const State *s2);
-extern Datum* cun_copy_print_result(const State *state);
-extern Connector cun_determine_connector(const State *s1, const State *s2, bool inverted, bool newline, bool ligature);
-extern Oid cun_opened_condition_start(const char *s, size_t n, bool *no_condition);
-extern Oid cun_opened_condition_end(const char *s, size_t n);
-extern void cun_copy_compound_comment(const text *compound_comment, State *state);
+extern PGDLLEXPORT State *cun_init_state(int line_capacity, MemoryContext memcontext);
+extern PGDLLEXPORT char *cun_add_line(int capacity, State *state, MemoryContext memcontext);
+extern PGDLLEXPORT char *cun_get_cursor(int len, State *state);
+extern PGDLLEXPORT int cun_get_changes(const State *s1, const State *s2);
+extern PGDLLEXPORT Datum* cun_copy_print_result(const State *state);
+extern PGDLLEXPORT Connector cun_determine_connector(const State *s1, const State *s2, bool inverted, bool newline, bool ligature);
+extern PGDLLEXPORT Oid cun_opened_condition_start(const char *s, size_t n, bool *no_condition);
+extern PGDLLEXPORT Oid cun_opened_condition_end(const char *s, size_t n);
+extern PGDLLEXPORT void cun_copy_compound_comment(const text *compound_comment, State *state);
 
 #endif // CUNEIFORM_PRINT_CORE_H
