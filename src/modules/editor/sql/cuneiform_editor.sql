@@ -525,6 +525,7 @@ BEGIN
     RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', v_target_schema);
     RETURN QUERY SELECT * FROM split_merge_all_entries(v_transliteration_id, 'compounds', 'words', 'compound_no', 'word_no', compound_columns, compound_special_col, v_source_schema, v_target_schema);
     RETURN QUERY SELECT * FROM align_sections(v_transliteration_id, v_source_schema, v_target_schema);
+    RETURN QUERY SELECT * FROM delete_empty_entries(v_transliteration_id, 'sections', 'compounds', 'section_no', v_target_schema);
     RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'compounds', 'compound_no', compound_columns, compound_special_col, v_source_schema, v_target_schema);
     RETURN QUERY SELECT * FROM update_all_entries(v_transliteration_id, 'sections', 'section_no', section_columns, section_special_col, v_source_schema, v_target_schema);
 
