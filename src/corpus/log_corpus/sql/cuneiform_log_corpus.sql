@@ -36,6 +36,90 @@ GROUP BY
     sign_no;
 
 
+CREATE OR REPLACE PROCEDURE undo (
+    v_edit_id integer, 
+    v_schema text
+    )
+    LANGUAGE PLPGSQL
+    AS 
+$BODY$
+DECLARE
+
+v_query text;
+
+BEGIN
+FOR v_query IN 
+    SELECT edit_log_undo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val_old)
+    FROM edit_log JOIN edits USING (edit_id)
+    WHERE 
+        edit_id = v_edit_id
+    ORDER BY log_no DESC 
+    LOOP
+    RAISE INFO USING MESSAGE = v_query;
+    DISCARD PLANS;
+    EXECUTE v_query;
+END LOOP;
+END;
+$BODY$;
+
+
+CREATE OR REPLACE PROCEDURE revert_to (
+    v_transliteration_id integer, 
+    v_timestamp timestamp, 
+    v_schema text
+    )
+    LANGUAGE PLPGSQL
+    AS 
+$BODY$
+
+DECLARE
+
+v_query text;
+
+BEGIN
+FOR v_query IN 
+    SELECT edit_log_undo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val_old) 
+    FROM edit_log JOIN edits USING (edit_id)
+    WHERE 
+        transliteration_id = v_transliteration_id 
+        AND timestamp > v_timestamp
+    ORDER BY timestamp DESC, log_no DESC 
+    LOOP
+    RAISE INFO USING MESSAGE = v_query;
+    DISCARD PLANS;
+    EXECUTE v_query;
+END LOOP;
+END;
+$BODY$;
+
+
+CREATE OR REPLACE PROCEDURE redo (
+    v_edit_id integer, 
+    v_schema text
+    )
+    LANGUAGE PLPGSQL
+    AS 
+$BODY$
+DECLARE
+
+v_query text;
+
+BEGIN
+FOR v_query IN 
+    SELECT edit_log_redo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val) 
+    FROM edit_log JOIN edits USING (edit_id)
+    WHERE 
+        edit_id = v_edit_id
+    ORDER BY log_no
+    LOOP
+    RAISE INFO USING MESSAGE = v_query;
+    DISCARD PLANS;
+    EXECUTE v_query;
+END LOOP;
+END;
+$BODY$;
+
+
 CREATE OR REPLACE PROCEDURE revert_corpus_to (
     v_transliteration_id integer, 
     v_timestamp timestamp

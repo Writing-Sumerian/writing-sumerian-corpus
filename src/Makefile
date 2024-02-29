@@ -2,6 +2,7 @@ all:
 	make -C data/signlist
 	make -C data/context
 	make -C data/database
+	make -C data/log_tables
 	make -C modules/log
 	make -C modules/sign_properties
 	make -C modules/create_corpus
@@ -20,7 +21,6 @@ all:
 	make -C corpus/print_corpus
 	make -C corpus/encode_corpus
 	make -C corpus/parse_corpus
-	make -C corpus/log_tables
 	make -C corpus/log_corpus
 	make -C corpus/edit_corpus
 	make -C corpus/replace_corpus
@@ -33,6 +33,7 @@ install:
 	make -C data/signlist install
 	make -C data/context install
 	make -C data/database install
+	make -C data/log_tables install
 	make -C modules/log install
 	make -C modules/sign_properties install
 	make -C modules/create_corpus install
@@ -51,7 +52,6 @@ install:
 	make -C corpus/print_corpus install
 	make -C corpus/encode_corpus install
 	make -C corpus/parse_corpus install
-	make -C corpus/log_tables install
 	make -C corpus/log_corpus install
 	make -C corpus/edit_corpus install
 	make -C corpus/replace_corpus install
