@@ -10,7 +10,7 @@ INSERT INTO genres VALUES (-1, 'test');
 INSERT INTO ensembles VALUES (-1, 'test');
 INSERT INTO texts VALUES (-1, -1, null, null, 'test', null, null, null, null, null, -1, null, null, null, null);
 INSERT INTO transliterations VALUES (-1, -1, -1);
-INSERT INTO compositions (VALUES (-1, 'a'), (-2, 'b'));
+INSERT INTO compositions (VALUES (-1, 'a', 'copy'), (-2, 'b', 'print'));
 CREATE TABLE errors (
     transliteration_id integer,
     line integer,
