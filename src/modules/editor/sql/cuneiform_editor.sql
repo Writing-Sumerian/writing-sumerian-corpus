@@ -400,8 +400,8 @@ DECLARE
     block_special_col     boolean[]   := '{t,f,f,f}';
     surface_columns       text[]      := '{surface_type, surface_data, surface_comment}';
     surface_special_col   boolean[]   := '{f,f,f}';
-    section_columns       text[]      := '{section_name, composition_id, witness_type}';
-    section_special_col   boolean[]   := '{f,f,f}';
+    section_columns       text[]      := '{section_name, composition_id}';
+    section_special_col   boolean[]   := '{f,f}';
 
 BEGIN
 

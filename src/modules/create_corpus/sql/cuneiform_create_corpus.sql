@@ -1,11 +1,3 @@
-
-CREATE TYPE witness_type AS ENUM (
-    'original',
-    'print',
-    'copy',
-    'variant'
-);
-
 CREATE TYPE surface_type AS ENUM (
     'obverse',
     'reverse',
@@ -33,8 +25,7 @@ CREATE TYPE sections_type AS (
     transliteration_id integer,
     section_no integer,
     section_name text,
-    composition_id integer,
-    witness_type witness_type
+    composition_id integer
 );
 
 CREATE TYPE compounds_type AS (
@@ -124,8 +115,7 @@ EXECUTE format(
     $$
     ALTER TABLE %1$I.sections 
         ALTER COLUMN section_name SET NOT NULL,
-        ALTER COLUMN composition_id SET NOT NULL,
-        ALTER COLUMN witness_type SET NOT NULL
+        ALTER COLUMN composition_id SET NOT NULL
     $$,
     v_schema);
 
