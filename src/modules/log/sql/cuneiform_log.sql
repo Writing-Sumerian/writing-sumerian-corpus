@@ -1,11 +1,11 @@
 CREATE OR REPLACE FUNCTION edit_log_redo_query (
-        transliteration_id integer,
-        schema text,
-        entry_no integer,
-        key_col text,
-        target text,
-        action text,
-        val text
+        v_transliteration_id integer,
+        v_schema text,
+        v_entry_no integer,
+        v_key_col text,
+        v_target text,
+        v_action text,
+        v_val text
     )
     RETURNS text
     IMMUTABLE
@@ -13,33 +13,33 @@ CREATE OR REPLACE FUNCTION edit_log_redo_query (
 AS $BODY$
 DECLARE
 
-ops text[];
+v_ops text[];
 
 BEGIN
 
-SELECT string_to_array(action, ' ') INTO ops;
+SELECT string_to_array(v_action, ' ') INTO v_ops;
 
-CASE ops[1]
+CASE v_ops[1]
     WHEN 'update' THEN
         RETURN format(
-            'SELECT update_entry(%s, %s, %L, %L, %L, %L, %L)', 
-            transliteration_id, entry_no, target, key_col, ops[2], val, schema);
+            'SELECT @extschema:cuneiform_actions@.update_entry(%s, %s, %L, %L, %L, %L, %L)', 
+            v_transliteration_id, v_entry_no, v_target, v_key_col, v_ops[2], v_val, v_schema);
     WHEN 'adjust' THEN
         RETURN format(
-            'SELECT adjust_key_col(%s, %s, %L, %L, %L, %L, %L)',
-            transliteration_id, entry_no, target, key_col, ops[2], val, schema);
+            'SELECT @extschema:cuneiform_actions@.adjust_key_col(%s, %s, %L, %L, %L, %L, %L)',
+            v_transliteration_id, v_entry_no, v_target, v_key_col, v_ops[2], v_val, v_schema);
     WHEN 'shift' THEN
         RETURN format(
-            'SELECT shift_key_col(%s, %s, %L, %L, %L, %L)',
-            transliteration_id, entry_no, target, key_col, val, schema);
+            'SELECT @extschema:cuneiform_actions@.shift_key_col(%s, %s, %L, %L, %L, %L)',
+            v_transliteration_id, v_entry_no, v_target, v_key_col, v_val, v_schema);
     WHEN 'insert' THEN
         RETURN format(
-            'SELECT insert_entry(%1$s, %2$s, %3$L, %4$L, %5$L::%6$I.%3$I, %6$L)'
-            transliteration_id, entry_no, target, key_col, val, schema);
+            'SELECT @extschema:cuneiform_actions@.insert_entry(%1$s, %2$s, %3$L, %4$L, %5$L::%6$I.%3$I, %6$L)'
+            v_transliteration_id, v_entry_no, v_target, v_key_col, v_val, v_schema);
     WHEN 'delete' THEN
         RETURN format(
-            'SELECT delete_entry(%s, %s, %L, %L, %L)',
-            transliteration_id, entry_no, target, key_col, schema);
+            'SELECT @extschema:cuneiform_actions@.delete_entry(%s, %s, %L, %L, %L)',
+            v_transliteration_id, v_entry_no, v_target, v_key_col, v_schema);
 END CASE;
 END;
 $BODY$;
@@ -47,13 +47,13 @@ $BODY$;
 
 
 CREATE OR REPLACE FUNCTION edit_log_undo_query (
-        transliteration_id integer,
-        schema text,
-        entry_no integer,
-        key_col text,
-        target text,
-        action text,
-        val_old text
+        v_transliteration_id integer,
+        v_schema text,
+        v_entry_no integer,
+        v_key_col text,
+        v_target text,
+        v_action text,
+        v_val_old text
     )
     RETURNS text
     IMMUTABLE
@@ -61,33 +61,33 @@ CREATE OR REPLACE FUNCTION edit_log_undo_query (
 AS $BODY$
 DECLARE
 
-ops text[];
+v_ops text[];
 
 BEGIN
 
-SELECT string_to_array(action, ' ') INTO ops;
+SELECT string_to_array(v_action, ' ') INTO v_ops;
 
-CASE ops[1]
+CASE v_ops[1]
     WHEN 'update' THEN
         RETURN format(
-            'SELECT update_entry(%s, %s, %L, %L, %L, %L, %L)', 
-            transliteration_id, entry_no, target, key_col, ops[2], val_old, schema);
+            'SELECT @extschema:cuneiform_actions@.update_entry(%s, %s, %L, %L, %L, %L, %L)', 
+            v_transliteration_id, v_entry_no, v_target, v_key_col, v_ops[2], v_val_old, v_schema);
     WHEN 'adjust' THEN
         RETURN format(
-            'SELECT adjust_key_col(%s, %s, %L, %L, %L, %L, %L)',
-            transliteration_id, entry_no, target, key_col, ops[2], val_old, schema);
+            'SELECT @extschema:cuneiform_actions@.adjust_key_col(%s, %s, %L, %L, %L, %L, %L)',
+            v_transliteration_id, v_entry_no, v_target, v_key_col, v_ops[2], v_val_old, v_schema);
     WHEN 'shift' THEN
         RETURN format(
-            'SELECT shift_key_col(%s, %s, %L, %L, %L, %L)',
-            transliteration_id, entry_no-val_old::integer, target, key_col, val_old, schema);
+            'SELECT @extschema:cuneiform_actions@.shift_key_col(%s, %s, %L, %L, %L, %L)',
+            v_transliteration_id, v_entry_no-v_val_old::integer, v_target, v_key_col, v_val_old, v_schema);
     WHEN 'insert' THEN
         RETURN format(
-            'SELECT delete_entry(%s, %s, %L, %L, %L)',
-            transliteration_id, entry_no, target, key_col, schema);
+            'SELECT @extschema:cuneiform_actions@.delete_entry(%s, %s, %L, %L, %L)',
+            v_transliteration_id, v_entry_no, v_target, v_key_col, v_schema);
     WHEN 'delete' THEN
         RETURN format(
-            'SELECT insert_entry(%1$s, %2$s, %3$L, %4$L, %5$L::%6$I.%3$I, %6$L)',
-            transliteration_id, entry_no, target, key_col, val_old, schema);
+            'SELECT @extschema:cuneiform_actions@.insert_entry(%1$s, %2$s, %3$L, %4$L, %5$L::%6$I.%3$I, %6$L)',
+            v_transliteration_id, v_entry_no, v_target, v_key_col, v_val_old, v_schema);
 END CASE;
 END;
 $BODY$;
@@ -101,41 +101,41 @@ CREATE TYPE log_agg_state_type AS (
 
 
 CREATE OR REPLACE FUNCTION log_agg_sfunc (
-    state log_agg_state_type,
-    edit_id integer,
-    action text,
-    id integer,
-    value text)
+        v_state log_agg_state_type,
+        v_edit_id integer,
+        v_action text,
+        v_id integer,
+        v_value text)
     RETURNS log_agg_state_type
     LANGUAGE SQL
     COST 100
     IMMUTABLE 
-AS $BODY$
+BEGIN ATOMIC
 SELECT
     CASE
-        WHEN action = 'insert' AND (state).id > id THEN ROW((state).id-1, (state).edit_ids)::log_agg_state_type
-        WHEN action = 'insert' AND (state).id = id THEN ROW(null, (state).edit_ids || edit_id)::log_agg_state_type
-        WHEN action = 'delete' AND (state).id >= id THEN ROW((state).id+1, (state).edit_ids)::log_agg_state_type
-        WHEN action = 'shift' AND (state).id >= id THEN ROW((state).id+value::integer, (state).edit_ids)::log_agg_state_type
-        WHEN action = 'update' AND (state).id = id THEN ROW((state).id, (state).edit_ids || edit_id)::log_agg_state_type
-        WHEN action IS NULL THEN ROW(id, ARRAY[]::integer[])::log_agg_state_type -- init
-        ELSE state
+        WHEN v_action = 'insert' AND (v_state).id > v_id THEN ROW((v_state).id-1, (v_state).edit_ids)::log_agg_state_type
+        WHEN v_action = 'insert' AND (v_state).id = v_id THEN ROW(null, (v_state).edit_ids || v_edit_id)::log_agg_state_type
+        WHEN v_action = 'delete' AND (v_state).id >= v_id THEN ROW((v_state).id+1, (v_state).edit_ids)::log_agg_state_type
+        WHEN v_action = 'shift' AND (v_state).id >= v_id THEN ROW((v_state).id+v_value::integer, (v_state).edit_ids)::log_agg_state_type
+        WHEN v_action = 'update' AND (v_state).id = v_id THEN ROW((v_state).id, (v_state).edit_ids || v_edit_id)::log_agg_state_type
+        WHEN v_action IS NULL THEN ROW(v_id, ARRAY[]::integer[])::log_agg_state_type -- init
+        ELSE v_state
     END;
-$BODY$;
+END;
 
 CREATE OR REPLACE FUNCTION log_agg_finalfunc (
-    state log_agg_state_type
+        v_state log_agg_state_type
     )
     RETURNS integer[]
     LANGUAGE SQL
     COST 100
     IMMUTABLE 
-AS $BODY$
-SELECT (state).edit_ids;
-$BODY$;
+BEGIN ATOMIC
+SELECT (v_state).edit_ids;
+END;
 
 
-CREATE OR REPLACE AGGREGATE log_agg (edit_id integer, action text, id integer, value text) (
+CREATE OR REPLACE AGGREGATE log_agg (v_edit_id integer, v_action text, v_id integer, v_value text) (
     stype = log_agg_state_type,
     sfunc = log_agg_sfunc,
     finalfunc = log_agg_finalfunc

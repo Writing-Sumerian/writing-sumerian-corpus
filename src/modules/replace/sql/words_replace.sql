@@ -4,7 +4,7 @@ CREATE OR REPLACE FUNCTION words_replace (
         v_corpus_schema text,
         v_source_schema text
     )
-    RETURNS SETOF words_type
+    RETURNS SETOF @extschema:cuneiform_create_corpus@.words_type
     STABLE
     ROWS 100
     LANGUAGE PLPGSQL
@@ -34,7 +34,7 @@ RETURN QUERY EXECUTE format($$
     FROM
         x
         LEFT JOIN %4$I.words a ON (NOT pattern_word AND x.transliteration_id = a.transliteration_id AND x.word_no_ref = a.word_no)
-        LEFT JOIN replace_pattern_words b ON (pattern_word AND x.pattern_id = b.pattern_id AND x.word_no_ref = b.word_no)
+        LEFT JOIN @extschema@.replace_pattern_words b ON (pattern_word AND x.pattern_id = b.pattern_id AND x.word_no_ref = b.word_no)
     $$,
     v_corpus_schema,
     v_corpus_table,

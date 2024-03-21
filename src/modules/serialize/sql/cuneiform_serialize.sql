@@ -6,11 +6,11 @@ CREATE OR REPLACE FUNCTION cun_agg_sfunc (
     integer, 
     integer, 
     integer,
-    sign_type,
-    indicator_type,
+    @extschema:cuneiform_sign_properties@.sign_type,
+    @extschema:cuneiform_sign_properties@.indicator_type,
     boolean,
     boolean, 
-    sign_condition, 
+    @extschema:cuneiform_sign_properties@.sign_condition, 
     language, 
     boolean, 
     boolean, 
@@ -18,7 +18,7 @@ CREATE OR REPLACE FUNCTION cun_agg_sfunc (
     text, 
     text,
     boolean,
-    pn_type,
+    @extschema:cuneiform_sign_properties@.pn_type,
     text,
     text
     )
@@ -47,11 +47,11 @@ CREATE AGGREGATE cun_agg (
     integer, 
     integer, 
     integer,
-    sign_type,
-    indicator_type,
+    @extschema:cuneiform_sign_properties@.sign_type,
+    @extschema:cuneiform_sign_properties@.indicator_type,
     boolean,
     boolean, 
-    sign_condition, 
+    @extschema:cuneiform_sign_properties@.sign_condition, 
     language, 
     boolean, 
     boolean, 
@@ -59,7 +59,7 @@ CREATE AGGREGATE cun_agg (
     text, 
     text,
     boolean,
-    pn_type,
+    @extschema:cuneiform_sign_properties@.pn_type,
     text,
     text
     ) (
@@ -73,48 +73,45 @@ CREATE OR REPLACE FUNCTION identity(v_value text)
     RETURNS text
     IMMUTABLE
     LANGUAGE SQL
-AS
-$BODY$
+BEGIN ATOMIC
     SELECT v_value;
-$BODY$;
+END;
 
 
 CREATE OR REPLACE FUNCTION print_spec_code (
-        v_variant_type sign_variant_type,
+        v_variant_type @extschema:cuneiform_signlist@.sign_variant_type,
         v_graphemes text, 
         v_glyphs text
     )
     RETURNS text
     IMMUTABLE
     LANGUAGE SQL
-AS
-$BODY$
+BEGIN ATOMIC
     SELECT 
         CASE 
             WHEN v_variant_type = 'default' THEN '(' || v_graphemes || ')'
             WHEN v_variant_type = 'nondefault' THEN '(' || v_glyphs || ')' 
             ELSE '!(' || v_glyphs || ')' 
         END;
-$BODY$;
+END;
 
 
 CREATE OR REPLACE FUNCTION print_graphemes_code(v_graphemes text)
     RETURNS text
     IMMUTABLE
     LANGUAGE SQL
-AS
-$BODY$
+BEGIN ATOMIC
     SELECT 
         CASE
             WHEN v_graphemes ~ '\.' THEN '|' || v_graphemes || '|'
             ELSE v_graphemes
         END;
-$BODY$;
+END;
 
 
-CALL create_signlist_print (
+CALL @extschema:cuneiform_print_core@.create_signlist_print (
     'code', 
-    'public', 
+    '@extschema@', 
     'identity', 
     'print_spec_code', 
     'identity', 
@@ -122,14 +119,15 @@ CALL create_signlist_print (
     'print_graphemes_code'
 );
 
-CREATE OR REPLACE FUNCTION placeholder_code (type SIGN_TYPE)
+
+CREATE OR REPLACE FUNCTION placeholder_code (v_type @extschema:cuneiform_sign_properties@.sign_type)
     RETURNS text
     STRICT
     IMMUTABLE
     LANGUAGE SQL
-AS $BODY$
+BEGIN ATOMIC
     SELECT
-        CASE type
+        CASE v_type
         WHEN 'number' THEN
             'N'
         WHEN 'description' THEN
@@ -140,5 +138,5 @@ AS $BODY$
             '…'
         ELSE
             'X'
-        END 
-$BODY$;
+        END;
+END;

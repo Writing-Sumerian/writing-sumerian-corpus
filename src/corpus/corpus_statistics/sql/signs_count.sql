@@ -19,8 +19,8 @@ SELECT
     value_id,
     count(*)
 FROM
-    corpus
-    JOIN transliterations USING (transliteration_id)
+    @extschema:cuneiform_corpus@.corpus
+    JOIN @extschema:cuneiform_corpus@.transliterations USING (transliteration_id)
 WHERE
     value_id IS NOT NULL
 GROUP BY
@@ -33,8 +33,8 @@ SELECT
     sign_variant_id,
     count(*)
 FROM
-    corpus
-    JOIN transliterations USING (transliteration_id)
+    @extschema:cuneiform_corpus@.corpus
+    JOIN @extschema:cuneiform_corpus@.transliterations USING (transliteration_id)
 WHERE
     sign_variant_id IS NOT NULL
 GROUP BY
@@ -50,27 +50,27 @@ CREATE OR REPLACE FUNCTION texts_values_count_corpus_trigger_fun ()
 $BODY$
 BEGIN
     IF NOT OLD IS NULL THEN
-        UPDATE texts_values_count SET count = count-1 
+        UPDATE @extschema@.texts_values_count SET count = count-1 
         FROM 
-            transliterations 
+            @extschema:cuneiform_corpus@.transliterations 
         WHERE 
             texts_values_count.text_id = transliterations.text_id
             AND transliterations.transliteration_id = (OLD).transliteration_id
             AND texts_values_count.value_id = (OLD).value_id;
-        DELETE FROM texts_values_count USING transliterations 
+        DELETE FROM @extschema@.texts_values_count USING @extschema:cuneiform_corpus@.transliterations 
         WHERE 
             texts_values_count.text_id = transliterations.text_id
             AND transliterations.transliteration_id = (OLD).transliteration_id
             AND count = 0;
     END IF;
     IF NOT NEW IS NULL AND NOT (NEW).value_id IS NULL THEN
-        INSERT INTO texts_values_count 
+        INSERT INTO @extschema@.texts_values_count 
         SELECT
             text_id,
             (NEW).value_id,
             1
         FROM
-            transliterations
+            @extschema:cuneiform_corpus@.transliterations
         WHERE
             transliteration_id = (NEW).transliteration_id
         ON CONFLICT (text_id, value_id) DO UPDATE
@@ -89,27 +89,27 @@ CREATE OR REPLACE FUNCTION texts_sign_variants_count_corpus_trigger_fun ()
 $BODY$
 BEGIN
     IF NOT OLD IS NULL THEN
-        UPDATE texts_sign_variants_count SET count = count-1 
+        UPDATE @extschema@.texts_sign_variants_count SET count = count-1 
         FROM 
-            transliterations 
+            @extschema:cuneiform_corpus@.transliterations 
         WHERE 
             texts_sign_variants_count.text_id = transliterations.text_id
             AND transliterations.transliteration_id = (OLD).transliteration_id
             AND texts_sign_variants_count.sign_variant_id = (OLD).sign_variant_id;
-        DELETE FROM texts_sign_variants_count USING transliterations 
+        DELETE FROM @extschema@.texts_sign_variants_count USING @extschema:cuneiform_corpus@.transliterations 
         WHERE 
             texts_sign_variants_count.text_id = transliterations.text_id
             AND transliterations.transliteration_id = (OLD).transliteration_id
             AND count = 0;
     END IF;
     IF NOT NEW IS NULL AND NOT (NEW).sign_variant_id IS NULL THEN
-        INSERT INTO texts_sign_variants_count 
+        INSERT INTO @extschema@.texts_sign_variants_count 
         SELECT
             text_id,
             (NEW).sign_variant_id,
             1
         FROM
-            transliterations
+            @extschema:cuneiform_corpus@.transliterations
         WHERE
             transliteration_id = (NEW).transliteration_id
         ON CONFLICT (text_id, sign_variant_id) DO UPDATE
@@ -130,26 +130,26 @@ BEGIN
     IF (OLD).text_id = (NEW).text_id THEN
         RETURN null;
     END IF;
-    DELETE FROM texts_values_count WHERE text_id = (OLD).text_id OR text_id = (NEW).text_id;
-    DELETE FROM texts_sign_variants_count WHERE text_id = (OLD).text_id OR text_id = (NEW).text_id;
-    INSERT INTO texts_values_count SELECT * FROM texts_values_count_view WHERE text_id = (OLD).text_id OR text_id = (NEW).text_id;
-    INSERT INTO texts_sign_variants_count SELECT * FROM texts_sign_variants_count_view WHERE text_id = (OLD).text_id OR text_id = (NEW).text_id;
+    DELETE FROM @extschema@.texts_values_count WHERE text_id = (OLD).text_id OR text_id = (NEW).text_id;
+    DELETE FROM @extschema@.texts_sign_variants_count WHERE text_id = (OLD).text_id OR text_id = (NEW).text_id;
+    INSERT INTO @extschema@.texts_values_count SELECT * FROM @extschema@.texts_values_count_view WHERE text_id = (OLD).text_id OR text_id = (NEW).text_id;
+    INSERT INTO @extschema@.texts_sign_variants_count SELECT * FROM @extschema@.texts_sign_variants_count_view WHERE text_id = (OLD).text_id OR text_id = (NEW).text_id;
     RETURN NULL;
 END;
 $BODY$;
 
 CREATE TRIGGER texts_values_count_corpus_trigger
-  AFTER UPDATE OF value_id OR INSERT OR DELETE ON corpus
+  AFTER UPDATE OF value_id OR INSERT OR DELETE ON @extschema:cuneiform_corpus@.corpus
   FOR EACH ROW
   EXECUTE FUNCTION texts_values_count_corpus_trigger_fun();
 
 CREATE TRIGGER texts_sign_variants_count_corpus_trigger
-  AFTER UPDATE OF sign_variant_id OR INSERT OR DELETE ON corpus
+  AFTER UPDATE OF sign_variant_id OR INSERT OR DELETE ON @extschema:cuneiform_corpus@.corpus
   FOR EACH ROW
   EXECUTE FUNCTION texts_sign_variants_count_corpus_trigger_fun();
 
 CREATE TRIGGER texts_values_sign_variants_count_transliterations_trigger
-  AFTER UPDATE OF text_id ON transliterations
+  AFTER UPDATE OF text_id ON @extschema:cuneiform_corpus@.transliterations
   FOR EACH ROW
   EXECUTE FUNCTION texts_values_sign_variants_count_transliterations_trigger_fun();
 

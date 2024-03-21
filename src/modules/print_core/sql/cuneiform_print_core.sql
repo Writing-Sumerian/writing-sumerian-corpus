@@ -15,8 +15,8 @@ BEGIN
 
 EXECUTE format($$
     CREATE TABLE %1$I.sign_variants_%2$s (
-        sign_variant_id integer PRIMARY KEY REFERENCES sign_variants (sign_variant_id) DEFERRABLE INITIALLY DEFERRED,
-        sign_id integer NOT NULL REFERENCES signs (sign_id) DEFERRABLE INITIALLY DEFERRED,
+        sign_variant_id integer PRIMARY KEY REFERENCES @extschema:cuneiform_signlist@.sign_variants (sign_variant_id) DEFERRABLE INITIALLY DEFERRED,
+        sign_id integer NOT NULL REFERENCES @extschema:cuneiform_signlist@.signs (sign_id) DEFERRABLE INITIALLY DEFERRED,
         variant_type sign_variant_type NOT NULL,
         length integer NOT NULL,
         graphemes_print text NOT NULL,
@@ -28,9 +28,9 @@ EXECUTE format($$
 
 EXECUTE format($$
     CREATE TABLE %1$I.values_%2$s (
-        value_id integer REFERENCES values (value_id) DEFERRABLE INITIALLY DEFERRED,
-        sign_variant_id integer REFERENCES sign_variants (sign_variant_id) DEFERRABLE INITIALLY DEFERRED,
-        sign_id integer NOT NULL REFERENCES signs (sign_id) DEFERRABLE INITIALLY DEFERRED,
+        value_id integer REFERENCES @extschema:cuneiform_signlist@.values (value_id) DEFERRABLE INITIALLY DEFERRED,
+        sign_variant_id integer REFERENCES @extschema:cuneiform_signlist@.sign_variants (sign_variant_id) DEFERRABLE INITIALLY DEFERRED,
+        sign_id integer NOT NULL REFERENCES @extschema:cuneiform_signlist@.signs (sign_id) DEFERRABLE INITIALLY DEFERRED,
         value_print text NOT NULL,
         PRIMARY KEY (value_id, sign_variant_id)
     )
@@ -40,8 +40,8 @@ EXECUTE format($$
 
 EXECUTE format($$
     CREATE TABLE %1$I.signs_%2$s (
-        sign_variant_id integer PRIMARY KEY REFERENCES sign_variants (sign_variant_id) DEFERRABLE INITIALLY DEFERRED,
-        sign_id integer NOT NULL REFERENCES signs (sign_id) DEFERRABLE INITIALLY DEFERRED,
+        sign_variant_id integer PRIMARY KEY REFERENCES @extschema:cuneiform_signlist@.sign_variants (sign_variant_id) DEFERRABLE INITIALLY DEFERRED,
+        sign_id integer NOT NULL REFERENCES @extschema:cuneiform_signlist@.signs (sign_id) DEFERRABLE INITIALLY DEFERRED,
         sign_print text
     )
     $$,
@@ -58,8 +58,8 @@ EXECUTE format($$
         value ~ 'x' AS x_value,
         %3$s(value) AS value_print
     FROM
-        value_variants
-        LEFT JOIN values USING (value_id)
+        @extschema:cuneiform_signlist@.value_variants
+        LEFT JOIN @extschema:cuneiform_signlist@.values USING (value_id)
     $$,
     v_schema,
     v_suffix,
@@ -93,11 +93,11 @@ EXECUTE format($$
         string_agg(%3$s(grapheme), '.' ORDER BY ord) AS graphemes_print,
         string_agg(%4$s(glyph), '.' ORDER BY ord) AS glyphs_print
     FROM
-        sign_variants
+        @extschema:cuneiform_signlist@.sign_variants
         LEFT JOIN LATERAL unnest(allograph_ids) WITH ORDINALITY AS a(allograph_id, ord) ON TRUE
-        LEFT JOIN allographs USING (allograph_id)
-        LEFT JOIN glyphs USING (glyph_id)
-        LEFT JOIN graphemes USING (grapheme_id)
+        LEFT JOIN @extschema:cuneiform_signlist@.allographs USING (allograph_id)
+        LEFT JOIN @extschema:cuneiform_signlist@.glyphs USING (glyph_id)
+        LEFT JOIN @extschema:cuneiform_signlist@.graphemes USING (grapheme_id)
     GROUP BY
         sign_variant_id,
         sign_id,
@@ -166,7 +166,7 @@ EXECUTE format($$
     AS
     $INNERBODY$
     BEGIN
-        PERFORM %1$I.upsert_sign_variants_%2$s(sign_variant_id) FROM sign_variants WHERE (NEW).allograph_id = ANY(allograph_ids);
+        PERFORM %1$I.upsert_sign_variants_%2$s(sign_variant_id) FROM @extschema:cuneiform_signlist@.sign_variants WHERE (NEW).allograph_id = ANY(allograph_ids);
         RETURN NULL;
     END;
     $INNERBODY$
@@ -182,7 +182,7 @@ EXECUTE format($$
     AS
     $INNERBODY$
     BEGIN
-        PERFORM %1$I.upsert_sign_variants_%2$s(sign_variant_id) FROM sign_variants_composition WHERE (NEW).grapheme_id = ANY(grapheme_ids);
+        PERFORM %1$I.upsert_sign_variants_%2$s(sign_variant_id) FROM @extschema:cuneiform_signlist@.sign_variants_composition WHERE (NEW).grapheme_id = ANY(grapheme_ids);
         RETURN NULL;
     END;
     $INNERBODY$
@@ -198,7 +198,7 @@ EXECUTE format($$
     AS
     $INNERBODY$
     BEGIN
-        PERFORM %1$I.upsert_sign_variants_%2$s(sign_variant_id) FROM sign_variants_composition WHERE (NEW).glyph_id = ANY(glyph_ids);
+        PERFORM %1$I.upsert_sign_variants_%2$s(sign_variant_id) FROM @extschema:cuneiform_signlist@.sign_variants_composition WHERE (NEW).glyph_id = ANY(glyph_ids);
         RETURN NULL;
     END;
     $INNERBODY$
@@ -208,7 +208,7 @@ EXECUTE format($$
 
 EXECUTE format($$
     CREATE TRIGGER sign_variants_%2$s_sign_variants_trigger
-    AFTER INSERT OR DELETE OR UPDATE OF sign_id, allograph_ids, variant_type ON sign_variants 
+    AFTER INSERT OR DELETE OR UPDATE OF sign_id, allograph_ids, variant_type ON @extschema:cuneiform_signlist@.sign_variants 
     FOR EACH ROW
     EXECUTE FUNCTION %1$I.sign_variants_%2$s_sign_variants_trigger_fun()
     $$,
@@ -217,7 +217,7 @@ EXECUTE format($$
 
 EXECUTE format($$
     CREATE TRIGGER sign_variants_%2$s_allographs_trigger
-    AFTER UPDATE OF grapheme_id, glyph_id ON allographs 
+    AFTER UPDATE OF grapheme_id, glyph_id ON @extschema:cuneiform_signlist@.allographs 
     FOR EACH ROW
     EXECUTE FUNCTION %1$I.sign_variants_%2$s_allographs_trigger_fun()
     $$,
@@ -226,7 +226,7 @@ EXECUTE format($$
 
 EXECUTE format($$
     CREATE TRIGGER sign_variants_%2$s_graphemes_trigger
-    AFTER UPDATE OF grapheme ON graphemes 
+    AFTER UPDATE OF grapheme ON @extschema:cuneiform_signlist@.graphemes 
     FOR EACH ROW
     EXECUTE FUNCTION %1$I.sign_variants_%2$s_graphemes_trigger_fun()
     $$,
@@ -235,7 +235,7 @@ EXECUTE format($$
 
 EXECUTE format($$
     CREATE TRIGGER sign_variants_%2$s_glyphs_trigger
-    AFTER UPDATE OF glyph ON glyphs 
+    AFTER UPDATE OF glyph ON @extschema:cuneiform_signlist@.glyphs 
     FOR EACH ROW
     EXECUTE FUNCTION %1$I.sign_variants_%2$s_glyphs_trigger_fun()
     $$,
@@ -453,7 +453,7 @@ EXECUTE format($$
 
 EXECUTE format($$
     CREATE TRIGGER values_%2$s_values_trigger
-    AFTER INSERT OR DELETE OR UPDATE ON values 
+    AFTER INSERT OR DELETE OR UPDATE ON @extschema:cuneiform_signlist@.values 
     FOR EACH ROW
     EXECUTE FUNCTION %1$I.values_%2$s_values_trigger_fun()
     $$,
@@ -462,7 +462,7 @@ EXECUTE format($$
 
 EXECUTE format($$
     CREATE TRIGGER values_%2$s_value_variants_trigger
-    AFTER UPDATE ON value_variants 
+    AFTER UPDATE ON @extschema:cuneiform_signlist@.value_variants 
     FOR EACH ROW
     EXECUTE FUNCTION %1$I.values_%2$s_value_variants_trigger_fun()
     $$,

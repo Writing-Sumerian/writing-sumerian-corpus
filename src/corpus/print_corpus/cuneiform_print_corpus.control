@@ -1,5 +1,6 @@
 comment = 'Compose abstract cuneiform into human readable text'
 default_version = '0.0.2'
-relocatable = false
+relocatable = true
 module_pathname = '$libdir/cuneiform_print_corpus'
 requires = 'cuneiform_corpus, cuneiform_print_html'
+no_relocate = 'cuneiform_corpus, cuneiform_print_html'

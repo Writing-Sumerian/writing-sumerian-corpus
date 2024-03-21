@@ -2,4 +2,5 @@ comment = 'Edit data in Cuneiform Corpus'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_edit_corpus'
-requires = 'cuneiform_corpus, cuneiform_editor, cuneiform_log, cuneiform_log_tables'
+requires = 'cuneiform_sign_properties, cuneiform_create_corpus, cuneiform_corpus, cuneiform_parser, cuneiform_editor, cuneiform_log, cuneiform_log_tables'
+no_relocate = 'cuneiform_create_corpus, cuneiform_corpus, cuneiform_parser, cuneiform_editor, cuneiform_log_tables'

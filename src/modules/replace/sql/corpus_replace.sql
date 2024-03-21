@@ -71,8 +71,8 @@ RETURN QUERY EXECUTE format($$
             b.compound_no AS compound_no_reference
         FROM
             (SELECT DISTINCT match_no FROM matched_signs) match
-            CROSS JOIN replace_pattern_corpus a
-            LEFT JOIN replace_pattern_words a_words USING (pattern_id, word_no)
+            CROSS JOIN @extschema@.replace_pattern_corpus a
+            LEFT JOIN @extschema@.replace_pattern_words a_words USING (pattern_id, word_no)
             LEFT JOIN "references" ON (
                 type = 'description' 
                 AND custom_value ~ '^[0-9]+' 
@@ -121,7 +121,7 @@ RETURN QUERY EXECUTE format($$
             glyph_id
         FROM
             original
-            LEFT JOIN sign_variants_composition USING (sign_variant_id)
+            LEFT JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (sign_variant_id)
             LEFT JOIN LATERAL UNNEST (glyph_ids) WITH ORDINALITY AS _(glyph_id, ord) ON TRUE
         WHERE
             match_no IS NOT NULL
@@ -134,7 +134,7 @@ RETURN QUERY EXECUTE format($$
             glyph_id
         FROM
             replacement
-            LEFT JOIN sign_variants_composition USING (sign_variant_id)
+            LEFT JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (sign_variant_id)
             LEFT JOIN LATERAL UNNEST (glyph_ids) WITH ORDINALITY AS _(glyph_id, ord) ON TRUE
     ),
     correspondence AS (
@@ -151,18 +151,18 @@ RETURN QUERY EXECUTE format($$
             match_no,
             sign_no_new AS sign_no,
             min(line_no) AS line_no,
-            condition_agg(condition) AS condition,
+            @extschema:cuneiform_sign_properties@.condition_agg(condition) AS condition,
             string_agg(crits, '') AS crits,
-            last(comment ORDER BY sign_no_old) AS comment,
+            @extschema@.last(comment ORDER BY sign_no_old) AS comment,
             bool_or(newline) AS newline,
-            last(inverted ORDER BY sign_no_old) AS inverted,
-            last(ligature ORDER BY sign_no_old) AS ligature,
+            @extschema@.last(inverted ORDER BY sign_no_old) AS inverted,
+            @extschema@.last(ligature ORDER BY sign_no_old) AS ligature,
             min(sign_no_old) AS sign_no_old,
             min(word_no) AS word_no_old,
             min(compound_no) AS compound_no_old,
-            bool_and_ex_last(NOT inverted AND NOT ligature)     -- cannot automatically merge inverted, ligatured oder commented on signs
-            AND bool_and(sign_no_old IS NOT NULL)               -- all components have a correspondence in the old text
-                AND bool_and(gap <= 1)                          -- no gaps within a new sign
+            @extschema@.bool_and_ex_last(NOT inverted AND NOT ligature)     -- cannot automatically merge inverted, ligatured oder commented on signs
+            AND bool_and(sign_no_old IS NOT NULL)                           -- all components have a correspondence in the old text
+                AND bool_and(gap <= 1)                                      -- no gaps within a new sign
                 AS valid         
         FROM
             original

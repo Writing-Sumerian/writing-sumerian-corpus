@@ -1,10 +1,8 @@
-from numbers import Complex
-from tokenize import Single
 from typing import List
 from py2plpy import plpy, sql_properties
 
-@sql_properties(volatility='stable', cost=1000)
-def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str:
+@sql_properties(volatility='immutable', cost=1000)
+def parse_search(search_term:str, target_table:str, target_key:List[str], target_schema:str) -> str:
      
     import itertools
     from enum import Enum
@@ -343,16 +341,16 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
                 return [f"(({c1}) OR ({c2}))"]
 
             if table.unordered:
-                conditions.append(f"consecutive({table.list('position')})")
+                conditions.append(f"@extschema@.consecutive({table.list('position')})")
             
             for a, b in zip(table.tables[:-1], table.tables[1:]):
                 if isinstance(b, DummyTable):
                     continue
                 if not table.unordered:
                     if TokenType.ELLIPSIS in a.ops:
-                        conditions.append(f"{a.last('position')} < {b.first('position')}")
+                        conditions.append(f"{a.last('position')} OPERATOR(@extschema@.<) {b.first('position')}")
                     else:
-                        conditions.append(f"next({a.last('position')}) = {b.first('position')}")
+                        conditions.append(f"@extschema@.next({a.last('position')}) OPERATOR(@extschema@.=) {b.first('position')}")
                 if TokenType.WORDCON in a.ops:
                     conditions.append(f"{a.last('word_no')} = {b.first('word_no')}")
                 if TokenType.COMPOUNDCON in a.ops:
@@ -415,10 +413,10 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
         def translateWildcards(self):
             wildcards = self.wildcards(self.table)
             wildcards = [(wc, ', '.join(f"c{id}.sign_no" for id in signNos)) for wc, signNos in wildcards.items()]
-            return 'ARRAY['+', '.join(f"({wc}, sort_uniq_remove_null({signNos}))" for wc, signNos in wildcards)+']::search_wildcard[]'
+            return 'ARRAY['+', '.join(f"({wc}, @extschema@.sort_uniq_remove_null({signNos}))" for wc, signNos in wildcards)+']::@extschema@.search_wildcard[]'
 
 
-        def translate(self, targetTable, targetKey):
+        def translate(self, targetTable, targetKey, targetSchema):
             conditions = Translator.join(self.table)
             for col in targetKey:
                 for id in self.table.ids[1:]:
@@ -427,12 +425,12 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
                 lineNos = ', '.join(f"c{id}.line_no" for table in line for id in table.ids)
                 conditions.append(f"LEAST({lineNos}) = GREATEST({lineNos})")
 
-            fromClause = ', '.join(f"{targetTable} c{id}" for id in self.table.ids)
+            fromClause = ', '.join(f"{plpy.quote_ident(targetSchema)}.{plpy.quote_ident(targetTable)} c{id}" for id in self.table.ids)
             whereClause = ' AND '.join(conditions)
-            keyCols = ', '.join(f"c{self.table.ids[0]}.{col}" for col in targetKey)
-            matchClause = 'sort_uniq_remove_null('+', '.join(f"c{id}.sign_no" for id in self.table.matchIds)+')'
-            wordMatchClause = 'sort_uniq_remove_null('+', '.join(f"c{id}.word_no" for id in self.table.matchIds)+')'
-            lineMatchClause = 'sort_uniq_remove_null('+', '.join(f"c{id}.line_no" for id in self.table.matchIds)+')'
+            keyCols = ', '.join(f"c{self.table.ids[0]}.{plpy.quote_ident(col)}" for col in targetKey)
+            matchClause = '@extschema@.sort_uniq_remove_null('+', '.join(f"c{id}.sign_no" for id in self.table.matchIds)+')'
+            wordMatchClause = '@extschema@.sort_uniq_remove_null('+', '.join(f"c{id}.word_no" for id in self.table.matchIds)+')'
+            lineMatchClause = '@extschema@.sort_uniq_remove_null('+', '.join(f"c{id}.line_no" for id in self.table.matchIds)+')'
             wildcardClause = self.translateWildcards()
 
             return f'SELECT {keyCols}, {matchClause} AS signs, {wordMatchClause} AS words, {lineMatchClause} AS lines, {wildcardClause} AS wildcards FROM {fromClause} WHERE {whereClause}'
@@ -448,7 +446,7 @@ def parse_search(search_term:str, target_table:str, target_key:List[str]) -> str
     translator = Translator(tokens)
 
 
-    return translator.translate(target_table, target_key)
+    return translator.translate(target_table, target_key, target_schema)
 
     
 

@@ -30,7 +30,7 @@ SELECT
 FROM    
     texts_values_count
     JOIN texts_transliteration_count USING (text_id)
-    JOIN texts USING (text_id)
+    JOIN @extschema:cuneiform_corpus@.texts USING (text_id)
 GROUP BY
     value_id,
     period_id,
@@ -51,7 +51,7 @@ SELECT
 FROM    
     texts_sign_variants_count
     JOIN texts_transliteration_count USING (text_id)
-    JOIN texts USING (text_id)
+    JOIN @extschema:cuneiform_corpus@.texts USING (text_id)
 GROUP BY
     sign_variant_id,
     period_id,
@@ -67,8 +67,8 @@ CREATE OR REPLACE FUNCTION values_present_texts_values_count_trigger_fun ()
     AS
 $BODY$
 BEGIN
-    DELETE FROM values_present 
-    USING texts 
+    DELETE FROM @extschema@.values_present 
+    USING @extschema:cuneiform_corpus@.texts 
     WHERE 
         ((texts.text_id = (OLD).text_id AND value_id = (OLD).value_id) 
         OR (texts.text_id = (NEW).text_id AND value_id = (NEW).value_id))
@@ -76,16 +76,15 @@ BEGIN
         AND values_present.provenience_id = texts.provenience_id
         AND values_present.genre_id = texts.genre_id
         AND values_present.object_id = texts.object_id;
-    INSERT INTO values_present
+    INSERT INTO @extschema@.values_present
     SELECT DISTINCT
         values_present_view.* 
     FROM 
-        values_present_view
-        JOIN texts USING (period_id, provenience_id, genre_id, object_id)
+        @extschema@.values_present_view
+        JOIN @extschema:cuneiform_corpus@.texts USING (period_id, provenience_id, genre_id, object_id)
     WHERE 
         (texts.text_id = (OLD).text_id AND value_id = (OLD).value_id) 
         OR (texts.text_id = (NEW).text_id AND value_id = (NEW).value_id);
-    RAISE INFO '% % % %', (OLD).text_id, (OLD).value_id, (NEW).text_id, (NEW).value_id;
     RETURN NULL;
 END;
 $BODY$;
@@ -98,8 +97,8 @@ CREATE OR REPLACE FUNCTION sign_variants_present_texts_sign_variants_count_trigg
     AS
 $BODY$
 BEGIN
-    DELETE FROM sign_variants_present 
-    USING texts 
+    DELETE FROM @extschema@.sign_variants_present 
+    USING @extschema:cuneiform_corpus@.texts 
     WHERE 
         ((texts.text_id = (OLD).text_id AND sign_variant_id = (OLD).sign_variant_id) 
         OR (texts.text_id = (NEW).text_id AND sign_variant_id = (NEW).sign_variant_id))
@@ -107,12 +106,12 @@ BEGIN
         AND sign_variants_present.provenience_id = texts.provenience_id
         AND sign_variants_present.genre_id = texts.genre_id
         AND sign_variants_present.object_id = texts.object_id;
-    INSERT INTO sign_variants_present
+    INSERT INTO @extschema@.sign_variants_present
     SELECT DISTINCT
         sign_variants_present_view.* 
     FROM 
-        sign_variants_present_view
-        JOIN texts USING (period_id, provenience_id, genre_id, object_id)
+        @extschema@.sign_variants_present_view
+        JOIN @extschema:cuneiform_corpus@.texts USING (period_id, provenience_id, genre_id, object_id)
     WHERE 
         (texts.text_id = (OLD).text_id AND sign_variant_id = (OLD).sign_variant_id) 
         OR (texts.text_id = (NEW).text_id AND sign_variant_id = (NEW).sign_variant_id);
@@ -129,27 +128,27 @@ CREATE OR REPLACE FUNCTION values_sign_variants_present_texts_trigger_fun ()
     AS
 $BODY$
 BEGIN
-    DELETE FROM values_present 
+    DELETE FROM @extschema@.values_present 
     WHERE 
         ((OLD).period_id != (NEW).period_id AND (period_id = (OLD).period_id OR period_id = (NEW).period_id))
         OR ((OLD).provenience_id != (NEW).provenience_id AND (provenience_id = (OLD).provenience_id OR provenience_id = (NEW).provenience_id))
         OR ((OLD).genre_id != (NEW).genre_id AND (genre_id = (OLD).genre_id OR genre_id = (NEW).genre_id))
         OR ((OLD).object_id != (NEW).object_id AND (object_id = (OLD).object_id OR object_id = (NEW).object_id));
-    DELETE FROM sign_variants_present 
+    DELETE FROM @extschema@.sign_variants_present 
     WHERE 
         ((OLD).period_id != (NEW).period_id AND (period_id = (OLD).period_id OR period_id = (NEW).period_id))
         OR ((OLD).provenience_id != (NEW).provenience_id AND (provenience_id = (OLD).provenience_id OR provenience_id = (NEW).provenience_id))
         OR ((OLD).genre_id != (NEW).genre_id AND (genre_id = (OLD).genre_id OR genre_id = (NEW).genre_id))
         OR ((OLD).object_id != (NEW).object_id AND (object_id = (OLD).object_id OR object_id = (NEW).object_id));
-    INSERT INTO values_present
-    SELECT * FROM values_present_view
+    INSERT INTO @extschema@.values_present
+    SELECT * FROM @extschema@.values_present_view
     WHERE 
         ((OLD).period_id != (NEW).period_id AND (period_id = (OLD).period_id OR period_id = (NEW).period_id))
         OR ((OLD).provenience_id != (NEW).provenience_id AND (provenience_id = (OLD).provenience_id OR provenience_id = (NEW).provenience_id))
         OR ((OLD).genre_id != (NEW).genre_id AND (genre_id = (OLD).genre_id OR genre_id = (NEW).genre_id))
         OR ((OLD).object_id != (NEW).object_id AND (object_id = (OLD).object_id OR object_id = (NEW).object_id));
-    INSERT INTO sign_variants_present
-    SELECT * FROM sign_variants_present_view
+    INSERT INTO @extschema@.sign_variants_present
+    SELECT * FROM @extschema@.sign_variants_present_view
     WHERE 
         ((OLD).period_id != (NEW).period_id AND (period_id = (OLD).period_id OR period_id = (NEW).period_id))
         OR ((OLD).provenience_id != (NEW).provenience_id AND (provenience_id = (OLD).provenience_id OR provenience_id = (NEW).provenience_id))
@@ -166,12 +165,12 @@ CREATE OR REPLACE FUNCTION values_sign_variants_present_texts_transliteration_co
     AS
 $BODY$
 BEGIN
-    UPDATE values_present SET count_norm = values_present_view.count_norm
+    UPDATE @extschema@.values_present SET count_norm = values_present_view.count_norm
     FROM
-        texts_transliteration_count
-        JOIN texts USING (text_id)
-        JOIN texts_values_count USING (text_id)
-        JOIN values_present_view USING (value_id, period_id, provenience_id, genre_id, object_id)
+         @extschema@.texts_transliteration_count
+        JOIN @extschema:cuneiform_corpus@.texts USING (text_id)
+        JOIN @extschema@.texts_values_count USING (text_id)
+        JOIN @extschema@.values_present_view USING (value_id, period_id, provenience_id, genre_id, object_id)
     WHERE
         text_id = (NEW).text_id
         AND values_present.value_id = values_present_view.value_id
@@ -180,12 +179,12 @@ BEGIN
         AND values_present.genre_id = values_present_view.genre_id
         AND values_present.object_id = values_present_view.object_id;
 
-    UPDATE sign_variants_present SET count_norm = sign_variants_present_view.count_norm
+    UPDATE  @extschema@.sign_variants_present SET count_norm = sign_variants_present_view.count_norm
     FROM
-        texts_transliteration_count
-        JOIN texts USING (text_id)
-        JOIN texts_sign_variants_count USING (text_id)
-        JOIN sign_variants_present_view USING (sign_variant_id, period_id, provenience_id, genre_id, object_id)
+         @extschema@.texts_transliteration_count
+        JOIN @extschema:cuneiform_corpus@.texts USING (text_id)
+        JOIN @extschema@.texts_sign_variants_count USING (text_id)
+        JOIN @extschema@.sign_variants_present_view USING (sign_variant_id, period_id, provenience_id, genre_id, object_id)
     WHERE
         text_id = (NEW).text_id
         AND sign_variants_present.sign_variant_id = sign_variants_present_view.sign_variant_id
@@ -206,8 +205,8 @@ CREATE OR REPLACE FUNCTION values_sign_variants_present_transliterations_before_
     AS
 $BODY$
 BEGIN
-    DROP TRIGGER values_present_texts_values_count_trigger ON texts_values_count;
-    DROP TRIGGER sign_variants_present_texts_sign_variants_count_trigger ON texts_sign_variants_count;
+    DROP TRIGGER values_present_texts_values_count_trigger ON @extschema@.texts_values_count;
+    DROP TRIGGER sign_variants_present_texts_sign_variants_count_trigger ON @extschema@.texts_sign_variants_count;
     RETURN NULL;
 END;
 $BODY$;
@@ -220,13 +219,13 @@ CREATE OR REPLACE FUNCTION values_sign_variants_present_transliterations_after_t
 $BODY$
 BEGIN
     CREATE TRIGGER values_present_texts_values_count_trigger
-        AFTER UPDATE OR INSERT OR DELETE ON texts_values_count
+        AFTER UPDATE OR INSERT OR DELETE ON @extschema@.texts_values_count
         FOR EACH ROW
-        EXECUTE FUNCTION values_present_texts_values_count_trigger_fun();
+        EXECUTE FUNCTION @extschema@.values_present_texts_values_count_trigger_fun();
     CREATE TRIGGER sign_variants_present_texts_sign_variants_count_trigger
-        AFTER UPDATE OR INSERT OR DELETE ON texts_sign_variants_count
+        AFTER UPDATE OR INSERT OR DELETE ON @extschema@.texts_sign_variants_count
         FOR EACH ROW
-        EXECUTE FUNCTION sign_variants_present_texts_sign_variants_count_trigger_fun();
+        EXECUTE FUNCTION @extschema@.sign_variants_present_texts_sign_variants_count_trigger_fun();
     RETURN NULL;
 END;
 $BODY$;
@@ -243,7 +242,7 @@ CREATE TRIGGER sign_variants_present_texts_sign_variants_count_trigger
   EXECUTE FUNCTION sign_variants_present_texts_sign_variants_count_trigger_fun();
 
 CREATE TRIGGER values_sign_variants_present_texts_trigger
-  AFTER UPDATE OF period_id, provenience_id, genre_id, object_id ON texts
+  AFTER UPDATE OF period_id, provenience_id, genre_id, object_id ON @extschema:cuneiform_corpus@.texts
   FOR EACH ROW
   EXECUTE FUNCTION values_sign_variants_present_texts_trigger_fun();
 
@@ -253,12 +252,12 @@ CREATE TRIGGER values_sign_variants_present_texts_transliteration_count_trigger
   EXECUTE FUNCTION values_sign_variants_present_texts_transliteration_count_trigger_fun();
 
 CREATE TRIGGER values_sign_variants_present_transliterations_before_trigger
-    BEFORE UPDATE OF text_id ON transliterations
+    BEFORE UPDATE OF text_id ON @extschema:cuneiform_corpus@.transliterations
     FOR EACH STATEMENT
     EXECUTE FUNCTION values_sign_variants_present_transliterations_before_trigger_fun();
 
 CREATE TRIGGER values_sign_variants_present_transliterations_after_trigger
-    AFTER UPDATE OF text_id ON transliterations
+    AFTER UPDATE OF text_id ON @extschema:cuneiform_corpus@.transliterations
     FOR EACH STATEMENT
     EXECUTE FUNCTION values_sign_variants_present_transliterations_after_trigger_fun();
 

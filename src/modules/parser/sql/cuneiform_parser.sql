@@ -3,23 +3,23 @@ CREATE TABLE corpus_parsed_unencoded (
     sign_no integer,
     value text,
     sign_spec text,
-    type sign_type NOT NULL,
+    type @extschema:cuneiform_sign_properties@.sign_type NOT NULL,
     line_no_code integer,
     start_col_code integer,
     stop_col_code integer,
     PRIMARY KEY (transliteration_id, sign_no)
 );
 
-CALL create_corpus_encoder('parser_corpus_encoder', 'corpus_parsed_unencoded', '{transliteration_id}');
+CALL @extschema:cuneiform_encoder@.create_corpus_encoder('parser_corpus_encoder', 'corpus_parsed_unencoded', '{transliteration_id}', '@extschema@');
 
 CREATE OR REPLACE PROCEDURE parse (
-    code text, 
-    schema text,
-    language LANGUAGE,
-    stemmed boolean,
-    id integer
+        code text, 
+        schema text,
+        language LANGUAGE,
+        stemmed boolean,
+        id integer
     )
-    LANGUAGE 'plpython3u'
+    LANGUAGE PLPYTHON3U
     AS $BODY$
 
 from cuneiformparser import parseText
@@ -27,12 +27,12 @@ import pandas as pd
 
 corpus_plan = plpy.prepare(
     f"INSERT INTO {schema}.corpus VALUES ($1, $2, $3, $4, NULL, NULL, CASE WHEN $6 = 'value' OR $6 = 'sign' THEN NULL ELSE $5 END, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)", 
-    ['integer', 'integer', 'integer', 'integer', 'text', 'sign_type', 'indicator_type', 'boolean', 'boolean', 'sign_condition', 'text', 'text', 'boolean', 'boolean', 'boolean']
+    ['integer', 'integer', 'integer', 'integer', 'text', '@extschema:cuneiform_sign_properties@.sign_type', '@extschema:cuneiform_sign_properties@.indicator_type', 'boolean', 'boolean', '@extschema:cuneiform_sign_properties@.sign_condition', 'text', 'text', 'boolean', 'boolean', 'boolean']
 )
 
 corpus_unencoded_plan = plpy.prepare(
-    f'INSERT INTO corpus_parsed_unencoded VALUES ($1, $2, $3, $4, $5, $6, $7, $8)', 
-    ['integer', 'integer', 'text', 'text', 'sign_type', 'integer', 'integer', 'integer']
+    f'INSERT INTO @extschema@.corpus_parsed_unencoded VALUES ($1, $2, $3, $4, $5, $6, $7, $8)', 
+    ['integer', 'integer', 'text', 'text', '@extschema:cuneiform_sign_properties@.sign_type', 'integer', 'integer', 'integer']
 )
 
 words_plan = plpy.prepare(
@@ -42,22 +42,22 @@ words_plan = plpy.prepare(
 
 compounds_plan = plpy.prepare(
     f'INSERT INTO {schema}.compounds VALUES ($1, $2, $3, $4, $5, $6)',
-    ['integer', 'integer', 'pn_type', 'language', 'integer', 'text']
+    ['integer', 'integer', '@extschema:cuneiform_sign_properties@.pn_type', '@extschema:cuneiform_sign_properties@.language', 'integer', 'text']
 )
 
 sections_plan = plpy.prepare(
-    f'INSERT INTO {schema}.sections SELECT $1, $2, $3, composition_id FROM compositions WHERE composition_name = $4',
+    f'INSERT INTO {schema}.sections SELECT $1, $2, $3, composition_id FROM @extschema:cuneiform_corpus@.compositions WHERE composition_name = $4',
     ['integer', 'integer', 'text', 'text']
 )
 
 surfaces_plan = plpy.prepare(
     f'INSERT INTO {schema}.surfaces (transliteration_id, surface_no, surface_type, surface_data, surface_comment) VALUES ($1, $2, $3, $4, $5)',
-    ['integer', 'integer', 'surface_type', 'text', 'text']
+    ['integer', 'integer', '@extschema:cuneiform_create_corpus@.surface_type', 'text', 'text']
 )
 
 blocks_plan = plpy.prepare(
     f'INSERT INTO {schema}.blocks (transliteration_id, block_no, surface_no, block_type, block_data, block_comment) VALUES ($1, $2, $3, $4, $5, $6)',
-    ['integer', 'integer', 'integer', 'block_type', 'text', 'text']
+    ['integer', 'integer', 'integer', '@extschema:cuneiform_create_corpus@.block_type', 'text', 'text']
 )
 
 lines_plan = plpy.prepare(
@@ -72,7 +72,7 @@ errors_plan = plpy.prepare(
 
 surfaces, blocks, lines, signs, compounds, words, sections, errors = parseText(code, language, stemmed)
 
-plpy.execute(f"DELETE FROM corpus_parsed_unencoded WHERE transliteration_id = {id}")
+plpy.execute(f"DELETE FROM @extschema@.corpus_parsed_unencoded WHERE transliteration_id = {id}")
 
 for ix, row in sections.iterrows():
     plpy.execute(sections_plan, [id, ix]+[row[key] for key in ['section_name', 'composition']])
@@ -102,7 +102,7 @@ plpy.execute(f"""
         value_id = a.value_id, 
         sign_variant_id = a.sign_variant_id 
     FROM 
-        parser_corpus_encoder a 
+        @extschema@.parser_corpus_encoder a 
     WHERE 
         corpus.transliteration_id = a.transliteration_id AND 
         corpus.transliteration_id = {id} AND
@@ -110,7 +110,7 @@ plpy.execute(f"""
     """)
 
 plpy.execute(f"""
-    DELETE FROM corpus_parsed_unencoded
+    DELETE FROM @extschema@.corpus_parsed_unencoded
     USING {schema}.corpus
     WHERE
         corpus.transliteration_id = corpus_parsed_unencoded.transliteration_id AND 
@@ -123,7 +123,7 @@ plpy.execute(f"""
     UPDATE {schema}.corpus SET 
         custom_value = corpus_parsed_unencoded.value  || COALESCE('(' || corpus_parsed_unencoded.sign_spec || ')', '')
     FROM
-        corpus_parsed_unencoded
+        @extschema@.corpus_parsed_unencoded
     WHERE
         corpus.transliteration_id = corpus_parsed_unencoded.transliteration_id AND
         corpus.transliteration_id = {id} AND

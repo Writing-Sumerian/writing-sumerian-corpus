@@ -9,7 +9,7 @@ AS $BODY$
 DECLARE
     v_edit_id       integer;
 BEGIN
-    INSERT INTO edits (transliteration_id, timestamp, user_id, internal) 
+    INSERT INTO @extschema:cuneiform_log_tables@.edits (transliteration_id, timestamp, user_id, internal) 
     SELECT 
         v_transliteration_id, 
         CURRENT_TIMESTAMP, 
@@ -17,7 +17,7 @@ BEGIN
         v_internal
     RETURNING edit_id INTO v_edit_id;
 
-    INSERT INTO edit_log 
+    INSERT INTO @extschema:cuneiform_log_tables@.edit_log 
     SELECT
         v_edit_id,
         ordinality,
@@ -28,7 +28,7 @@ BEGIN
         val,
         val_old
     FROM
-        edit(v_source_schema, 'public', v_transliteration_id) WITH ORDINALITY;
+        @extschema:cuneiform_editor@.edit(v_source_schema, '@extschema:cuneiform_corpus@', v_transliteration_id) WITH ORDINALITY;
 END;
 $BODY$;
 
@@ -36,7 +36,7 @@ $BODY$;
 CREATE OR REPLACE PROCEDURE edit_transliteration (
     v_code text, 
     v_transliteration_id integer,
-    v_language language,
+    v_language @extschema:cuneiform_sign_properties@.language,
     v_stemmed boolean,
     v_user_id integer DEFAULT NULL,
     v_internal boolean DEFAULT false
@@ -50,7 +50,7 @@ DECLARE
 
 BEGIN
 
-    CALL create_corpus('pg_temp', TRUE);
+    CALL @extschema:cuneiform_create_corpus@.create_corpus('pg_temp', TRUE);
     CREATE TEMPORARY TABLE errors (
         transliteration_id integer,
         line integer,
@@ -59,7 +59,7 @@ BEGIN
         message text
     ) ON COMMIT DROP;
 
-    CALL parse(v_code, 'pg_temp', v_language, v_stemmed, v_transliteration_id);
+    CALL @extschema:cuneiform_parser@.parse(v_code, 'pg_temp', v_language, v_stemmed, v_transliteration_id);
 
     SELECT string_agg(format('"%s" near %s:%s', message, line, col),  E'\n') INTO v_error FROM errors;
     IF length(v_error) > 0 THEN
@@ -71,7 +71,7 @@ BEGIN
     INTO 
         v_error 
     FROM 
-        corpus_parsed_unencoded
+        @extschema:cuneiform_parser@.corpus_parsed_unencoded
     WHERE 
         transliteration_id = v_transliteration_id;
 
@@ -79,7 +79,7 @@ BEGIN
         RAISE EXCEPTION 'cuneiform_parser encoding error:%', v_error;
     END IF;
 
-    CALL edit_corpus('pg_temp', v_transliteration_id, v_user_id, v_internal);
+    CALL @extschema@.edit_corpus('pg_temp', v_transliteration_id, v_user_id, v_internal);
 
 END;
 

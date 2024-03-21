@@ -115,12 +115,12 @@ BEGIN
                             %1$s,
                             sign_no,
                             glyph_no,
-                            normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
+                            @extschema:cuneiform_signlist@.normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
                         FROM
                             %3$I.%2$I
-                            LEFT JOIN LATERAL split_glyphs(value) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
-                            LEFT JOIN LATERAL split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
-                            LEFT JOIN sign_map ON component = identifier
+                            LEFT JOIN LATERAL @extschema:cuneiform_signlist@.split_glyphs(value) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
+                            LEFT JOIN LATERAL @extschema:cuneiform_signlist@.split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
+                            LEFT JOIN @extschema:cuneiform_signlist@.sign_map ON component = identifier
                         WHERE type = 'sign'
                         GROUP BY 
                             %1$s,
@@ -142,12 +142,12 @@ BEGIN
                             %1$s,
                             sign_no,
                             glyph_no,
-                            normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
+                            @extschema:cuneiform_signlist@.normalize_operators(string_agg(op||COALESCE('('||glyphs||')', ''), '' ORDER BY component_no)) AS glyphs
                         FROM
                             %3$I.%2$I
-                            LEFT JOIN LATERAL split_glyphs(sign_spec) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
-                            LEFT JOIN LATERAL split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
-                            LEFT JOIN sign_map ON component = identifier
+                            LEFT JOIN LATERAL @extschema:cuneiform_signlist@.split_glyphs(sign_spec) WITH ORDINALITY AS a(glyph, glyph_no) ON TRUE
+                            LEFT JOIN LATERAL @extschema:cuneiform_signlist@.split_sign(glyph) WITH ORDINALITY AS b(component, op, component_no) ON TRUE
+                            LEFT JOIN @extschema:cuneiform_signlist@.sign_map ON component = identifier
                         WHERE sign_spec IS NOT NULL
                         GROUP BY 
                             %1$s,
@@ -172,7 +172,7 @@ BEGIN
                 FROM
                     %3$I.%2$I s
                     LEFT JOIN normalized_sign_specs USING (%1$s, sign_no)
-                    JOIN values_encoded ON ( normalized_sign_specs.glyphs IS NOT DISTINCT FROM values_encoded.sign_spec AND s.value = values_encoded.value)
+                    JOIN @extschema@.values_encoded ON normalized_sign_specs.glyphs IS NOT DISTINCT FROM values_encoded.sign_spec AND s.value = values_encoded.value
                 WHERE 
                     s.type = 'value'
                 UNION ALL
@@ -186,7 +186,7 @@ BEGIN
                     %3$I.%2$I s
                     LEFT JOIN normalized_signs USING (%1$s, sign_no)
                     LEFT JOIN normalized_sign_specs USING (%1$s, sign_no)
-                    JOIN signs_encoded ON normalized_signs.glyphs = signs_encoded.sign AND normalized_sign_specs.glyphs IS NOT DISTINCT FROM signs_encoded.sign_spec
+                    JOIN @extschema@.signs_encoded ON normalized_signs.glyphs = signs_encoded.sign AND normalized_sign_specs.glyphs IS NOT DISTINCT FROM signs_encoded.sign_spec
                 WHERE 
                     s.type = 'sign'
         $$,

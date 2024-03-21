@@ -32,7 +32,7 @@ CREATE TYPE compounds_type AS (
     transliteration_id integer,
     compound_no integer,
     pn_type pn_type,
-    language LANGUAGE,
+    language @extschema:cuneiform_sign_properties@.language,
     section_no integer,
     compound_comment text
 );
@@ -77,11 +77,11 @@ CREATE TYPE corpus_type AS (
     value_id integer,
     sign_variant_id integer,
     custom_value text,
-    type sign_type,
-    indicator_type indicator_type,
+    type @extschema:cuneiform_sign_properties@.sign_type,
+    indicator_type @extschema:cuneiform_sign_properties@.indicator_type,
     phonographic boolean,
     stem boolean,
-    condition sign_condition,
+    condition @extschema:cuneiform_sign_properties@.sign_condition,
     crits text,
     comment text,
     newline boolean,
@@ -104,7 +104,7 @@ BEGIN
 EXECUTE format(
     $$
     CREATE %1$s TABLE %2$I.sections (
-        LIKE sections_type,
+        LIKE @extschema@.sections_type,
         PRIMARY KEY (transliteration_id, section_no)
     ) %3$s
     $$,
@@ -122,7 +122,7 @@ EXECUTE format(
 EXECUTE format(
     $$
     CREATE %1$s TABLE %2$I.compounds (
-        LIKE compounds_type,
+        LIKE @extschema@.compounds_type,
         PRIMARY KEY (transliteration_id, compound_no),
         FOREIGN KEY (transliteration_id, section_no) REFERENCES %2$I.sections (transliteration_id, section_no) DEFERRABLE INITIALLY IMMEDIATE
     ) %3$s
@@ -134,7 +134,7 @@ EXECUTE format(
 EXECUTE format(
     $$
     CREATE %1$s TABLE %2$I.words (
-        LIKE words_type,
+        LIKE @extschema@.words_type,
         PRIMARY KEY (transliteration_id, word_no),
         FOREIGN KEY (transliteration_id, compound_no) REFERENCES %2$I.compounds (transliteration_id, compound_no) DEFERRABLE INITIALLY IMMEDIATE
     ) %3$s
@@ -153,7 +153,7 @@ EXECUTE format(
 EXECUTE format(
     $$
     CREATE %1$s TABLE %2$I.surfaces (
-        LIKE surfaces_type,
+        LIKE @extschema@.surfaces_type,
         PRIMARY KEY (transliteration_id, surface_no)
     ) %3$s
     $$,
@@ -170,7 +170,7 @@ EXECUTE format(
 EXECUTE format(
     $$
     CREATE %1$s TABLE %2$I.blocks (
-        LIKE blocks_type,
+        LIKE @extschema@.blocks_type,
         PRIMARY KEY (transliteration_id, block_no),
         FOREIGN KEY (transliteration_id, surface_no) REFERENCES %2$I.surfaces (transliteration_id, surface_no) DEFERRABLE INITIALLY IMMEDIATE
     ) %3$s
@@ -189,7 +189,7 @@ EXECUTE format(
 EXECUTE format(
     $$
     CREATE %1$s TABLE %2$I.lines (
-        LIKE lines_type,
+        LIKE @extschema@.lines_type,
         PRIMARY KEY (transliteration_id, line_no),
         FOREIGN KEY (transliteration_id, block_no) REFERENCES %2$I.blocks (transliteration_id, block_no) DEFERRABLE INITIALLY IMMEDIATE
     ) %3$s
@@ -207,7 +207,7 @@ EXECUTE format(
 EXECUTE format(
     $$
     CREATE %1$s TABLE %2$I.corpus (
-        LIKE corpus_type,
+        LIKE @extschema@.corpus_type,
         PRIMARY KEY (transliteration_id, sign_no),
          %4$s
          %5$s
@@ -218,8 +218,8 @@ EXECUTE format(
     v_temp_clause,
     v_schema,
     v_on_commit_clause,
-    CASE WHEN v_temp THEN '' ELSE 'FOREIGN KEY (value_id) REFERENCES values DEFERRABLE INITIALLY IMMEDIATE,' END,
-    CASE WHEN v_temp THEN '' ELSE 'FOREIGN KEY (sign_variant_id) REFERENCES sign_variants DEFERRABLE INITIALLY IMMEDIATE,' END);
+    CASE WHEN v_temp THEN '' ELSE 'FOREIGN KEY (value_id) REFERENCES @extschema:cuneiform_signlist@.values DEFERRABLE INITIALLY IMMEDIATE,' END,
+    CASE WHEN v_temp THEN '' ELSE 'FOREIGN KEY (sign_variant_id) REFERENCES @extschema:cuneiform_signlist@.sign_variants DEFERRABLE INITIALLY IMMEDIATE,' END);
 EXECUTE format(
     $$
     ALTER TABLE %1$I.corpus 

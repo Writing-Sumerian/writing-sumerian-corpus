@@ -3,3 +3,4 @@ default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_corpus_statistics'
 requires = 'cuneiform_corpus'
+no_relocate = 'cuneiform_corpus'

@@ -1,4 +1,3 @@
-from tokenize import Single
 from typing import List
 from py2plpy import plpy, Out, sql_properties
 
@@ -16,18 +15,18 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
 
     class DB:
         
-        VALUE_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM values_search WHERE value = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
-        PATTERN_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM values_search WHERE value ~ $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
-        VALUEX_SPEC_PLAN = plpy.prepare("SELECT array_agg('s' || sign_variant_id::text) AS codes FROM sign_variants_composition WHERE glyphs = $1 AND specific", ["text"])
-        SIGN_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM signs_search WHERE sign = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
-        FORM_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM forms_search WHERE form = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
-        SIGN_DESCRIPTION_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM sign_descriptions_search WHERE sign = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
-        FORM_DESCRIPTION_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM form_descriptions_search WHERE form = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
+        VALUE_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM @extschema@.values_search WHERE value = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
+        PATTERN_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM @extschema@.values_search WHERE value ~ $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
+        VALUEX_SPEC_PLAN = plpy.prepare("SELECT array_agg('s' || sign_variant_id::text) AS codes FROM @extschema:cuneiform_signlist@.sign_variants_composition WHERE glyphs = $1 AND specific", ["text"])
+        SIGN_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM @extschema@.signs_search WHERE sign = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
+        FORM_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM @extschema@.forms_search WHERE form = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
+        SIGN_DESCRIPTION_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM @extschema@.sign_descriptions_search WHERE sign = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
+        FORM_DESCRIPTION_PLAN = plpy.prepare("SELECT array_agg(code) AS codes FROM @extschema@.form_descriptions_search WHERE form = $1 and sign_spec IS NOT DISTINCT FROM $2", ["text", "text"])
         
         def normalizeGlyphs(sign):
             if sign is None:
                 return None
-            r = plpy.execute(f"SELECT normalize_glyphs('{sign}')")
+            r = plpy.execute(f"SELECT @extschema:cuneiform_signlist@.normalize_glyphs('{sign}')")
             return r[0]['normalize_glyphs']
 
         def value(value, spec=None):

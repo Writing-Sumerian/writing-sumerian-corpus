@@ -6,11 +6,11 @@ CREATE OR REPLACE FUNCTION cun_agg_html_sfunc (
     integer, 
     integer, 
     integer,
-    sign_type,
-    indicator_type,
+    @extschema:cuneiform_sign_properties@.sign_type,
+    @extschema:cuneiform_sign_properties@.indicator_type,
     boolean,
     boolean, 
-    sign_condition, 
+    @extschema:cuneiform_sign_properties@.sign_condition, 
     language, 
     boolean, 
     boolean, 
@@ -18,7 +18,7 @@ CREATE OR REPLACE FUNCTION cun_agg_html_sfunc (
     text, 
     text,
     boolean,
-    pn_type,
+    @extschema:cuneiform_sign_properties@.pn_type,
     text,
     text,
     boolean,
@@ -49,11 +49,11 @@ CREATE AGGREGATE cun_agg_html (
     integer, 
     integer, 
     integer,
-    sign_type,
-    indicator_type,
+    @extschema:cuneiform_sign_properties@.sign_type,
+    @extschema:cuneiform_sign_properties@.indicator_type,
     boolean,
     boolean, 
-    sign_condition, 
+    @extschema:cuneiform_sign_properties@.sign_condition, 
     language, 
     boolean, 
     boolean, 
@@ -61,7 +61,7 @@ CREATE AGGREGATE cun_agg_html (
     text, 
     text,
     boolean,
-    pn_type,
+    @extschema:cuneiform_sign_properties@.pn_type,
     text,
     text,
     boolean,
@@ -74,16 +74,16 @@ CREATE AGGREGATE cun_agg_html (
 
 
 
-CREATE OR REPLACE FUNCTION placeholder_html (type SIGN_TYPE)
+CREATE OR REPLACE FUNCTION placeholder_html (v_type @extschema:cuneiform_sign_properties@.sign_type)
     RETURNS text
     STRICT
     IMMUTABLE
     LANGUAGE SQL
-AS $BODY$
+BEGIN ATOMIC
     SELECT
         '<span class="placeholder">' 
         ||
-        CASE type
+        CASE v_type
         WHEN 'number' THEN
             'N'
         WHEN 'description' THEN
@@ -96,58 +96,54 @@ AS $BODY$
             'X'
         END 
         ||
-        '</span>'
-$BODY$;
+        '</span>';
+END;
 
 
 CREATE OR REPLACE FUNCTION print_value_html(v_value text)
     RETURNS text
     IMMUTABLE
     LANGUAGE SQL
-AS
-$BODY$
+BEGIN ATOMIC
     SELECT regexp_replace(v_value, '(?<=[^0-9x])([0-9x]+)$', '<span class=''index''>\1</span>');
-$BODY$;
+END;
 
 CREATE OR REPLACE FUNCTION print_sign_html(v_sign text)
     RETURNS text
     IMMUTABLE
     LANGUAGE SQL
-AS
-$BODY$
-    SELECT compose_sign_html(parse_sign(v_sign));
-$BODY$;
+BEGIN ATOMIC
+    SELECT compose_sign_html(@extschema:cuneiform_signlist@.parse_sign(v_sign));
+END;
 
 CREATE OR REPLACE FUNCTION print_graphemes_html(v_graphemes text)
     RETURNS text
     IMMUTABLE
     LANGUAGE SQL
-AS
-$BODY$
+BEGIN ATOMIC
     SELECT '<span class=''unknown_value''>' || v_graphemes || '</span>';
-$BODY$;
+END;
 
 CREATE OR REPLACE FUNCTION print_spec_html (
-        v_variant_type sign_variant_type,
+        v_variant_type @extschema:cuneiform_signlist@.sign_variant_type,
         v_graphemes text, 
         v_glyphs text
     )
     RETURNS text
     IMMUTABLE
     LANGUAGE SQL
-AS
-$BODY$
+BEGIN ATOMIC
     SELECT 
         CASE 
             WHEN v_variant_type = 'default' THEN '<span class=''signspec''>' || v_graphemes || '</span>'
-            WHEN v_variant_type = 'nondefault' THEN '<span class=''signspec''>' ||v_glyphs || '</span>' 
+            WHEN v_variant_type = 'nondefault' THEN '<span class=''signspec''>' || v_glyphs || '</span>' 
             ELSE '<span class=''critic''>!</span><span class=''signspec''>' || v_glyphs || '</span>'
         END;
-$BODY$;
+END;
 
-CALL create_signlist_print(
+CALL @extschema:cuneiform_print_core@.create_signlist_print(
     'html', 
-    'public', 
+    '@extschema@', 
     'print_value_html', 
     'print_spec_html', 
     'print_sign_html', 

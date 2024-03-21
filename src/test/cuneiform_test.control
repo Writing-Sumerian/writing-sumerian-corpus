@@ -2,4 +2,4 @@ comment = 'Cuneiform tests'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_test'
-requires = 'pgtap, cuneiform_corpus'
+requires = 'pgtap, cuneiform_actions, cuneiform_log, cuneiform_parser, cuneiform_context, cuneiform_corpus, cuneiform_serialize_corpus, cuneiform_log_corpus, cuneiform_edit_corpus, cuneiform_replace_corpus'

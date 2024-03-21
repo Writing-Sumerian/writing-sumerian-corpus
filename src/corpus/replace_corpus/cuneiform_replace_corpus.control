@@ -1,5 +1,6 @@
 comment = 'Replace Functions for Cuneiform Corpus'
 default_version = '0.0.1'
-relocatable = false
+relocatable = true
 module_pathname = '$libdir/cuneiform_replace_corpus'
-requires = 'cuneiform_corpus, cuneiform_replace, cuneiform_search_corpus, cuneiform_edit_corpus'
+requires = 'cuneiform_sign_properties, cuneiform_corpus, cuneiform_replace, cuneiform_search, cuneiform_search_corpus, cuneiform_edit_corpus'
+no_relocate = 'cuneiform_corpus, cuneiform_replace, cuneiform_search, cuneiform_search_corpus, cuneiform_edit_corpus'

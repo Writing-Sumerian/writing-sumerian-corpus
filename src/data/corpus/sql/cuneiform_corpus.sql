@@ -1,8 +1,8 @@
-CALL create_corpus('@extschema@');
+CALL @extschema:cuneiform_create_corpus@.create_corpus('@extschema@');
 
 
 CREATE TABLE corpora (
-    corpus_id serial PRIMARY KEY,
+    corpus_id integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     name_short text NOT NULL UNIQUE,
     name_long text NOT NULL,
     core boolean NOT NULL
@@ -10,7 +10,7 @@ CREATE TABLE corpora (
 
 
 CREATE TABLE ensembles (
-    ensemble_id serial PRIMARY KEY,
+    ensemble_id integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     ensemble text
 );
 
@@ -24,7 +24,7 @@ CREATE TYPE witness_type AS ENUM (
 );
 
 CREATE TABLE compositions (
-    composition_id SERIAL PRIMARY KEY,
+    composition_id integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     composition_name text UNIQUE NOT NULL,
     witness_type witness_type NOT NULL,
     parent_composition_id integer REFERENCES compositions (composition_id) DEFERRABLE INITIALLY IMMEDIATE
@@ -51,29 +51,29 @@ SELECT * FROM t;
 
 
 CREATE TABLE texts (
-    text_id serial PRIMARY KEY,
+    text_id integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     ensemble_id integer NOT NULL REFERENCES ensembles (ensemble_id) DEFERRABLE INITIALLY IMMEDIATE,
     cdli_no text,
     bdtns_no text,
     citation text,
-    provenience_id integer REFERENCES proveniences (provenience_id) DEFERRABLE INITIALLY IMMEDIATE,
+    provenience_id integer REFERENCES @extschema:cuneiform_context@.proveniences (provenience_id) DEFERRABLE INITIALLY IMMEDIATE,
     provenience_comment text,
-    period_id integer REFERENCES periods (period_id) DEFERRABLE INITIALLY IMMEDIATE,
+    period_id integer REFERENCES @extschema:cuneiform_context@.periods (period_id) DEFERRABLE INITIALLY IMMEDIATE,
     period_year integer,
     period_comment text,
-    genre_id integer REFERENCES genres (genre_id) DEFERRABLE INITIALLY IMMEDIATE,
+    genre_id integer REFERENCES @extschema:cuneiform_context@.genres (genre_id) DEFERRABLE INITIALLY IMMEDIATE,
     genre_comment text,
-    object_id integer REFERENCES objects (object_id) DEFERRABLE INITIALLY IMMEDIATE,
+    object_id integer REFERENCES @extschema:cuneiform_context@.objects (object_id) DEFERRABLE INITIALLY IMMEDIATE,
     object_subtype_id integer,
     object_comment text,
     archive text,
     composition_id integer REFERENCES compositions (composition_id) DEFERRABLE INITIALLY IMMEDIATE,
-    FOREIGN KEY (object_id, object_subtype_id) REFERENCES object_subtypes (object_id, object_subtype_id)
+    FOREIGN KEY (object_id, object_subtype_id) REFERENCES @extschema:cuneiform_context@.object_subtypes (object_id, object_subtype_id)
 );
 
 
 CREATE TABLE transliterations (
-    transliteration_id serial PRIMARY KEY,
+    transliteration_id integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     text_id integer NOT NULL REFERENCES texts (text_id) DEFERRABLE INITIALLY IMMEDIATE,
     corpus_id integer NOT NULL REFERENCES corpora (corpus_id) DEFERRABLE INITIALLY IMMEDIATE
 );
@@ -159,9 +159,14 @@ SELECT pg_catalog.pg_extension_config_dump('@extschema@.surfaces', '');
 SELECT pg_catalog.pg_extension_config_dump('@extschema@.blocks', '');
 SELECT pg_catalog.pg_extension_config_dump('@extschema@.lines', '');
 SELECT pg_catalog.pg_extension_config_dump('@extschema@.corpus', '');
+SELECT pg_catalog.pg_extension_config_dump(pg_get_serial_sequence('@extschema@.corpora', 'corpus_id'), '');
+SELECT pg_catalog.pg_extension_config_dump(pg_get_serial_sequence('@extschema@.ensembles', 'ensemble_id'), '');
+SELECT pg_catalog.pg_extension_config_dump(pg_get_serial_sequence('@extschema@.texts', 'text_id'), '');
+SELECT pg_catalog.pg_extension_config_dump(pg_get_serial_sequence('@extschema@.transliterations', 'transliteration_id'), '');
+SELECT pg_catalog.pg_extension_config_dump(pg_get_serial_sequence('@extschema@.compositions', 'composition_id'), '');
 
 
-CREATE OR REPLACE PROCEDURE public.load_corpus_(path text)
+CREATE OR REPLACE PROCEDURE load_corpus(v_path text)
  LANGUAGE plpgsql
 AS 
 $BODY$
@@ -170,24 +175,24 @@ $BODY$
 
  SET CONSTRAINTS ALL DEFERRED;
 
- EXECUTE format('COPY compositions FROM %L CSV NULL ''\N''', path || 'compositions.csv');
- EXECUTE format('COPY corpora FROM %L CSV NULL ''\N''', path || 'corpora.csv');
- EXECUTE format('COPY ensembles FROM %L CSV NULL ''\N''', path || 'ensembles.csv');
- EXECUTE format('COPY texts FROM %L CSV NULL ''\N''', path || 'texts.csv');
- EXECUTE format('COPY transliterations FROM %L CSV NULL ''\N''', path || 'transliterations.csv');         
- EXECUTE format('COPY surfaces FROM %L CSV NULL ''\N''', path || 'surfaces.csv');
- EXECUTE format('COPY blocks FROM %L CSV NULL ''\N''', path || 'blocks.csv');
- EXECUTE format('COPY lines FROM %L CSV NULL ''\N''', path || 'lines.csv');
- EXECUTE format('COPY sections FROM %L CSV NULL ''\N''', path || 'sections.csv');
- EXECUTE format('COPY compounds FROM %L CSV NULL ''\N''', path || 'compounds.csv');
- EXECUTE format('COPY words FROM %L CSV NULL ''\N''', path || 'words.csv');
- EXECUTE format('COPY corpus FROM %L CSV NULL ''\N''', path || 'corpus.csv');
+ EXECUTE format('COPY @extschema@.compositions FROM %L CSV NULL ''\N''', v_path || 'compositions.csv');
+ EXECUTE format('COPY @extschema@.corpora FROM %L CSV NULL ''\N''', v_path || 'corpora.csv');
+ EXECUTE format('COPY @extschema@.ensembles FROM %L CSV NULL ''\N''', v_path || 'ensembles.csv');
+ EXECUTE format('COPY @extschema@.texts FROM %L CSV NULL ''\N''', v_path || 'texts.csv');
+ EXECUTE format('COPY @extschema@.transliterations FROM %L CSV NULL ''\N''', v_path || 'transliterations.csv');         
+ EXECUTE format('COPY @extschema@.surfaces FROM %L CSV NULL ''\N''', v_path || 'surfaces.csv');
+ EXECUTE format('COPY @extschema@.blocks FROM %L CSV NULL ''\N''', v_path || 'blocks.csv');
+ EXECUTE format('COPY @extschema@.lines FROM %L CSV NULL ''\N''', v_path || 'lines.csv');
+ EXECUTE format('COPY @extschema@.sections FROM %L CSV NULL ''\N''', v_path || 'sections.csv');
+ EXECUTE format('COPY @extschema@.compounds FROM %L CSV NULL ''\N''', v_path || 'compounds.csv');
+ EXECUTE format('COPY @extschema@.words FROM %L CSV NULL ''\N''', v_path || 'words.csv');
+ EXECUTE format('COPY @extschema@.corpus FROM %L CSV NULL ''\N''', v_path || 'corpus.csv');
 
- PERFORM setval('compositions_composition_id_seq', max(composition_id)) FROM compositions;
- PERFORM setval('corpora_corpus_id_seq', max(corpus_id)) FROM corpora;
- PERFORM setval('ensembles_ensemble_id_seq', max(ensemble_id)) FROM ensembles;
- PERFORM setval('texts_text_id_seq', max(text_id)) FROM texts;
- PERFORM setval('transliterations_transliteration_id_seq', max(transliteration_id)) FROM transliterations;
+ PERFORM setval(pg_get_serial_sequence('@extschema@.compositions', 'composition_id'), max(composition_id)) FROM @extschema@.compositions;
+ PERFORM setval(pg_get_serial_sequence('@extschema@.corpora', 'corpus_id'), max(corpus_id)) FROM @extschema@.corpora;
+ PERFORM setval(pg_get_serial_sequence('@extschema@.ensembles', 'ensemble_id'), max(ensemble_id)) FROM @extschema@.ensembles;
+ PERFORM setval(pg_get_serial_sequence('@extschema@.texts', 'text_id'), max(text_id)) FROM @extschema@.texts;
+ PERFORM setval(pg_get_serial_sequence('@extschema@.transliterations', 'transliteration_id'), max(transliteration_id)) FROM @extschema@.transliterations;
 
  END
  $BODY$;

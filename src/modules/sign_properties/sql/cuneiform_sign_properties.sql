@@ -43,3 +43,27 @@ CREATE TYPE pn_type AS ENUM (
     'object',
     'ethnicity'
 );
+
+
+CREATE OR REPLACE FUNCTION condition_agg_sfunc (sign_condition, sign_condition)
+    RETURNS sign_condition
+    STABLE 
+    STRICT 
+    PARALLEL SAFE
+    LANGUAGE sql 
+BEGIN ATOMIC
+    SELECT
+        CASE 
+            WHEN $1 = $2 THEN $1
+            WHEN $2 = 'deleted' OR $2 = 'inserted' THEN null
+            ELSE 'damaged' 
+        END;
+END;
+
+
+CREATE AGGREGATE condition_agg (sign_condition) (
+    SFUNC       = condition_agg_sfunc,
+    COMBINEFUNC = condition_agg_sfunc,
+    STYPE       = sign_condition,
+    PARALLEL    = safe
+);

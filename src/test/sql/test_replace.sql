@@ -5,19 +5,19 @@ CREATE OR REPLACE FUNCTION test_replace_basic ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\ti3 ni', 'public', 'sumerian', false, -1);
-CALL replace('i3','a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\ti3 ni') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('i3','ni','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tni ni') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('NI','i3','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\ti3 i3') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('NI NI','i3 NI','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\ti3 NI') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('NI NI','i3','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\ti3 NI') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('NI NI','i3 NI e','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\ti3 NI') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\ti3 ni', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('i3','a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\ti3 ni') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('i3','ni','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tni ni') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('NI','i3','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\ti3 i3') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('NI NI','i3 NI','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\ti3 NI') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('NI NI','i3','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\ti3 NI') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('NI NI','i3 NI e','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\ti3 NI') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -28,15 +28,15 @@ CREATE OR REPLACE FUNCTION test_replace_basic_references ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\ti3 ni', 'public', 'sumerian', false, -1);
-CALL replace('(NI) (NI)','"2" "1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tni i3') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('(NI NI)','i3 "1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tni i3') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('(NI) (NI)','"2"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tni i3') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('(NI) (NI)','"2" "2"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\ti3 i3') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\ti3 ni', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('(NI) (NI)','"2" "1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tni i3') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('(NI NI)','i3 "1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tni i3') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('(NI) (NI)','"2"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tni i3') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('(NI) (NI)','"2" "2"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\ti3 i3') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -47,13 +47,13 @@ CREATE OR REPLACE FUNCTION test_replace_composites ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\tensi2 a diri', 'public', 'sumerian', false, -1);
-CALL replace('DIRI','si-a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tensi2 a si-a') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tensi2 a diri') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('ENSI2 a','PA.TE diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tPA.TE diri diri') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\tensi2 a diri', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','si-a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tensi2 a si-a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tensi2 a diri') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('ENSI2 a','PA.TE diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tPA.TE diri diri') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -65,11 +65,11 @@ CREATE OR REPLACE FUNCTION test_replace_overlap ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\ta a a', 'public', 'sumerian', false, -1);
-CALL replace('A A','ayya','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\ta a a') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('(A) A A','"1" aya','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\ta aya') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\ta a a', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('A A','ayya','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\ta a a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('(A) A A','"1" aya','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\ta aya') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -81,15 +81,15 @@ CREATE OR REPLACE FUNCTION test_replace_composite_references ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\tdiri si-a', 'public', 'sumerian', false, -1);
-CALL replace('(DIRI) … (DIRI)','"2"-"1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi-a-diri') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('(DIRI) … (DIRI)','si a si','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi-a-diri') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('(DIRI) … (DIRI)','si a si a si','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi-a-diri') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('(DIRI) … (DIRI)','si a si a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi a si a') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\tdiri si-a', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('(DIRI) … (DIRI)','"2"-"1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi-a-diri') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('(DIRI) … (DIRI)','si a si','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi-a-diri') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('(DIRI) … (DIRI)','si a si a si','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi-a-diri') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('(DIRI) … (DIRI)','si a si a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi a si a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -100,13 +100,13 @@ CREATE OR REPLACE FUNCTION test_replace_gap ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\tdiri e si-a', 'public', 'sumerian', false, -1);
-CALL replace('(DIRI) … (DIRI)','"2"-"1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tdiri e si-a') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('(DIRI) … (DIRI)','"2"--"1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tdiri e si-a') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('(DIRI) … (DIRI)','"2" "1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi-a e diri') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\tdiri e si-a', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('(DIRI) … (DIRI)','"2"-"1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tdiri e si-a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('(DIRI) … (DIRI)','"2"--"1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tdiri e si-a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('(DIRI) … (DIRI)','"2" "1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi-a e diri') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -117,11 +117,11 @@ CREATE OR REPLACE FUNCTION test_replace_ligature ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\tsi+a', 'public', 'sumerian', false, -1);
-CALL replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi+a') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('si','sig9','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsig9+a') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\tsi+a', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi+a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('si','sig9','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsig9+a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -132,11 +132,11 @@ CREATE OR REPLACE FUNCTION test_replace_inversion ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\tsi:a', 'public', 'sumerian', false, -1);
-CALL replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi:a') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('si','sig9','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsig9:a') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\tsi:a', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi:a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('si','sig9','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsig9:a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -147,11 +147,11 @@ CREATE OR REPLACE FUNCTION test_replace_ligature ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\tsi+a', 'public', 'sumerian', false, -1);
-CALL replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi+a') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('si','sig9','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsig9+a') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\tsi+a', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi+a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('si','sig9','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsig9+a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -162,11 +162,11 @@ CREATE OR REPLACE FUNCTION test_replace_word ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\te-si &a', 'public', 'sumerian', false, -1);
-CALL replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\te-diri') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('DIRI','si &a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\te-si &a') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\te-si &a', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\te-diri') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','si &a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\te-si &a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -177,9 +177,9 @@ CREATE OR REPLACE FUNCTION test_replace_word_reference ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\tsi-a-si a', 'public', 'sumerian', false, -1);
-CALL replace('(DIRI) (DIRI)','"2" "1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi a si-a') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\tsi-a-si a', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('(DIRI) (DIRI)','"2" "1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi a si-a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -190,11 +190,11 @@ CREATE OR REPLACE FUNCTION test_replace_compound_1 ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\te--si %person &a', 'public', 'sumerian', false, -1);
-CALL replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\te--diri') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('DIRI','si %person &a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\te--si %person &a') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\te--si %person &a', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\te--diri') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','si %person &a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\te--si %person &a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -205,11 +205,11 @@ CREATE OR REPLACE FUNCTION test_replace_compound_2 ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\te--si %a a', 'public', 'sumerian', false, -1);
-CALL replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\te--diri') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('DIRI','si %a a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\te--si %a a') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\te--si %a a', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\te--diri') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','si %a a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\te--si %a a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -220,9 +220,9 @@ CREATE OR REPLACE FUNCTION test_replace_compound_reference ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\tsi--a--si a', 'public', 'sumerian', false, -1);
-CALL replace('(DIRI) (DIRI)','"2" "1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi a si--a') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\tsi--a--si a', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('(DIRI) (DIRI)','"2" "1"','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi a si--a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -233,9 +233,9 @@ CREATE OR REPLACE FUNCTION test_replace_compound_comment_1 ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\tsi (?) a', 'public', 'sumerian', false, -1);
-CALL replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi (?) a') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\tsi (?) a', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi (?) a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -246,9 +246,9 @@ CREATE OR REPLACE FUNCTION test_replace_compound_comment_2 ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\tsi a (?)', 'public', 'sumerian', false, -1);
-CALL replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi a (?)') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\tsi a (?)', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi a (?)') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -259,11 +259,11 @@ CREATE OR REPLACE FUNCTION test_replace_capitalization ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\tsi &a', 'public', 'sumerian', false, -1);
-CALL replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tdiri') FROM transliterations_serialized WHERE transliteration_id = -1;
-CALL replace('diri','si &a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi &a') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\tsi &a', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('DIRI','diri','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tdiri') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('diri','si &a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi &a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
 
@@ -274,8 +274,8 @@ CREATE OR REPLACE FUNCTION test_replace_multiple ()
     AS 
 $BODY$
 BEGIN
-CALL parse(E'1\tdiri diri', 'public', 'sumerian', false, -1);
-CALL replace('diri','si-a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi-a si-a') FROM transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_parser@.parse(E'1\tdiri diri', '@extschema:cuneiform_corpus@', 'sumerian', false, -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('diri','si-a','sumerian', false, -1, true, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi-a si-a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;

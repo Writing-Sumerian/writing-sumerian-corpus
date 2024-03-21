@@ -263,25 +263,25 @@ SELECT
     null,
     'v' || value_id::text
 FROM
-    value_variants
-    LEFT JOIN values USING (value_id)
+    @extschema:cuneiform_signlist@.value_variants
+    LEFT JOIN @extschema:cuneiform_signlist@.values USING (value_id)
 UNION ALL
 SELECT
     value,
     glyphs,
     'v' || value_id::text || 's' || sign_variant_id::text
 FROM
-    value_variants
-    LEFT JOIN values USING (value_id)
-    JOIN sign_variants_composition USING (sign_id)
+    @extschema:cuneiform_signlist@.value_variants
+    LEFT JOIN @extschema:cuneiform_signlist@.values USING (value_id)
+    JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (sign_id)
 UNION ALL
 SELECT
     value,
     CASE WHEN i = 1 THEN NULL ELSE glyphs END,
     'v' || value_id::text || 's' || sign_variant_id::text
 FROM
-    glyph_values 
-    JOIN sign_variants_composition USING (glyph_ids)
+    @extschema:cuneiform_signlist@.glyph_values 
+    JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (glyph_ids)
     LEFT JOIN LATERAL generate_series(1, 2) AS _(i) ON TRUE;
 
 
@@ -291,9 +291,9 @@ SELECT
     CASE WHEN i = 1 THEN NULL ELSE glyphs END,
     's' || sign_variant_id::text
 FROM
-    value_variants
-    LEFT JOIN values USING (value_id)
-    JOIN sign_variants_composition USING (sign_id)
+    @extschema:cuneiform_signlist@.value_variants
+    LEFT JOIN @extschema:cuneiform_signlist@.values USING (value_id)
+    JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (sign_id)
     LEFT JOIN LATERAL generate_series(1, 2) AS _(i) ON TRUE
     UNION ALL
 SELECT
@@ -301,8 +301,8 @@ SELECT
     CASE WHEN i = 1 THEN NULL ELSE glyphs END,
     's' || sign_variant_id::text
 FROM
-    glyph_values 
-    JOIN sign_variants_composition USING (glyph_ids)
+    @extschema:cuneiform_signlist@.glyph_values 
+    JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (glyph_ids)
     LEFT JOIN LATERAL generate_series(1, 2) AS _(i) ON TRUE;
 
 
@@ -312,8 +312,8 @@ SELECT
     CASE WHEN i = 1 THEN NULL ELSE b.glyphs END,
     's' || b.sign_variant_id::text
 FROM
-    sign_variants_composition a
-    JOIN sign_variants_composition b USING (sign_id)
+    @extschema:cuneiform_signlist@.sign_variants_composition a
+    JOIN @extschema:cuneiform_signlist@.sign_variants_composition b USING (sign_id)
     LEFT JOIN LATERAL generate_series(1, 2) AS _(i) ON TRUE
 WHERE
     a.specific;
@@ -327,9 +327,9 @@ WITH graphemes AS (
         pos,
         '(g' || grapheme_id::text || '|' || string_agg('c' || glyph_id::text, '|') || ')' AS code
     FROM
-        allomorphs
-        LEFT JOIN allomorph_components USING (allomorph_id)
-        LEFT JOIN allographs USING (grapheme_id)
+        @extschema:cuneiform_signlist@.allomorphs
+        LEFT JOIN @extschema:cuneiform_signlist@.allomorph_components USING (allomorph_id)
+        LEFT JOIN @extschema:cuneiform_signlist@.allographs USING (grapheme_id)
     WHERE 
         allomorphs.specific AND allographs.specific
     GROUP BY 
@@ -343,8 +343,8 @@ SELECT
     NULL,
     string_agg(code, '~' ORDER BY pos)
 FROM
-    value_variants
-    LEFT JOIN values USING (value_id)
+    @extschema:cuneiform_signlist@.value_variants
+    LEFT JOIN @extschema:cuneiform_signlist@.values USING (value_id)
     LEFT JOIN graphemes USING (sign_id)
 GROUP BY
     value,
@@ -355,9 +355,9 @@ SELECT
     glyphs,
     string_agg('c' || glyph_id::text, '~' ORDER BY pos)
 FROM
-    value_variants
-    LEFT JOIN values USING (value_id)
-    LEFT JOIN sign_variants_composition USING (sign_id)
+    @extschema:cuneiform_signlist@.value_variants
+    LEFT JOIN @extschema:cuneiform_signlist@.values USING (value_id)
+    LEFT JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (sign_id)
     LEFT JOIN LATERAL unnest(glyph_ids) WITH ORDINALITY AS _(glyph_id, pos) ON TRUE
 GROUP BY
     value,
@@ -369,9 +369,9 @@ SELECT
     CASE WHEN i = 1 THEN NULL ELSE string_agg(glyph, '.' ORDER BY pos) END,
     string_agg('c' || glyph_id::text, '~')
 FROM
-    glyph_values
+    @extschema:cuneiform_signlist@.glyph_values
     LEFT JOIN LATERAL unnest(glyph_ids) WITH ORDINALITY AS _(glyph_id, pos) ON TRUE
-    LEFT JOIN glyphs USING (glyph_id)
+    LEFT JOIN @extschema:cuneiform_signlist@.glyphs USING (glyph_id)
     LEFT JOIN LATERAL generate_series(1, 2) AS __(i) ON TRUE
 GROUP BY
     value,
@@ -383,16 +383,16 @@ SELECT
     NULL,
     'g' || grapheme_id::text
 FROM
-    graphemes
+    @extschema:cuneiform_signlist@.graphemes
 UNION ALL
 SELECT
     grapheme,
     glyph,
     'c' || glyph_id::text
 FROM
-    graphemes
-    LEFT JOIN allographs USING (grapheme_id)
-    LEFT JOIN glyphs USING (glyph_id)
+    @extschema:cuneiform_signlist@.graphemes
+    LEFT JOIN @extschema:cuneiform_signlist@.allographs USING (grapheme_id)
+    LEFT JOIN @extschema:cuneiform_signlist@.glyphs USING (glyph_id)
 UNION ALL
 SELECT
     glyph,

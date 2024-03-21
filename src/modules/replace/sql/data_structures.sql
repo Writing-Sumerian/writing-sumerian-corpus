@@ -7,8 +7,8 @@ CREATE TABLE replace_pattern_corpus (
     value_id integer,
     sign_variant_id integer,
     custom_value text,
-    type sign_type,
-    indicator_type indicator_type,
+    type @extschema:cuneiform_sign_properties@.sign_type,
+    indicator_type @extschema:cuneiform_sign_properties@.indicator_type,
     phonographic boolean,
     stem boolean,
     PRIMARY KEY (pattern_id, sign_no)
@@ -26,7 +26,7 @@ CREATE TABLE replace_pattern_compounds (
     pattern_id integer,
     compound_no integer,
     pn_type pn_type,
-    language language,
+    language @extschema:cuneiform_sign_properties@.language,
     PRIMARY KEY (pattern_id, compound_no)
 );
 
@@ -35,7 +35,7 @@ CREATE TABLE replace_pattern_corpus_unencoded (
     sign_no integer,
     value text,
     sign_spec text,
-    type sign_type NOT NULL,
+    type @extschema:cuneiform_sign_properties@.sign_type NOT NULL,
     PRIMARY KEY (pattern_id, sign_no)
 );
 
@@ -47,11 +47,11 @@ CREATE TYPE corpus_replace_type AS (
     value_id integer,
     sign_variant_id integer,
     custom_value text,
-    type sign_type,
-    indicator_type indicator_type,
+    type @extschema:cuneiform_sign_properties@.sign_type,
+    indicator_type @extschema:cuneiform_sign_properties@.indicator_type,
     phonographic boolean,
     stem boolean,
-    condition sign_condition,
+    condition @extschema:cuneiform_sign_properties@.sign_condition,
     crits text,
     comment text,
     newline boolean,
@@ -65,4 +65,4 @@ CREATE TYPE corpus_replace_type AS (
     valid boolean
 );
 
-CALL create_corpus_encoder('replace_pattern_corpus_encoder', 'replace_pattern_corpus_unencoded', '{pattern_id}');
+CALL @extschema:cuneiform_encoder@.create_corpus_encoder('replace_pattern_corpus_encoder', 'replace_pattern_corpus_unencoded', '{pattern_id}', '@extschema@');

@@ -1,28 +1,13 @@
-CREATE SCHEMA replace;
-
-CREATE TABLE replace.corpus (
-    LIKE corpus_replace_type
-);
-
-CREATE TABLE replace.words (LIKE words);
-CREATE TABLE replace.compounds (LIKE compounds);
-
-CREATE VIEW replace.lines AS SELECT * FROM lines;
-CREATE VIEW replace.blocks AS SELECT * FROM blocks;
-CREATE VIEW replace.surfaces AS SELECT * FROM surfaces;
-CREATE VIEW replace.sections AS SELECT * FROM sections;
-
-
 CREATE OR REPLACE PROCEDURE replace (
-    search_term text, 
-    pattern text,
-    language language,
-    stemmed boolean,
-    user_id integer,
-    internal boolean,
-    period_ids integer[] DEFAULT ARRAY[]::integer[],
-    provenience_ids integer[] DEFAULT ARRAY[]::integer[],
-    genre_ids integer[] DEFAULT ARRAY[]::integer[]
+    v_search_term text, 
+    v_pattern text,
+    v_language @extschema:cuneiform_sign_properties@.language,
+    v_stemmed boolean,
+    v_user_id integer,
+    v_internal boolean,
+    v_period_ids integer[] DEFAULT ARRAY[]::integer[],
+    v_provenience_ids integer[] DEFAULT ARRAY[]::integer[],
+    v_genre_ids integer[] DEFAULT ARRAY[]::integer[]
     )
     LANGUAGE PLPGSQL
 AS $BODY$
@@ -44,7 +29,15 @@ DECLARE
 
 BEGIN
 
-    CALL parse_replacement(pattern, language, stemmed, v_pattern_id);
+    CREATE TEMPORARY TABLE IF NOT EXISTS corpus (LIKE @extschema:cuneiform_replace@.corpus_replace_type) ON COMMIT DROP;
+    CREATE TEMPORARY TABLE IF NOT EXISTS words (LIKE @extschema:cuneiform_corpus@.words) ON COMMIT DROP;
+    CREATE TEMPORARY TABLE IF NOT EXISTS compounds (LIKE @extschema:cuneiform_corpus@.compounds) ON COMMIT DROP;
+    CREATE OR REPLACE TEMPORARY VIEW lines AS SELECT * FROM @extschema:cuneiform_corpus@.lines;
+    CREATE OR REPLACE TEMPORARY VIEW blocks AS SELECT * FROM @extschema:cuneiform_corpus@.blocks;
+    CREATE OR REPLACE TEMPORARY VIEW surfaces AS SELECT * FROM @extschema:cuneiform_corpus@.surfaces;
+    CREATE OR REPLACE TEMPORARY VIEW sections AS SELECT * FROM @extschema:cuneiform_corpus@.sections;
+
+    CALL @extschema:cuneiform_replace@.parse_replacement(v_pattern, v_language, v_stemmed, v_pattern_id);
 
     SELECT 
         preparse_search.code,
@@ -53,7 +46,7 @@ BEGIN
         v_search_term_norm,
         v_wildcards_explicit
     FROM
-        preparse_search(search_term);
+        @extschema:cuneiform_search@.preparse_search(v_search_term);
 
     FOR v_transliteration_id, v_sign_nos, v_match_nos, v_reference_ids, v_reference_sign_nos, v_reference_match_nos, v_overlap IN 
         WITH 
@@ -62,7 +55,7 @@ BEGIN
                 row_number() OVER (PARTITION BY transliteration_id ORDER BY sign_nos[1]) AS match_no, 
                 * 
             FROM 
-                search(v_search_term_norm, period_ids, provenience_ids, genre_ids)
+                @extschema:cuneiform_search_corpus@.search(v_search_term_norm, v_period_ids, v_provenience_ids, v_genre_ids)
         ),
         sign_nos_ AS (
             SELECT
@@ -116,15 +109,15 @@ BEGIN
             CONTINUE;
         END IF;
         BEGIN
-            INSERT INTO replace.corpus SELECT * FROM corpus_replace(v_transliteration_id, v_pattern_id, v_sign_nos, v_match_nos, v_reference_ids, v_reference_sign_nos, v_reference_match_nos, 'public');
-            INSERT INTO replace.words SELECT * FROM words_replace(v_transliteration_id, 'corpus', 'replace', 'public');
-            INSERT INTO replace.compounds SELECT * FROM compounds_replace(v_transliteration_id, 'corpus', 'replace', 'public');
+            INSERT INTO pg_temp.corpus SELECT * FROM @extschema:cuneiform_replace@.corpus_replace(v_transliteration_id, v_pattern_id, v_sign_nos, v_match_nos, v_reference_ids, v_reference_sign_nos, v_reference_match_nos, '@extschema:cuneiform_corpus@');
+            INSERT INTO pg_temp.words SELECT * FROM @extschema:cuneiform_replace@.words_replace(v_transliteration_id, 'corpus', 'pg_temp', '@extschema:cuneiform_corpus@');
+            INSERT INTO pg_temp.compounds SELECT * FROM @extschema:cuneiform_replace@.compounds_replace(v_transliteration_id, 'corpus', 'pg_temp', '@extschema:cuneiform_corpus@');
             
-            SELECT array_agg(sign_no) INTO v_invalid_sign_nos FROM replace.corpus WHERE transliteration_id = v_transliteration_id AND NOT valid;
-            SELECT array_agg(compound_no) INTO  v_invalid_compound_nos 
+            SELECT array_agg(sign_no) INTO v_invalid_sign_nos FROM pg_temp.corpus WHERE NOT valid;
+            SELECT array_agg(compound_no) INTO v_invalid_compound_nos 
             FROM (
-                SELECT compound_no FROM compounds WHERE transliteration_id = v_transliteration_id AND compound_comment IS NOT NULL
-                EXCEPT SELECT compound_no_ref FROM replace.corpus WHERE transliteration_id = v_transliteration_id AND NOT pattern_compound
+                SELECT compound_no FROM @extschema:cuneiform_corpus@.compounds WHERE transliteration_id = v_transliteration_id AND compound_comment IS NOT NULL
+                EXCEPT SELECT compound_no_ref FROM pg_temp.corpus WHERE NOT pattern_compound
             )_;
                 
             IF NOT v_invalid_sign_nos IS NULL THEN
@@ -133,19 +126,21 @@ BEGIN
                 RAISE NOTICE 'Skipping %, %: Cannot remove compounds %', v_transliteration_id, v_sign_nos, v_invalid_compound_nos;
             ELSE
                 RAISE NOTICE 'Replacing signs % in %...', v_sign_nos, v_transliteration_id;
-                CALL corpus_search_drop_triggers();
-                CALL edit_corpus('replace', v_transliteration_id, user_id, internal);
-                CALL corpus_search_create_triggers();
-                CALL corpus_search_update_transliteration(v_transliteration_id);
+                CALL @extschema:cuneiform_search_corpus@.corpus_search_drop_triggers();
+                CALL @extschema:cuneiform_edit_corpus@.edit_corpus('pg_temp', v_transliteration_id, v_user_id, v_internal);
+                CALL @extschema:cuneiform_search_corpus@.corpus_search_create_triggers();
+                CALL @extschema:cuneiform_search_corpus@.corpus_search_update_transliteration(v_transliteration_id);
                 RAISE NOTICE 'Done.';
             END IF;
 
-            DELETE FROM replace.corpus WHERE transliteration_id = v_transliteration_id;
-            DELETE FROM replace.words WHERE transliteration_id = v_transliteration_id;
-            DELETE FROM replace.compounds WHERE transliteration_id = v_transliteration_id;
         EXCEPTION
             WHEN not_null_violation THEN RAISE NOTICE 'Skipping %: Signs missing in replacement', v_transliteration_id;
         END;
+
+        TRUNCATE pg_temp.corpus;
+        TRUNCATE pg_temp.words;
+        TRUNCATE pg_temp.compounds;
+
     END LOOP;
 END;
 $BODY$;

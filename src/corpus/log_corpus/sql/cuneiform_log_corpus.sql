@@ -9,9 +9,9 @@ WITH corpus_edits AS (
         split_part(action, ' ', 1) AS action,
         val
     FROM 
-        edit_log 
-        JOIN edits USING (edit_id)
-        JOIN corpus USING (transliteration_id)
+        @extschema:cuneiform_log_tables@.edit_log 
+        JOIN @extschema:cuneiform_log_tables@.edits USING (edit_id)
+        JOIN @extschema:cuneiform_corpus@.corpus USING (transliteration_id)
     WHERE
         target = 'corpus'
     UNION ALL
@@ -23,7 +23,7 @@ WITH corpus_edits AS (
         sign_no,
         NULL,
         NULL
-    FROM corpus
+    FROM @extschema:cuneiform_corpus@.corpus
 )
 SELECT
     transliteration_id,
@@ -49,8 +49,11 @@ v_query text;
 
 BEGIN
 FOR v_query IN 
-    SELECT edit_log_undo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val_old)
-    FROM edit_log JOIN edits USING (edit_id)
+    SELECT 
+        @extschema:cuneiform_log@.edit_log_undo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val_old)
+    FROM 
+        @extschema:cuneiform_log_tables@.edit_log 
+        JOIN @extschema:cuneiform_log_tables@.edits USING (edit_id)
     WHERE 
         edit_id = v_edit_id
     ORDER BY log_no DESC 
@@ -78,8 +81,11 @@ v_query text;
 
 BEGIN
 FOR v_query IN 
-    SELECT edit_log_undo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val_old) 
-    FROM edit_log JOIN edits USING (edit_id)
+    SELECT 
+        @extschema:cuneiform_log@.edit_log_undo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val_old) 
+    FROM 
+        @extschema:cuneiform_log_tables@.edit_log 
+        JOIN @extschema:cuneiform_log_tables@.edits USING (edit_id)
     WHERE 
         transliteration_id = v_transliteration_id 
         AND timestamp > v_timestamp
@@ -106,8 +112,11 @@ v_query text;
 
 BEGIN
 FOR v_query IN 
-    SELECT edit_log_redo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val) 
-    FROM edit_log JOIN edits USING (edit_id)
+    SELECT 
+        @extschema:cuneiform_log@.edit_log_redo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val) 
+    FROM 
+        @extschema:cuneiform_log_tables@.edit_log 
+        JOIN @extschema:cuneiform_log_tables@.edits USING (edit_id)
     WHERE 
         edit_id = v_edit_id
     ORDER BY log_no
@@ -128,7 +137,7 @@ CREATE OR REPLACE PROCEDURE revert_corpus_to (
     AS 
 $BODY$
 BEGIN
-    CALL revert_to(v_transliteration_id, v_timestamp, 'public');
-    DELETE FROM edits WHERE transliteration_id = v_transliteration_id AND timestamp > v_timestamp;
+    CALL revert_to(v_transliteration_id, v_timestamp, '@extschema:cuneiform_corpus@');
+    DELETE FROM @extschema:cuneiform_log_tables@.edits WHERE transliteration_id = v_transliteration_id AND timestamp > v_timestamp;
 END;
 $BODY$;

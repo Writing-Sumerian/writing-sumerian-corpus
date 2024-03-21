@@ -3,3 +3,4 @@ default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_log_corpus'
 requires = 'cuneiform_corpus, cuneiform_log, cuneiform_log_tables'
+no_relocate = 'cuneiform_corpus, cuneiform_log, cuneiform_log_tables'

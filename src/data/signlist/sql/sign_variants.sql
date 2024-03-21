@@ -1,32 +1,20 @@
 CREATE OR REPLACE FUNCTION merge_variant_types (
-  a sign_variant_type,
-  b sign_variant_type
+    a sign_variant_type,
+    b sign_variant_type
   )
   RETURNS sign_variant_type
-  LANGUAGE 'sql'
+  LANGUAGE SQL
   STABLE
   STRICT
-  AS $BODY$
-  SELECT CASE
-    WHEN a = b THEN a
-    WHEN GREATEST(a, b) = ANY('{reduced, augmented}') AND LEAST(a, b) = 'default' THEN GREATEST(a, b)
-    WHEN GREATEST(a, b) = ANY('{nonstandard, reduced, augmented}') THEN 'nonstandard'::sign_variant_type
-    ELSE 'nondefault'::sign_variant_type
+BEGIN ATOMIC
+  SELECT 
+    CASE
+      WHEN a = b THEN a
+      WHEN GREATEST(a, b) = ANY('{reduced, augmented}') AND LEAST(a, b) = 'default' THEN GREATEST(a, b)
+      WHEN GREATEST(a, b) = ANY('{nonstandard, reduced, augmented}') THEN 'nonstandard'::sign_variant_type
+      ELSE 'nondefault'::sign_variant_type
     END;
-$BODY$;
-
-
-
-CREATE TABLE sign_variants (
-    sign_variant_id SERIAL PRIMARY KEY,
-    sign_id integer NOT NULL REFERENCES signs (sign_id) DEFERRABLE INITIALLY DEFERRED,
-    allomorph_id integer NOT NULL REFERENCES allomorphs (allomorph_id) DEFERRABLE INITIALLY DEFERRED,
-    allograph_ids integer[] NOT NULL,
-    variant_type sign_variant_type NOT NULL,
-    specific boolean NOT NULL,
-    UNIQUE (allomorph_id, allograph_ids)
-);
-
+END;
 
 CREATE VIEW sign_variants_view AS
 WITH RECURSIVE 
@@ -88,13 +76,13 @@ CREATE OR REPLACE FUNCTION sign_variants_sync_signs (v_sign_ids integer[])
   AS
 $BODY$
 BEGIN
-    DELETE FROM sign_variants 
+    DELETE FROM @extschema@.sign_variants 
     WHERE 
         sign_id = ANY(v_sign_ids)
-        AND (allomorph_id, allograph_ids) NOT IN (SELECT allomorph_id, allograph_ids FROM sign_variants_view WHERE sign_id = ANY(v_sign_ids));
+        AND (allomorph_id, allograph_ids) NOT IN (SELECT allomorph_id, allograph_ids FROM @extschema@.sign_variants_view WHERE sign_id = ANY(v_sign_ids));
 
-    INSERT INTO sign_variants (sign_id, allomorph_id, allograph_ids, variant_type, specific)
-    SELECT * FROM sign_variants_view WHERE sign_id = ANY(v_sign_ids)
+    INSERT INTO @extschema@.sign_variants (sign_id, allomorph_id, allograph_ids, variant_type, specific)
+    SELECT * FROM @extschema@.sign_variants_view WHERE sign_id = ANY(v_sign_ids)
     ON CONFLICT (allomorph_id, allograph_ids) DO UPDATE SET
         sign_id = EXCLUDED.sign_id,
         variant_type = EXCLUDED.variant_type,
@@ -106,6 +94,7 @@ BEGIN
 END;
 $BODY$;
 
+
 CREATE OR REPLACE FUNCTION sign_variants_allomorphs_trigger_fun () 
   RETURNS trigger 
   VOLATILE
@@ -113,10 +102,11 @@ CREATE OR REPLACE FUNCTION sign_variants_allomorphs_trigger_fun ()
   AS
 $BODY$
 BEGIN
-    PERFORM sign_variants_sync_signs(ARRAY[(OLD).sign_id, (NEW).sign_id]);
+    PERFORM @extschema@.sign_variants_sync_signs(ARRAY[(OLD).sign_id, (NEW).sign_id]);
     RETURN NULL;
 END;
 $BODY$;
+
 
 CREATE OR REPLACE FUNCTION sign_variants_allomorph_components_trigger_fun () 
   RETURNS trigger 
@@ -126,9 +116,9 @@ CREATE OR REPLACE FUNCTION sign_variants_allomorph_components_trigger_fun ()
 $BODY$
 BEGIN
     PERFORM 
-        sign_variants_sync_signs(array_agg(DISTINCT sign_id)) 
+        @extschema@.sign_variants_sync_signs(array_agg(DISTINCT sign_id)) 
     FROM 
-        allomorphs
+        @extschema@.allomorphs
     WHERE 
         allomorph_id = (OLD).allomorph_id 
         OR allomorph_id = (NEW).allomorph_id;
@@ -145,19 +135,16 @@ CREATE OR REPLACE FUNCTION sign_variants_allographs_trigger_fun ()
 $BODY$
 BEGIN
     PERFORM 
-        sign_variants_sync_signs(array_agg(DISTINCT sign_id)) 
+        @extschema@.sign_variants_sync_signs(array_agg(DISTINCT sign_id)) 
     FROM 
-        allomorphs
-        JOIN allomorph_components USING (allomorph_id)
+        @extschema@.allomorphs
+        JOIN @extschema@.allomorph_components USING (allomorph_id)
     WHERE 
         grapheme_id = (OLD).grapheme_id 
         OR grapheme_id = (NEW).grapheme_id;
     RETURN NULL;
 END;
 $BODY$;
-
-
-
 
 
 
@@ -175,6 +162,7 @@ CREATE TABLE sign_variants_composition (
     variant_type sign_variant_type NOT NULL,
     specific boolean NOT NULL
 );
+
 
 CREATE VIEW sign_variants_composition_view AS
 WITH _ AS (
@@ -210,6 +198,7 @@ SELECT
 FROM _
     LEFT JOIN sign_variants USING (sign_variant_id);
 
+
 CREATE OR REPLACE FUNCTION sign_variants_composition_sign_variants_trigger_fun () 
   RETURNS trigger 
   VOLATILE
@@ -218,13 +207,13 @@ CREATE OR REPLACE FUNCTION sign_variants_composition_sign_variants_trigger_fun (
 $BODY$
 BEGIN
     IF NEW IS NULL THEN
-        DELETE FROM sign_variants_composition WHERE sign_variant_id = (OLD).sign_variant_id;
+        DELETE FROM @extschema@.sign_variants_composition WHERE sign_variant_id = (OLD).sign_variant_id;
     ELSE
-        INSERT INTO sign_variants_composition
+        INSERT INTO @extschema@.sign_variants_composition
         SELECT
             *
         FROM
-            sign_variants_composition_view
+            @extschema@.sign_variants_composition_view
         WHERE
             sign_variant_id = (NEW).sign_variant_id
         ON CONFLICT (sign_variant_id) DO UPDATE SET
@@ -244,6 +233,7 @@ BEGIN
 END;
 $BODY$;
 
+
 CREATE OR REPLACE FUNCTION sign_variants_composition_graphemes_trigger_fun () 
   RETURNS trigger 
   VOLATILE
@@ -251,16 +241,17 @@ CREATE OR REPLACE FUNCTION sign_variants_composition_graphemes_trigger_fun ()
   AS
 $BODY$
 BEGIN
-    UPDATE sign_variants_composition SET
+    UPDATE @extschema@.sign_variants_composition SET
         graphemes = sign_variants_composition_view.graphemes
     FROM
-        sign_variants_composition_view
+        @extschema@.sign_variants_composition_view
     WHERE
         sign_variants_composition_view.sign_variant_id = sign_variants_composition.sign_variant_id
         AND (NEW).grapheme_id = ANY(sign_variants_composition.grapheme_ids);
     RETURN NULL;
 END;
 $BODY$;
+
 
 CREATE OR REPLACE FUNCTION sign_variants_composition_glyphs_trigger_fun () 
   RETURNS trigger 
@@ -269,18 +260,19 @@ CREATE OR REPLACE FUNCTION sign_variants_composition_glyphs_trigger_fun ()
   AS
 $BODY$
 BEGIN
-    UPDATE sign_variants_composition SET
+    UPDATE @extschema@.sign_variants_composition SET
         glyphs = sign_variants_composition_view.glyphs,
         unicode = sign_variants_composition_view.unicode,
         tree = sign_variants_composition_view.tree
     FROM
-        sign_variants_composition_view
+        @extschema@.sign_variants_composition_view
     WHERE
         sign_variants_composition_view.sign_variant_id = sign_variants_composition.sign_variant_id
         AND (NEW).glyph_id = ANY(sign_variants_composition.glyph_ids);
     RETURN NULL;
 END;
 $BODY$;
+
 
 CREATE OR REPLACE FUNCTION sign_variants_composition_allographs_trigger_fun () 
   RETURNS trigger 
@@ -289,13 +281,13 @@ CREATE OR REPLACE FUNCTION sign_variants_composition_allographs_trigger_fun ()
   AS
 $BODY$
 BEGIN
-    UPDATE sign_variants_composition SET
+    UPDATE @extschema@.sign_variants_composition SET
         graphemes = sign_variants_composition_view.graphemes,
         glyphs = sign_variants_composition_view.glyphs,
         unicode = sign_variants_composition_view.unicode,
         tree = sign_variants_composition_view.tree
     FROM
-        sign_variants_composition_view
+        @extschema@.sign_variants_composition_view
     WHERE
         sign_variants_composition_view.sign_variant_id = sign_variants_composition.sign_variant_id
         AND (NEW).allograph_id = ANY(sign_variants_composition.allograph_ids);
@@ -306,50 +298,49 @@ $BODY$;
 
 CREATE OR REPLACE PROCEDURE signlist_create_triggers()
     LANGUAGE SQL
-    AS
-$BODY$
-CREATE TRIGGER sign_variants_allomorphs_trigger
-  AFTER UPDATE OR INSERT OR DELETE ON allomorphs 
-  FOR EACH ROW
-  EXECUTE FUNCTION sign_variants_allomorphs_trigger_fun();
-CREATE TRIGGER sign_variants_allomorph_components_trigger
-  AFTER UPDATE OR INSERT OR DELETE ON allomorph_components 
-  FOR EACH ROW
-  EXECUTE FUNCTION sign_variants_allomorph_components_trigger_fun();
-CREATE TRIGGER sign_variants_allographs_trigger
-  AFTER UPDATE OR INSERT OR DELETE ON allographs
-  FOR EACH ROW
-  EXECUTE FUNCTION sign_variants_allographs_trigger_fun();
-CREATE TRIGGER sign_variants_composition_sign_variants_trigger
-  AFTER UPDATE OR INSERT OR DELETE ON sign_variants 
-  FOR EACH ROW
-  EXECUTE FUNCTION sign_variants_composition_sign_variants_trigger_fun();
-CREATE TRIGGER sign_variants_composition_graphemes_trigger
-  AFTER UPDATE ON graphemes 
-  FOR EACH ROW
-  EXECUTE FUNCTION sign_variants_composition_graphemes_trigger_fun();
-CREATE TRIGGER sign_variants_composition_glyphs_trigger
-  AFTER UPDATE ON glyphs 
-  FOR EACH ROW
-  EXECUTE FUNCTION sign_variants_composition_glyphs_trigger_fun();
-CREATE TRIGGER sign_variants_composition_allographs_trigger
-  AFTER UPDATE ON allographs 
-  FOR EACH ROW
-  EXECUTE FUNCTION sign_variants_composition_allographs_trigger_fun();
+AS $BODY$
+
+  CREATE TRIGGER sign_variants_allomorphs_trigger
+    AFTER UPDATE OR INSERT OR DELETE ON @extschema@.allomorphs 
+    FOR EACH ROW
+    EXECUTE FUNCTION @extschema@.sign_variants_allomorphs_trigger_fun();
+  CREATE TRIGGER sign_variants_allomorph_components_trigger
+    AFTER UPDATE OR INSERT OR DELETE ON @extschema@.allomorph_components 
+    FOR EACH ROW
+    EXECUTE FUNCTION @extschema@.sign_variants_allomorph_components_trigger_fun();
+  CREATE TRIGGER sign_variants_allographs_trigger
+    AFTER UPDATE OR INSERT OR DELETE ON @extschema@.allographs
+    FOR EACH ROW
+    EXECUTE FUNCTION @extschema@.sign_variants_allographs_trigger_fun();
+  CREATE TRIGGER sign_variants_composition_sign_variants_trigger
+    AFTER UPDATE OR INSERT OR DELETE ON @extschema@.sign_variants 
+    FOR EACH ROW
+    EXECUTE FUNCTION @extschema@.sign_variants_composition_sign_variants_trigger_fun();
+  CREATE TRIGGER sign_variants_composition_graphemes_trigger
+    AFTER UPDATE ON @extschema@.graphemes 
+    FOR EACH ROW
+    EXECUTE FUNCTION @extschema@.sign_variants_composition_graphemes_trigger_fun();
+  CREATE TRIGGER sign_variants_composition_glyphs_trigger
+    AFTER UPDATE ON @extschema@.glyphs 
+    FOR EACH ROW
+    EXECUTE FUNCTION @extschema@.sign_variants_composition_glyphs_trigger_fun();
+  CREATE TRIGGER sign_variants_composition_allographs_trigger
+    AFTER UPDATE ON @extschema@.allographs 
+    FOR EACH ROW
+    EXECUTE FUNCTION @extschema@.sign_variants_composition_allographs_trigger_fun();
 $BODY$;
 
 
 CREATE OR REPLACE PROCEDURE signlist_drop_triggers()
     LANGUAGE SQL
-    AS
-$BODY$
-DROP TRIGGER sign_variants_allomorphs_trigger ON allomorphs;
-DROP TRIGGER sign_variants_allomorph_components_trigger ON allomorph_components;
-DROP TRIGGER sign_variants_allographs_trigger ON allographs;
-DROP TRIGGER sign_variants_composition_sign_variants_trigger ON sign_variants;
-DROP TRIGGER sign_variants_composition_graphemes_trigger ON graphemes;
-DROP TRIGGER sign_variants_composition_glyphs_trigger ON glyphs;
-DROP TRIGGER sign_variants_composition_allographs_trigger ON allographs;
+AS $BODY$
+  DROP TRIGGER sign_variants_allomorphs_trigger ON @extschema@.allomorphs;
+  DROP TRIGGER sign_variants_allomorph_components_trigger ON @extschema@.allomorph_components;
+  DROP TRIGGER sign_variants_allographs_trigger ON @extschema@.allographs;
+  DROP TRIGGER sign_variants_composition_sign_variants_trigger ON @extschema@.sign_variants;
+  DROP TRIGGER sign_variants_composition_graphemes_trigger ON @extschema@.graphemes;
+  DROP TRIGGER sign_variants_composition_glyphs_trigger ON @extschema@.glyphs;
+  DROP TRIGGER sign_variants_composition_allographs_trigger ON @extschema@.allographs;
 $BODY$;
 
 
