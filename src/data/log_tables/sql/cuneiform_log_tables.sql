@@ -34,7 +34,7 @@ BEGIN
 EXECUTE format('COPY @extschema@.edits(edit_id, transliteration_id, timestamp, user_id, internal) FROM %L CSV NULL ''\N''', path || 'edits.csv');
 EXECUTE format('COPY @extschema@.edit_log(edit_id, log_no, entry_no, key_col, target, action, val, val_old) FROM %L CSV NULL ''\N''', path || 'edit_log.csv');
 
-PERFORM setval(pg_get_serial_sequence('@extschema@.edits', 'edit_id'), max(edit_id)) FROM edits;
+PERFORM setval(pg_get_serial_sequence('@extschema@.edits', 'edit_id'), max(edit_id)) FROM @extschema@.edits;
 
 END
 $BODY$;
