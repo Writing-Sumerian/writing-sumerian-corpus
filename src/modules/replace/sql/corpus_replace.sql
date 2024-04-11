@@ -155,12 +155,12 @@ RETURN QUERY EXECUTE format($$
             string_agg(crits, '') AS crits,
             @extschema@.last(comment ORDER BY sign_no_old) AS comment,
             bool_or(newline) AS newline,
-            @extschema@.last(inverted ORDER BY sign_no_old) AS inverted,
-            @extschema@.last(ligature ORDER BY sign_no_old) AS ligature,
+            @extschema@.last(inverted ORDER BY sign_no_old DESC) AS inverted,
+            @extschema@.last(ligature ORDER BY sign_no_old DESC) AS ligature,
             min(sign_no_old) AS sign_no_old,
             min(word_no) AS word_no_old,
             min(compound_no) AS compound_no_old,
-            @extschema@.bool_and_ex_last(NOT inverted AND NOT ligature)     -- cannot automatically merge inverted, ligatured oder commented on signs
+            @extschema@.bool_and_ex_last(NOT inverted AND NOT ligature ORDER BY sign_no_old DESC)     -- cannot automatically merge inverted, ligatured or commented on signs
             AND bool_and(sign_no_old IS NOT NULL)                           -- all components have a correspondence in the old text
                 AND bool_and(gap <= 1)                                      -- no gaps within a new sign
                 AS valid         
