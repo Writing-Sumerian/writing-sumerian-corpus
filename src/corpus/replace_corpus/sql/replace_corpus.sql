@@ -29,9 +29,9 @@ DECLARE
 
 BEGIN
 
-    CREATE TEMPORARY TABLE IF NOT EXISTS corpus (LIKE @extschema:cuneiform_replace@.corpus_replace_type) ON COMMIT DROP;
-    CREATE TEMPORARY TABLE IF NOT EXISTS words (LIKE @extschema:cuneiform_corpus@.words) ON COMMIT DROP;
-    CREATE TEMPORARY TABLE IF NOT EXISTS compounds (LIKE @extschema:cuneiform_corpus@.compounds) ON COMMIT DROP;
+    CREATE TEMPORARY TABLE IF NOT EXISTS corpus (LIKE @extschema:cuneiform_replace@.corpus_replace_type);
+    CREATE TEMPORARY TABLE IF NOT EXISTS words (LIKE @extschema:cuneiform_corpus@.words);
+    CREATE TEMPORARY TABLE IF NOT EXISTS compounds (LIKE @extschema:cuneiform_corpus@.compounds);
     CREATE OR REPLACE TEMPORARY VIEW lines AS SELECT * FROM @extschema:cuneiform_corpus@.lines;
     CREATE OR REPLACE TEMPORARY VIEW blocks AS SELECT * FROM @extschema:cuneiform_corpus@.blocks;
     CREATE OR REPLACE TEMPORARY VIEW surfaces AS SELECT * FROM @extschema:cuneiform_corpus@.surfaces;
@@ -141,6 +141,13 @@ BEGIN
         TRUNCATE pg_temp.words;
         TRUNCATE pg_temp.compounds;
 
+        COMMIT;
+
     END LOOP;
+
+    DROP TABLE pg_temp.corpus;
+    DROP TABLE pg_temp.words;
+    DROP TABLE pg_temp.compounds;
+
 END;
 $BODY$;
