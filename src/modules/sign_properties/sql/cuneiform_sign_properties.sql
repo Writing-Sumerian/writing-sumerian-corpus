@@ -41,9 +41,18 @@ CREATE TYPE pn_type AS ENUM (
     'temple', 
     'month',
     'object',
-    'ethnicity'
+    'ethnicity',
+    'festival'
 );
 
+CREATE TYPE sign_meaning AS (
+    word_no integer,
+    value_id integer,
+    sign_id integer,
+    indicator_type indicator_type,
+    phonographic boolean,
+    stem boolean
+);
 
 CREATE OR REPLACE FUNCTION condition_agg_sfunc (sign_condition, sign_condition)
     RETURNS sign_condition

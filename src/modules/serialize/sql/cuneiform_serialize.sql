@@ -140,3 +140,21 @@ BEGIN ATOMIC
             'X'
         END;
 END;
+
+
+CREATE OR REPLACE FUNCTION serialize_sign_meanings (v_sign_meanings @extschema:cuneiform_sign_properties@.sign_meaning[])
+  RETURNS text
+  STABLE
+  COST 1000
+  LANGUAGE SQL
+BEGIN ATOMIC
+    SELECT
+        (cun_agg (character_print, ordinality::integer, word_no, 0, NULL, 0, (CASE WHEN unnest.value_id IS NULL THEN 'sign' ELSE 'value' END)::@extschema:cuneiform_sign_properties@.sign_type, indicator_type, phonographic, stem, 'intact'::@extschema:cuneiform_sign_properties@.sign_condition, language, 
+            FALSE, FALSE, FALSE, NULL, NULL, false, NULL, NULL, NULL ORDER BY ordinality))[1]
+    FROM
+        unnest(v_sign_meanings) WITH ORDINALITY
+        LEFT JOIN @extschema:cuneiform_signlist@.sign_variants USING (sign_id)
+        LEFT JOIN characters_code ON characters_code.sign_variant_id = sign_variants.sign_variant_id AND unnest.value_id IS NOT DISTINCT FROM characters_code.value_id
+    WHERE
+        variant_type = 'default'
+END;
