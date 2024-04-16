@@ -171,7 +171,7 @@ RETURN QUERY EXECUTE format($$
             match_no,
             sign_no_new
     ),
-    patched_ AS (
+    patched__ AS (
         SELECT
             match_no,
             line_no,
@@ -235,10 +235,10 @@ RETURN QUERY EXECUTE format($$
         WHERE
             match_no IS NULL
     ),
-    patched AS (
+    patched_ AS (
         SELECT
             *,
-            row_number() OVER w1 - 1 AS sign_no_final,
+            (row_number() OVER w1 - 1)::integer AS sign_no_final,
             COALESCE(
                 word_no_new != lag(word_no_new) OVER w2, 
                 word_no_old != lag(word_no_old) OVER w1, 
@@ -254,25 +254,32 @@ RETURN QUERY EXECUTE format($$
                 AND COALESCE(word_no_new IS NULL OR word_no_old <= lag(word_no_old) OVER w4 + 1, true) 
                 AS valid_final
         FROM
-            patched_
+            patched__
         WINDOW 
             w1 AS (ORDER BY sign_no_old, match_no, sign_no_new),
             w2 AS (PARTITION BY match_no ORDER BY sign_no_old, sign_no_new),
             w3 AS (PARTITION BY match_no, compound_no_new ORDER BY sign_no_old, sign_no_new),
             w4 AS (PARTITION BY match_no, word_no_new ORDER BY sign_no_old, sign_no_new)
+    ),
+    patched AS (
+        SELECT
+            *,
+            (sum(new_word::integer) OVER (ORDER BY sign_no_final) - 1)::integer AS word_no_final
+        FROM
+            patched_
     )
     SELECT
         %1$s,
-        sign_no_final::integer AS sign_no,
+        sign_no_final AS sign_no,
         line_no,
-        (sum(new_word::integer) OVER (ORDER BY sign_no_final) - 1)::integer,
+        word_no_final AS word_no,
         value_id,
         sign_variant_id,
         custom_value,
         type,
         indicator_type,
         phonographic,
-        stem,
+        CASE WHEN bool_and(stem IS NOT NULL) OVER (PARTITION BY word_no_final) THEN stem ELSE NULL END AS stem,
         condition,
         crits,
         comment,
