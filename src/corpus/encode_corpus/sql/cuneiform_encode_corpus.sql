@@ -2,11 +2,8 @@
 -- corpus
 
 CREATE TABLE corpus_unencoded (
-   transliteration_id integer,
-    sign_no integer,
-    value text,
-    sign_spec text,
-    type @extschema:cuneiform_sign_properties@.sign_type NOT NULL,
+    transliteration_id integer,
+    LIKE @extschema:cuneiform_encoder@.corpus_unencoded_type,
     PRIMARY KEY (transliteration_id, sign_no)
 );
 

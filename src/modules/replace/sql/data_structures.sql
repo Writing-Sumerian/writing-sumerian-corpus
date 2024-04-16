@@ -32,10 +32,7 @@ CREATE TABLE replace_pattern_compounds (
 
 CREATE TABLE replace_pattern_corpus_unencoded (
     pattern_id integer,
-    sign_no integer,
-    value text,
-    sign_spec text,
-    type @extschema:cuneiform_sign_properties@.sign_type NOT NULL,
+    LIKE @extschema:cuneiform_encoder@.corpus_unencoded_type,
     PRIMARY KEY (pattern_id, sign_no)
 );
 

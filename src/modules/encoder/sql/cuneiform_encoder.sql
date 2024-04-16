@@ -95,6 +95,13 @@ WHERE
     a.variant_type = 'default';
 
 
+CREATE TYPE corpus_unencoded_type AS (
+    sign_no integer,
+    value text,
+    sign_spec text,
+    type @extschema:cuneiform_sign_properties@.sign_type
+);
+
 
 CREATE OR REPLACE PROCEDURE create_corpus_encoder (v_name text, v_source text, v_key text[], v_schema text = 'public')
     LANGUAGE PLPGSQL
