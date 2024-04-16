@@ -63,7 +63,7 @@ signt           : SIMPLESIGN MOD* ( ( SIGNCON | xcon ) ( signt | parensignt ) )*
 parensignt      : "(" signt ( _DOT signt )* ")"
 xcon            : X
 
-PATTERN.5       : /\/[^\/]*\//
+PATTERN.5       : /\/[^\/]+\//
 VALUE.3         : /[abdegĝhḫijklmnpqrsšṣtṭuwyz’][abdegĝhḫijklmnpqrsšṣtṭuwyz’]+[0-9xX]*/
                 | /[aeiou][0-9xX]*/
                 | "d"
