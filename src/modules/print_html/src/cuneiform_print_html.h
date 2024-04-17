@@ -2,10 +2,6 @@
 
 #include <funcapi.h>
 
-#ifdef PG_MODULE_MAGIC
-PG_MODULE_MAGIC;
-#endif
-
 void _PG_init(void);
 
 Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS);

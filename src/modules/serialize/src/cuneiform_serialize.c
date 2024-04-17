@@ -10,6 +10,7 @@
 #include <utils/array.h>
 #include <tcop/pquery.h>
 
+PG_MODULE_MAGIC;
 
 static cun_set_enums_t set_enums;
 static cun_copy_n_t copy_n;
@@ -89,9 +90,14 @@ void _PG_init(void)
 
 static char* open_code(char* s, const State* s1, State* s2)
 {
-    if((s1 != NULL && s1->language != s2->language) || (s1 == NULL && s2->language != enum_language()->sumerian))
+    if(s1 == NULL || s1->language != s2->language || s1->language_null != s2->language_null)
     {
-        if(s2->language == enum_language()->akkadian)
+        if(s2->language_null)
+        {
+            if(s1)
+                s = copy(s, "%u ");
+        }
+        else if(s2->language == enum_language()->akkadian)
             s = copy(s, "%a ");
         else if(s2->language == enum_language()->eblaite)
             s = copy(s, "%e ");
@@ -100,7 +106,7 @@ static char* open_code(char* s, const State* s1, State* s2)
         else if(s2->language == enum_language()->sumerian)
             s = copy(s, "%s ");
     }
-    if(!s2->pn_type_null && (s1 == NULL || s1->pn_type != s2->pn_type || s2->pn_type_null || s1->compound_no != s2->compound_no))
+    if(!s2->pn_type_null && (s1 == NULL || s1->pn_type != s2->pn_type || s1->pn_type_null || s1->compound_no != s2->compound_no))
     {
         if(s2->pn_type == enum_pn()->person)
             s = copy(s, "%person ");
@@ -122,7 +128,12 @@ static char* open_code(char* s, const State* s1, State* s2)
             s = copy(s, "%ethnicity ");
     }
 
-    if(s1 != NULL && !s1->stem && s2->stem && !s1->stem_null && !s2->stem_null && s1->word_no == s2->word_no)
+    if(!s2->stem_null && (s1 == NULL || (s1->stem_null && s1->compound_no != s2->compound_no)))
+        s = copy(s, "%st+ ");
+    else if(s2->stem_null && s1 != NULL && !s1->stem_null && s1->compound_no != s2->compound_no)
+        s = copy(s, "%st- ");
+
+    if(s1 != NULL && s1->word_no == s2->word_no && !s1->stem && s2->stem && !s1->stem_null && !s2->stem_null)
         *s++ = ';';
 
     if(!s2->phonographic_null && !s2->phonographic && s2->indicator_type == enum_indicator_type()->none && (s1 == NULL || s1->phonographic_null || s1->phonographic || s1->indicator_type != enum_indicator_type()->none || s1->line_no != s2->line_no))
@@ -314,6 +325,7 @@ Datum cuneiform_cun_agg_sfunc(PG_FUNCTION_ARGS)
     state->stem_null = PG_ARGISNULL(ARG_STEM);
     state->condition = PG_GETARG_OID(ARG_CONDITION);
     state->language = PG_GETARG_OID(ARG_LANGUAGE);
+    state->language_null = PG_ARGISNULL(ARG_LANGUAGE);
     state->pn_type = PG_GETARG_OID(ARG_PN_TYPE);
     state->pn_type_null = PG_ARGISNULL(ARG_PN_TYPE);
     state->capitalize = state_old.capitalize || (PG_GETARG_BOOL(ARG_CAPITALIZED) && state_old.word_no != state->word_no);

@@ -1,10 +1,9 @@
 CREATE OR REPLACE PROCEDURE replace (
     v_search_term text, 
     v_pattern text,
-    v_language @extschema:cuneiform_sign_properties@.language,
-    v_stemmed boolean,
     v_user_id integer,
     v_internal boolean,
+    v_subcommit boolean DEFAULT false,
     v_period_ids integer[] DEFAULT ARRAY[]::integer[],
     v_provenience_ids integer[] DEFAULT ARRAY[]::integer[],
     v_genre_ids integer[] DEFAULT ARRAY[]::integer[]
@@ -37,7 +36,7 @@ BEGIN
     CREATE OR REPLACE TEMPORARY VIEW surfaces AS SELECT * FROM @extschema:cuneiform_corpus@.surfaces;
     CREATE OR REPLACE TEMPORARY VIEW sections AS SELECT * FROM @extschema:cuneiform_corpus@.sections;
 
-    CALL @extschema:cuneiform_replace@.parse_replacement(v_pattern, v_language, v_stemmed, v_pattern_id);
+    CALL @extschema:cuneiform_replace@.parse_replacement(v_pattern, v_pattern_id);
 
     SELECT 
         preparse_search.code,
@@ -141,7 +140,9 @@ BEGIN
         TRUNCATE pg_temp.words;
         TRUNCATE pg_temp.compounds;
 
-        COMMIT;
+        IF v_subcommit THEN
+            COMMIT;
+        END IF;
 
     END LOOP;
 

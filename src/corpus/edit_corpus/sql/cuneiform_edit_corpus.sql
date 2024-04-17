@@ -36,8 +36,6 @@ $BODY$;
 CREATE OR REPLACE PROCEDURE edit_transliteration (
     v_code text, 
     v_transliteration_id integer,
-    v_language @extschema:cuneiform_sign_properties@.language,
-    v_stemmed boolean,
     v_user_id integer DEFAULT NULL,
     v_internal boolean DEFAULT false
     )
@@ -59,7 +57,7 @@ BEGIN
         message text
     ) ON COMMIT DROP;
 
-    CALL @extschema:cuneiform_parser@.parse(v_code, 'pg_temp', v_language, v_stemmed, v_transliteration_id);
+    CALL @extschema:cuneiform_parser@.parse(v_code, 'pg_temp', v_transliteration_id);
 
     SELECT string_agg(format('"%s" near %s:%s', message, line, col),  E'\n') INTO v_error FROM errors;
     IF length(v_error) > 0 THEN

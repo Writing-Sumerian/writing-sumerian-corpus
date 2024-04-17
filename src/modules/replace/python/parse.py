@@ -4,7 +4,7 @@ class language:
     pass
 
 @sql_properties(procedure=True)
-def parse_replacement(code: str, language : language, stemmed: bool, id: InOut[int]):
+def parse_replacement(code: str, id: InOut[int]):
     from cuneiformparser import parse
     import pandas as pd
 
@@ -30,7 +30,7 @@ def parse_replacement(code: str, language : language, stemmed: bool, id: InOut[i
 
     id = plpy.execute("SELECT nextval('@extschema@.replace_id_seq') AS id")[0]['id']
 
-    signs, compounds, words, _, errors = parse(code, 'sumerian', stemmed)
+    signs, compounds, words, _, errors = parse(code)
 
     plpy.execute(f"DELETE FROM @extschema@.replace_pattern_corpus_unencoded WHERE pattern_id = {id}")
 

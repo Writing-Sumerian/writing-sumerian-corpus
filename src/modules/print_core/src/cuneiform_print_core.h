@@ -4,10 +4,6 @@
 #include <postgres.h>
 #include <fmgr.h>
 
-#ifdef PG_MODULE_MAGIC
-PG_MODULE_MAGIC;
-#endif
-
 typedef struct CunEnumType {
     Oid value;
     Oid sign;
@@ -103,13 +99,14 @@ typedef struct State
     bool section_null;
     Oid type;
     bool phonographic;
+    bool phonographic_null;
     Oid indicator_type;
     bool stem;
+    bool stem_null;
     Oid condition;
     Oid language;
+    bool language_null;
     bool unknown_reading;
-    bool stem_null;
-    bool phonographic_null;
     Oid pn_type;
     bool pn_type_null;
     bool highlight;

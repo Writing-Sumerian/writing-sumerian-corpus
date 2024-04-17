@@ -7,13 +7,13 @@ CREATE TABLE corpus_parsed_unencoded (
     PRIMARY KEY (transliteration_id, sign_no)
 );
 
+
 CALL @extschema:cuneiform_encoder@.create_corpus_encoder('parser_corpus_encoder', 'corpus_parsed_unencoded', '{transliteration_id}', '@extschema@');
+
 
 CREATE OR REPLACE PROCEDURE parse (
         code text, 
         schema text,
-        language LANGUAGE,
-        stemmed boolean,
         id integer
     )
     LANGUAGE PLPYTHON3U
@@ -67,7 +67,7 @@ errors_plan = plpy.prepare(
     ['integer', 'integer', 'integer', 'text', 'text']
 )
 
-surfaces, blocks, lines, signs, compounds, words, sections, errors = parseText(code, language, stemmed)
+surfaces, blocks, lines, signs, compounds, words, sections, errors = parseText(code)
 
 plpy.execute(f"DELETE FROM @extschema@.corpus_parsed_unencoded WHERE transliteration_id = {id}")
 

@@ -3,6 +3,9 @@
 #include <fmgr.h>
 #include <executor/spi.h>
 
+PG_MODULE_MAGIC;
+
+
 static cunEnumType ENUM_TYPE;
 static cunEnumIndicatorType ENUM_INDICATOR_TYPE;
 static cunEnumLanguage ENUM_LANGUAGE;
@@ -285,7 +288,7 @@ int cun_get_changes(const State* s1, const State* s2)
         changes += STEM;
     if(s1->pn_type != s2->pn_type || s1->pn_type_null != s2->pn_type_null || s1->word_no != s2->word_no)
         changes += PN_TYPE;
-    if(s1->language != s2->language)
+    if(s1->language != s2->language || s1->language_null != s2->language_null)
         changes += LANGUAGE;
     return changes;
 }

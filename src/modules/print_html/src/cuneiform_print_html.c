@@ -12,6 +12,9 @@
 #include <utils/arrayaccess.h>
 #include <tcop/pquery.h>
 
+PG_MODULE_MAGIC;
+
+
 static cun_set_enums_t set_enums;
 static cun_copy_n_t copy_n;
 static cun_copy_t copy;
@@ -144,7 +147,7 @@ static char* open_html(char* s, int changes, const State* state, const int *extr
         if(changes >= LANGUAGE * (2 << i) && !extra_null[i])
             s += sprintf(s, "<span class='extra%d-%d'>", i, extra[i]);
 
-    if(changes >= LANGUAGE && state->language != enum_language()->sumerian)
+    if(changes >= LANGUAGE && !state->language_null)
     {
         if(state->language == enum_language()->akkadian)
             s = copy(s, "<span class='akkadian'>");
@@ -161,9 +164,9 @@ static char* open_html(char* s, int changes, const State* state, const int *extr
         s = copy(s, "<span class='highlight'>");
     if(changes >= PHONOGRAPHIC && !state->phonographic_null)
     {
-        if(state->phonographic && state->language == enum_language()->sumerian)
+        if(state->phonographic)
             s = copy(s, "<span class='phonographic'>");
-        else if(!state->phonographic && state->language != enum_language()->sumerian)
+        else
             s = copy(s, "<span class='logographic'>");
     }
     if(changes >= TYPE && (state->type != enum_type()->value || state->unknown_reading)  && state->type != enum_type()->punctuation)
@@ -204,13 +207,13 @@ static char* close_html(char* s, int changes, const State* state, const int *ext
         s = copy(s, "</span>");
     if(changes >= TYPE && (state->type != enum_type()->value || state->unknown_reading) && state->type != enum_type()->punctuation)
         s = copy(s, "</span>");
-    if(changes >= PHONOGRAPHIC && !state->phonographic_null && (state->phonographic == (state->language == enum_language()->sumerian)))
+    if(changes >= PHONOGRAPHIC && !state->phonographic_null)
         s = copy(s, "</span>");
     if(changes >= HIGHLIGHT && state->highlight)
         s = copy(s, "</span>");
     if(changes >= STEM && state->stem && !state->stem_null)
         s = copy(s, "</span>");
-    if(changes >= LANGUAGE && state->language != enum_language()->sumerian)
+    if(changes >= LANGUAGE && !state->language_null)
         s = copy(s, "</span>");
     for(int i = 0; i < len_extra; ++i)
         if(changes >= LANGUAGE * (2 << i) && !extra_null[i])
@@ -426,6 +429,7 @@ Datum cuneiform_cun_agg_html_sfunc(PG_FUNCTION_ARGS)
     state->stem_null = PG_ARGISNULL(ARG_STEM);
     state->condition = PG_GETARG_OID(ARG_CONDITION);
     state->language = PG_GETARG_OID(ARG_LANGUAGE);
+    state->language_null = PG_ARGISNULL(ARG_LANGUAGE);
     state->pn_type = PG_GETARG_OID(ARG_PN_TYPE);
     state->pn_type_null = PG_ARGISNULL(ARG_PN_TYPE);
     state->highlight = PG_ARGISNULL(ARG_HIGHLIGHT) ? false : PG_GETARG_BOOL(ARG_HIGHLIGHT);
