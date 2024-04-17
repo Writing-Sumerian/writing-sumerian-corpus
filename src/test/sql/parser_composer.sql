@@ -9,30 +9,28 @@ t text[];
 columns text;
 BEGIN
 FOREACH t SLICE 1 IN ARRAY array[['corpus', 'sign_no'], ['words', 'word_no'], ['compounds', 'compound_no'], ['lines', 'line_no'], ['blocks', 'block_no'], ['surfaces', 'surface_no'], ['sections', 'section_no']] LOOP
-    SELECT string_agg(column_name, ', ') INTO columns FROM information_schema.columns WHERE table_schema = 'public' AND table_name = t[1] AND column_name != 'transliteration_id';
+    SELECT string_agg(column_name, ', ') INTO columns FROM information_schema.columns WHERE table_schema = '@extschema:cuneiform_corpus@' AND table_name = t[1] AND column_name != 'transliteration_id';
     RETURN NEXT results_eq(
-        format('SELECT %s FROM %I WHERE transliteration_id = %s ORDER BY %I', columns, t[1], transliteration_id_1, t[2]),
-        format('SELECT %s FROM %I WHERE transliteration_id = %s ORDER BY %I', columns, t[1], transliteration_id_2, t[2]),
+        format('SELECT %s FROM @extschema:cuneiform_corpus@.%I WHERE transliteration_id = %s ORDER BY %I', columns, t[1], transliteration_id_1, t[2]),
+        format('SELECT %s FROM @extschema:cuneiform_corpus@.%I WHERE transliteration_id = %s ORDER BY %I', columns, t[1], transliteration_id_2, t[2]),
         transliteration_id_1::text || ' ' || t[1]);
 END LOOP;
 RETURN;
 END;
 $BODY$;
 
-CREATE OR REPLACE PROCEDURE test.serialze_and_parse (v_transliteration_id integer, v_transliteration_id_new integer)
+CREATE OR REPLACE PROCEDURE serialize_and_parse (v_transliteration_id integer, v_transliteration_id_new integer)
     LANGUAGE PLPGSQL
     AS 
 $BODY$
 DECLARE
 code text;
-stemmed boolean;
 BEGIN
-SELECT content INTO code FROM transliterations_serialized WHERE transliteration_id = v_transliteration_id;
+SELECT content INTO code FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = v_transliteration_id;
 IF code IS NULL THEN
     RETURN;
 END IF;
-SELECT name_short = 'Glossar' OR name_short = 'Attinger' INTO stemmed FROM transliterations JOIN corpora USING (corpus_id) WHERE transliteration_id = v_transliteration_id;
-CALL parse(code, 'public', 'sumerian', stemmed, v_transliteration_id_new);
+CALL @extschema:cuneiform_parser@.parse(code, '@extschema:cuneiform_corpus@', v_transliteration_id_new);
 END;
 $BODY$;
 
@@ -42,13 +40,10 @@ CREATE OR REPLACE FUNCTION manually_test_parse_serialize (v_transliteration_id i
     LANGUAGE PLPGSQL
     AS 
 $BODY$
-DECLARE
-code text;
-stemmed boolean;
 BEGIN
 CALL @extschema@.serialize_and_parse(v_transliteration_id, -1);
 RETURN QUERY SELECT @extschema@.compare_transliteration (v_transliteration_id, -1);
-CALL delete_transliteration(-1, 'public');
+CALL @extschema:cuneiform_actions@.delete_transliteration(-1, '@extschema:cuneiform_corpus@');
 RETURN;
 END;
 $BODY$;
