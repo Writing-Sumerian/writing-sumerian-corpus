@@ -1,14 +1,21 @@
-CREATE TABLE corpus_parsed_unencoded (
+CREATE TYPE corpus_parsed_unencoded_type AS (
     transliteration_id integer,
-    LIKE @extschema:cuneiform_encoder@.corpus_unencoded_type,
+    sign_no integer,
+    value text,
+    sign_spec text,
+    type @extschema:cuneiform_sign_properties@.sign_type,
     line_no_code integer,
     start_col_code integer,
-    stop_col_code integer,
-    PRIMARY KEY (transliteration_id, sign_no)
+    stop_col_code integer
 );
 
-
-CALL @extschema:cuneiform_encoder@.create_corpus_encoder('parser_corpus_encoder', 'corpus_parsed_unencoded', '{transliteration_id}', '@extschema@');
+CREATE TYPE errors_type AS (
+    transliteration_id integer,
+    line integer,
+    col integer,
+    symbol text,
+    message text
+);
 
 
 CREATE TYPE sections_parser_type AS (
@@ -118,7 +125,7 @@ corpus_plan = plpy.prepare(
 
 corpus_unencoded_plan = plpy.prepare(
     f"""
-    INSERT INTO @extschema@.corpus_parsed_unencoded
+    INSERT INTO {schema}.corpus_parsed_unencoded
     SELECT
         $1,
         ordinality::integer-1, 
@@ -244,7 +251,7 @@ errors_plan = plpy.prepare(
 
 surfaces, blocks, lines, signs, compounds, words, sections, errors = parseText(code)
 
-plpy.execute(f"DELETE FROM @extschema@.corpus_parsed_unencoded WHERE transliteration_id = {id}")
+plpy.execute(f"DELETE FROM {schema}.corpus_parsed_unencoded WHERE transliteration_id = {id}")
 
 plpy.execute(sections_plan, [id, list(sections.to_records(index=False))])
 plpy.execute(compounds_plan, [id, [(x[0], x[1], x[2] if x[2] is not pd.NA else None, x[3]) for x in compounds.itertuples(index=False)]])
@@ -265,7 +272,7 @@ plpy.execute(f"""
         value_id = a.value_id, 
         sign_variant_id = a.sign_variant_id 
     FROM 
-        @extschema@.parser_corpus_encoder a 
+        {schema}.corpus_encoder a 
     WHERE 
         corpus.transliteration_id = a.transliteration_id AND 
         corpus.transliteration_id = {id} AND
@@ -273,7 +280,7 @@ plpy.execute(f"""
     """)
 
 plpy.execute(f"""
-    DELETE FROM @extschema@.corpus_parsed_unencoded
+    DELETE FROM {schema}.corpus_parsed_unencoded
     USING {schema}.corpus
     WHERE
         corpus.transliteration_id = corpus_parsed_unencoded.transliteration_id AND 
@@ -286,7 +293,7 @@ plpy.execute(f"""
     UPDATE {schema}.corpus SET 
         custom_value = corpus_parsed_unencoded.value  || COALESCE('(' || corpus_parsed_unencoded.sign_spec || ')', '')
     FROM
-        @extschema@.corpus_parsed_unencoded
+        {schema}.corpus_parsed_unencoded
     WHERE
         corpus.transliteration_id = corpus_parsed_unencoded.transliteration_id AND
         corpus.transliteration_id = {id} AND

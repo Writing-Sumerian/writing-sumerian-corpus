@@ -12,12 +12,14 @@ INSERT INTO @extschema:cuneiform_corpus@.texts OVERRIDING SYSTEM VALUE VALUES (-
 INSERT INTO @extschema:cuneiform_corpus@.transliterations OVERRIDING SYSTEM VALUE VALUES (-1, -1, -1);
 INSERT INTO @extschema:cuneiform_corpus@.compositions OVERRIDING SYSTEM VALUE (VALUES (-1, 'a', 'copy'), (-2, 'b', 'print'));
 CREATE TABLE @extschema:cuneiform_corpus@.errors (
-    transliteration_id integer,
-    line integer,
-    col integer,
-    symbol text,
-    message text
+    LIKE @extschema:cuneiform_parser@.errors_type
 );
+CREATE TABLE @extschema:cuneiform_corpus@.corpus_parsed_unencoded (
+    LIKE @extschema:cuneiform_parser@.corpus_parsed_unencoded_type,
+    PRIMARY KEY (transliteration_id, sign_no)
+);
+CALL @extschema:cuneiform_encoder@.create_corpus_encoder('corpus_encoder', 'corpus_parsed_unencoded', '{transliteration_id}', '@extschema:cuneiform_corpus@');
+
 $BODY$;
 
 
@@ -34,4 +36,5 @@ DELETE FROM @extschema:cuneiform_context@.genres WHERE genre_id = -1;
 DELETE FROM @extschema:cuneiform_corpus@.corpora WHERE corpus_id = -1;
 DELETE FROM @extschema:cuneiform_corpus@.compositions WHERE composition_id = -1 OR composition_id = -2;
 DROP TABLE @extschema:cuneiform_corpus@.errors;
+DROP TABLE @extschema:cuneiform_corpus@.corpus_parsed_unencoded CASCADE;
 $BODY$;

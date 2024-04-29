@@ -50,12 +50,13 @@ BEGIN
 
     CALL @extschema:cuneiform_create_corpus@.create_corpus('pg_temp', TRUE);
     CREATE TEMPORARY TABLE errors (
-        transliteration_id integer,
-        line integer,
-        col integer,
-        symbol text,
-        message text
+        LIKE @extschema:cuneiform_parser@.errors_type
     ) ON COMMIT DROP;
+    CREATE TEMPORARY TABLE corpus_parsed_unencoded (
+        LIKE @extschema:cuneiform_parser@.corpus_parsed_unencoded_type,
+        PRIMARY KEY (transliteration_id, sign_no)
+    ) ON COMMIT DROP;
+    CALL @extschema:cuneiform_encoder@.create_corpus_encoder('corpus_encoder', 'corpus_parsed_unencoded', '{transliteration_id}', 'pg_temp');
 
     CALL @extschema:cuneiform_parser@.parse(v_code, 'pg_temp', v_transliteration_id);
 
@@ -69,7 +70,7 @@ BEGIN
     INTO 
         v_error 
     FROM 
-        @extschema:cuneiform_parser@.corpus_parsed_unencoded
+        pg_temp.corpus_parsed_unencoded
     WHERE 
         transliteration_id = v_transliteration_id;
 
@@ -78,7 +79,6 @@ BEGIN
     END IF;
 
     CALL @extschema@.edit_corpus('pg_temp', v_transliteration_id, v_user_id, v_internal);
-
 END;
 
 $BODY$;
