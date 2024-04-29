@@ -150,3 +150,21 @@ CALL @extschema:cuneiform_print_core@.create_signlist_print(
     'print_sign_html',
     'print_graphemes_html'
 );
+
+
+CREATE OR REPLACE FUNCTION print_sign_meanings (v_sign_meanings @extschema:cuneiform_sign_properties@.sign_meaning[])
+  RETURNS text
+  STABLE
+  COST 1000
+  LANGUAGE SQL
+BEGIN ATOMIC
+    SELECT
+        (cun_agg_html (character_print, ordinality::integer, word_no, 0, NULL, 0, (CASE WHEN unnest.value_id IS NULL THEN 'sign' ELSE 'value' END)::@extschema:cuneiform_sign_properties@.sign_type, indicator_type, phonographic, stem, 'intact'::@extschema:cuneiform_sign_properties@.sign_condition, NULL, 
+            FALSE, FALSE, FALSE, NULL, NULL, FALSE, NULL, NULL, NULL, FALSE, VARIADIC ARRAY[]::integer[] ORDER BY ordinality))[1]
+    FROM
+        unnest(v_sign_meanings) WITH ORDINALITY
+        LEFT JOIN @extschema:cuneiform_signlist@.sign_variants USING (sign_id)
+        LEFT JOIN characters_html ON characters_html.sign_variant_id = sign_variants.sign_variant_id AND unnest.value_id IS NOT DISTINCT FROM characters_html.value_id
+    WHERE
+        variant_type = 'default';
+END;
