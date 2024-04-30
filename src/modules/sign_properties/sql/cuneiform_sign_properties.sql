@@ -51,7 +51,8 @@ CREATE TYPE sign_meaning AS (
     sign_id integer,
     indicator_type indicator_type,
     phonographic boolean,
-    stem boolean
+    stem boolean,
+    capitalized boolean
 );
 
 CREATE OR REPLACE FUNCTION condition_agg_sfunc (sign_condition, sign_condition)
