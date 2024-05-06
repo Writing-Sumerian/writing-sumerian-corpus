@@ -234,7 +234,7 @@ State* cun_init_state(const int line_capacity, MemoryContext memcontext)
     state->line_capacity = 10;
     state->lines[0] = (char *) MemoryContextAllocZero(memcontext, line_capacity);
     state->line_lens[0] = 0;
-    state->string_capacity = 1000;
+    state->string_capacity = line_capacity;
 
     state->compound_comment = (char *) MemoryContextAllocZero(memcontext, 100);
     state->compound_comment_len = 0;
