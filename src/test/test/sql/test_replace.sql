@@ -264,3 +264,37 @@ CALL @extschema:cuneiform_replace_corpus@.replace('diri', 'si-a', -1, true, fals
 RETURN NEXT is(content, E'1\tsi-a si-a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
 END;
 $BODY$;
+
+CREATE OR REPLACE FUNCTION test_replace_conditions ()
+    RETURNS SETOF text
+    VOLATILE
+    LANGUAGE PLPGSQL
+    AS 
+$BODY$
+BEGIN
+CALL @extschema:cuneiform_parser@.parse(E'1\t⸢ensi2⸣-‹a›-«diri»', '@extschema:cuneiform_corpus@', -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('ensi2', 'pa-te-si', -1, true, false, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\t⸢pa-te-si⸣-‹a›-«diri»') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('a', 'A', -1, true, false, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\t⸢pa-te-si⸣-‹A›-«diri»') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('diri', 'SI.A', -1, true, false, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\t⸢pa-te-si⸣-‹A›.«SI.A»') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('si-A', 'diri', -1, true, false, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\t⸢pa-te-si⸣-‹A›.«SI.A»') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+CALL @extschema:cuneiform_replace_corpus@.replace('pa-te-si', 'ensi2', -1, true, false, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\t⸢ensi2⸣-‹A›.«SI.A»') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+END;
+$BODY$;
+
+CREATE OR REPLACE FUNCTION test_replace_multiline ()
+    RETURNS SETOF text
+    VOLATILE
+    LANGUAGE PLPGSQL
+    AS 
+$BODY$
+BEGIN
+CALL @extschema:cuneiform_parser@.parse(E'1\tsi\n2\ta', '@extschema:cuneiform_corpus@', -1);
+CALL @extschema:cuneiform_replace_corpus@.replace('SI A', 'diri', -1, true, false, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
+RETURN NEXT is(content, E'1\tsi\n2\ta') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
+END;
+$BODY$;
