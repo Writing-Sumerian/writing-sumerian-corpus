@@ -302,3 +302,62 @@ plpy.execute(f"""
     """)
 
 $BODY$;
+
+
+
+CREATE OR REPLACE FUNCTION parse_to_sign_meanings (
+        code text
+    )
+    RETURNS @extschema:cuneiform_sign_properties@.sign_meaning[]
+    LANGUAGE PLPYTHON3U
+    AS 
+$BODY$
+
+from cuneiformparser import parse
+
+plan = plpy.prepare(
+        f"""
+        SELECT 
+            array_agg(
+                (
+                    word_no, 
+                    value_id,
+                    sign_id,
+                    indicator_type, 
+                    phonographic, 
+                    stem,
+                    capitalized
+                )::@extschema:cuneiform_sign_properties@.sign_meaning
+                ORDER BY corpus.ordinality
+            ) AS sign_meanings
+        FROM
+            UNNEST($1) WITH ORDINALITY AS corpus
+            LEFT JOIN UNNEST($2) WITH ORDINALITY AS words ON corpus.word_no = words.ordinality-1
+            LEFT JOIN LATERAL @extschema:cuneiform_signlist@.normalize_glyphs(sign_spec) AS _(sign_spec_normlized) ON TRUE
+            LEFT JOIN LATERAL @extschema:cuneiform_signlist@.normalize_glyphs(value) AS __(sign_normalized) ON type = 'sign'
+            LEFT JOIN @extschema:cuneiform_encoder@.values_encoded ON type = 'value' AND corpus.value = values_encoded.value AND sign_spec_normlized IS NOT DISTINCT FROM values_encoded.sign_spec
+            LEFT JOIN @extschema:cuneiform_encoder@.signs_encoded ON type = 'sign' AND sign_normalized = signs_encoded.sign AND sign_spec_normlized IS NOT DISTINCT FROM signs_encoded.sign_spec
+            LEFT JOIN @extschema:cuneiform_signlist@.sign_variants ON sign_variants.sign_variant_id = COALESCE(values_encoded.sign_variant_id, signs_encoded.sign_variant_id)
+        GROUP BY
+            compound_no
+        HAVING
+            bool_and(sign_id IS NOT NULL)
+        """,
+        ['@extschema@.corpus_parser_type[]', '@extschema@.words_parser_type[]']
+)
+
+signs, compounds, words, _, errors = parse(code)
+
+if len(errors.index):
+    plpy.error('cuneiform_parser syntax error', sqlstate=22000)
+if len(compounds.index) != 1:
+    plpy.error('cuneiform_parser compound error', sqlstate=22000)
+
+r = plpy.execute(plan, [list(signs.to_records(index=False)), list(words.to_records(index=False))])
+
+if r.nrows() != 1:
+    plpy.error('cuneiform_parse encoding error', sqlstate=22000)
+
+return r[0]['sign_meanings']
+
+$BODY$;
