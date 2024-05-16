@@ -65,7 +65,7 @@ BEGIN ATOMIC
     SELECT
         CASE 
             WHEN $1 = $2 THEN $1
-            WHEN $2 = 'deleted' OR $2 = 'inserted' THEN null
+            WHEN $1 = 'deleted' OR $1 = 'inserted' OR $2 = 'deleted' OR $2 = 'inserted' THEN null
             ELSE 'damaged' 
         END;
 END;
