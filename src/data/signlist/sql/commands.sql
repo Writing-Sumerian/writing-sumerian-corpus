@@ -169,9 +169,9 @@ BEGIN
     v_sign_id 
   FROM 
     @extschema@.sign_variants_composition 
-    JOIN @extschema@.allomorphs USING (allomorph_id) 
+    JOIN @extschema@.allomorphs USING (sign_id, allomorph_id) 
   WHERE 
-    graphemes = sign 
+    graphemes = v_sign 
     AND sign_variants_composition.specific;
   CALL @extschema@.add_allomorph(v_sign_id, v_graphemes, v_variant_type, v_specific, v_allomorph_id);
 END;
