@@ -27,7 +27,7 @@ all:
 	make -C corpus/corpus_statistics
 	make -C corpus/search_corpus
 	make -C loader
-	make -C test
+	make -C test/test
 
 install:
 	make -C data/signlist install
@@ -58,4 +58,4 @@ install:
 	make -C corpus/corpus_statistics install
 	make -C corpus/search_corpus install
 	make -C loader install
-	make -C test install
+	make -C test/test install

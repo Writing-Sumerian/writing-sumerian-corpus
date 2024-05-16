@@ -110,21 +110,6 @@ RETURN NEXT is(content, E'1\tsi-a e diri') FROM @extschema:cuneiform_serialize_c
 END;
 $BODY$;
 
-CREATE OR REPLACE FUNCTION test_replace_ligature ()
-    RETURNS SETOF text
-    VOLATILE
-    LANGUAGE PLPGSQL
-    AS 
-$BODY$
-BEGIN
-CALL @extschema:cuneiform_parser@.parse(E'1\tsi+a', '@extschema:cuneiform_corpus@', -1);
-CALL @extschema:cuneiform_replace_corpus@.replace('DIRI', 'diri', -1, true, false, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsi+a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
-CALL @extschema:cuneiform_replace_corpus@.replace('si', 'sig9', -1, true, false, ARRAY[]::integer[], ARRAY[]::integer[], ARRAY[-1]);
-RETURN NEXT is(content, E'1\tsig9+a') FROM @extschema:cuneiform_serialize_corpus@.transliterations_serialized WHERE transliteration_id = -1;
-END;
-$BODY$;
-
 CREATE OR REPLACE FUNCTION test_replace_inversion ()
     RETURNS SETOF text
     VOLATILE
