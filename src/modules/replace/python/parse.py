@@ -102,8 +102,8 @@ def parse_replacement(code: str, id: InOut[int]):
         """)
 
     if len(errors.index):
-        plpy.error('cuneiform_parse_proper_noun syntax error', sqlstate=22000)
+        plpy.error('cuneiform_replace syntax error', sqlstate=22000)
     if r[0]['count']:
-        plpy.error('cuneiform_parse_proper_noun encoding error', sqlstate=22000)
+        plpy.error('cuneiform_replace encoding error', sqlstate=22000)
 
     return {'id': id}
