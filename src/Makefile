@@ -3,6 +3,7 @@ all:
 	make -C data/context
 	make -C data/corpus
 	make -C data/log_tables
+	make -C data/pn_tables
 	make -C modules/log
 	make -C modules/sign_properties
 	make -C modules/create_corpus
@@ -16,6 +17,7 @@ all:
 	make -C modules/search
 	make -C modules/replace
 	make -C modules/print_html
+	make -C modules/pns
 	make -C corpus/cite_corpus
 	make -C corpus/serialize_corpus
 	make -C corpus/print_corpus
@@ -26,14 +28,17 @@ all:
 	make -C corpus/replace_corpus
 	make -C corpus/corpus_statistics
 	make -C corpus/search_corpus
+	make -C corpus/corpus_pns
 	make -C loader
 	make -C test/test
+	make -C test/test_pns
 
 install:
 	make -C data/signlist install
 	make -C data/context install
 	make -C data/corpus install
 	make -C data/log_tables install
+	make -C data/pn_tables install
 	make -C modules/log install
 	make -C modules/sign_properties install
 	make -C modules/create_corpus install
@@ -47,6 +52,7 @@ install:
 	make -C modules/search install
 	make -C modules/replace install
 	make -C modules/print_html install
+	make -C modules/pns install
 	make -C corpus/cite_corpus install
 	make -C corpus/serialize_corpus install
 	make -C corpus/print_corpus install
@@ -57,5 +63,7 @@ install:
 	make -C corpus/replace_corpus install
 	make -C corpus/corpus_statistics install
 	make -C corpus/search_corpus install
+	make -C corpus/corpus_pns install
 	make -C loader install
 	make -C test/test install
+	make -C test/test_pns install

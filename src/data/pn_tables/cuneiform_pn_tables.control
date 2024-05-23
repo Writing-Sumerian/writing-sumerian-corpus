@@ -1,0 +1,5 @@
+comment = 'Proper nouns tables for Cuneiform Database'
+default_version = '0.0.1'
+relocatable = false
+module_pathname = '$libdir/cuneiform_pn_tables'
+requires = 'cuneiform_sign_properties, cuneiform_signlist'

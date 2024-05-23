@@ -1,0 +1,6 @@
+comment = 'Proper nouns for Cuneiform Database'
+default_version = '0.0.1'
+relocatable = false
+module_pathname = '$libdir/cuneiform_pns'
+requires = 'cuneiform_sign_properties, cuneiform_signlist, cuneiform_pn_tables, cuneiform_parser, cuneiform_serialize, cuneiform_search'
+no_relocate = 'cuneiform_pn_tables, cuneiform_search'
