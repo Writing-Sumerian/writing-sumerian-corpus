@@ -9,7 +9,7 @@ CREATE TABLE compounds_pns (
 );
 
 
-CREATE OR REPLACE VIEW compounds_array AS
+CREATE OR REPLACE VIEW compounds_sign_meanings AS
 WITH _ AS NOT MATERIALIZED (
   SELECT 
     corpus.*,
@@ -48,19 +48,20 @@ GROUP BY
   compound_no;
 
 
-CREATE OR REPLACE VIEW compounds_sign_ids_array AS
-SELECT
-  transliteration_id,
-  compound_no,
-  CASE WHEN bool_and(sign_id IS NOT NULL) THEN
-    array_agg(sign_id ORDER BY sign_no)
+CREATE OR REPLACE VIEW compounds_grapheme_ids AS
+SELECT 
+  transliteration_id, 
+  compound_no, 
+  CASE WHEN bool_and(grapheme_id IS NOT NULL) THEN
+    array_agg(grapheme_id ORDER BY sign_no, ordinality)
   ELSE
     NULL
-  END AS sign_ids
-FROM
+  END AS grapheme_ids 
+FROM 
   @extschema:cuneiform_corpus@.corpus
   LEFT JOIN @extschema:cuneiform_corpus@.words USING (transliteration_id, word_no)
-  LEFT JOIN @extschema:cuneiform_signlist@.sign_variants USING (sign_variant_id)
+  LEFT JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (sign_variant_id)
+  LEFT JOIN LATERAL unnest(grapheme_ids) WITH ORDINALITY AS _(grapheme_id, ordinality) ON TRUE
 GROUP BY
   transliteration_id,
   compound_no;
@@ -74,7 +75,7 @@ SELECT
     pns.pn_id,
     pn_variant_no
 FROM
-    compounds_array a
+    compounds_sign_meanings a
     LEFT JOIN @extschema:cuneiform_corpus@.compounds USING (transliteration_id, compound_no)
     JOIN @extschema:cuneiform_pn_tables@.pns USING (pn_type)
     LEFT JOIN @extschema:cuneiform_pn_tables@.pn_variants b ON pns.pn_id = b.pn_id

@@ -95,5 +95,45 @@ EXECUTE format('COPY @extschema@.pn_variants FROM %L CSV NULL ''\N''', v_path ||
 PERFORM setval(pg_get_serial_sequence('@extschema@.pns', 'pn_id'), max(pn_id)) FROM @extschema@.pns;
 
 END
-
 $BODY$;
+
+
+CREATE OR REPLACE VIEW pn_variants_grapheme_ids AS
+WITH RECURSIVE
+a AS (
+  SELECT
+    pn_id,
+    pn_variant_no,
+    1 AS sign_no,
+    grapheme_ids,
+    ARRAY[sign_variant_id] AS sign_variant_ids,
+    variant_type
+  FROM
+    @extschema@.pn_variants_unnest
+    JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (sign_id)
+  WHERE
+    sign_no = 0
+  UNION ALL
+  SELECT
+    pn_id,
+    pn_variant_no,
+    sign_no+1,
+    a.grapheme_ids || sign_variants_composition.grapheme_ids,
+    sign_variant_ids || sign_variant_id,
+    @extschema:cuneiform_signlist@.merge_variant_types(a.variant_type, sign_variants_composition.variant_type)
+  FROM
+    a
+    JOIN @extschema@.pn_variants_unnest USING (pn_id, pn_variant_no, sign_no)
+    JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (sign_id)
+)
+SELECT
+  pn_id,
+  pn_variant_no,
+  grapheme_ids,
+  sign_variant_ids,
+  variant_type
+FROM
+  a
+  JOIN @extschema@.pn_variants USING (pn_id, pn_variant_no)
+WHERE
+  sign_no = cardinality(sign_meanings);
