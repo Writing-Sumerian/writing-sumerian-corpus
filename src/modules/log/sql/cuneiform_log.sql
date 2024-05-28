@@ -96,13 +96,13 @@ $BODY$;
 
 CREATE TYPE log_agg_state_type AS (
     id integer,
-    edit_ids integer[]
+    edit_nos integer[]
 );
 
 
 CREATE OR REPLACE FUNCTION log_agg_sfunc (
         v_state log_agg_state_type,
-        v_edit_id integer,
+        v_edit_no integer,
         v_action text,
         v_id integer,
         v_value text)
@@ -113,11 +113,11 @@ CREATE OR REPLACE FUNCTION log_agg_sfunc (
 BEGIN ATOMIC
 SELECT
     CASE
-        WHEN v_action = 'insert' AND (v_state).id > v_id THEN ROW((v_state).id-1, (v_state).edit_ids)::log_agg_state_type
-        WHEN v_action = 'insert' AND (v_state).id = v_id THEN ROW(null, (v_state).edit_ids || v_edit_id)::log_agg_state_type
-        WHEN v_action = 'delete' AND (v_state).id >= v_id THEN ROW((v_state).id+1, (v_state).edit_ids)::log_agg_state_type
-        WHEN v_action = 'shift' AND (v_state).id >= v_id THEN ROW((v_state).id+v_value::integer, (v_state).edit_ids)::log_agg_state_type
-        WHEN v_action = 'update' AND (v_state).id = v_id THEN ROW((v_state).id, (v_state).edit_ids || v_edit_id)::log_agg_state_type
+        WHEN v_action = 'insert' AND (v_state).id > v_id THEN ROW((v_state).id-1, (v_state).edit_nos)::log_agg_state_type
+        WHEN v_action = 'insert' AND (v_state).id = v_id THEN ROW(null, (v_state).edit_nos || v_edit_no)::log_agg_state_type
+        WHEN v_action = 'delete' AND (v_state).id >= v_id THEN ROW((v_state).id+1, (v_state).edit_nos)::log_agg_state_type
+        WHEN v_action = 'shift' AND (v_state).id >= v_id THEN ROW((v_state).id+v_value::integer, (v_state).edit_nos)::log_agg_state_type
+        WHEN v_action = 'update' AND (v_state).id = v_id THEN ROW((v_state).id, (v_state).edit_nos || v_edit_no)::log_agg_state_type
         WHEN v_action IS NULL THEN ROW(v_id, ARRAY[]::integer[])::log_agg_state_type -- init
         ELSE v_state
     END;
@@ -131,11 +131,11 @@ CREATE OR REPLACE FUNCTION log_agg_finalfunc (
     COST 100
     IMMUTABLE 
 BEGIN ATOMIC
-SELECT (v_state).edit_ids;
+SELECT (v_state).edit_nos;
 END;
 
 
-CREATE OR REPLACE AGGREGATE log_agg (v_edit_id integer, v_action text, v_id integer, v_value text) (
+CREATE OR REPLACE AGGREGATE log_agg (v_edit_no integer, v_action text, v_id integer, v_value text) (
     stype = log_agg_state_type,
     sfunc = log_agg_sfunc,
     finalfunc = log_agg_finalfunc

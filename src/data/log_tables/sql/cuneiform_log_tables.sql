@@ -1,14 +1,16 @@
 CREATE TABLE edits (
-    edit_id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     transliteration_id integer REFERENCES @extschema:cuneiform_corpus@.transliterations(transliteration_id) ON DELETE CASCADE,
-    timestamp timestamp,
+    edit_no integer,
+    timestamp timestamp with time zone,
     user_id integer,
-    internal boolean
+    internal boolean,
+    PRIMARY KEY (transliteration_id, edit_no)
 );
 
 
 CREATE TABLE edit_log (
-    edit_id integer REFERENCES edits (edit_id) ON DELETE CASCADE,
+    transliteration_id integer,
+    edit_no integer,
     log_no integer,
     entry_no integer,
     key_col text,
@@ -16,13 +18,13 @@ CREATE TABLE edit_log (
     action text,
     val text,
     val_old text,
-    PRIMARY KEY (edit_id, log_no)
+    PRIMARY KEY (transliteration_id, edit_no, log_no),
+    FOREIGN KEY (transliteration_id, edit_no) REFERENCES edits(transliteration_id, edit_no) ON DELETE CASCADE
 );
 
 
 SELECT pg_catalog.pg_extension_config_dump('@extschema@.edits', '');
 SELECT pg_catalog.pg_extension_config_dump('@extschema@.edit_log', '');
-SELECT pg_catalog.pg_extension_config_dump(pg_get_serial_sequence('@extschema@.edits', 'edit_id'), '');
 
 
 CREATE OR REPLACE PROCEDURE load_log (path text)
@@ -31,10 +33,8 @@ CREATE OR REPLACE PROCEDURE load_log (path text)
 
 BEGIN
 
-EXECUTE format('COPY @extschema@.edits(edit_id, transliteration_id, timestamp, user_id, internal) FROM %L CSV NULL ''\N''', path || 'edits.csv');
-EXECUTE format('COPY @extschema@.edit_log(edit_id, log_no, entry_no, key_col, target, action, val, val_old) FROM %L CSV NULL ''\N''', path || 'edit_log.csv');
-
-PERFORM setval(pg_get_serial_sequence('@extschema@.edits', 'edit_id'), max(edit_id)) FROM @extschema@.edits;
+EXECUTE format('COPY @extschema@.edits(transliteration_id, edit_no, timestamp, user_id, internal) FROM %L CSV NULL ''\N''', path || 'edits.csv');
+EXECUTE format('COPY @extschema@.edit_log(transliteration_id, edit_no, log_no, entry_no, key_col, target, action, val, val_old) FROM %L CSV NULL ''\N''', path || 'edit_log.csv');
 
 END
 $BODY$;

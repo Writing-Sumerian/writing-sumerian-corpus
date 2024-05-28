@@ -1,16 +1,16 @@
 CREATE OR REPLACE VIEW corpus_modified AS
 WITH corpus_edits AS (
     SELECT
-        row_number() OVER (PARTITION BY transliteration_id ORDER BY edit_id DESC, log_no DESC) AS ord,
+        row_number() OVER (PARTITION BY transliteration_id ORDER BY edit_no DESC, log_no DESC) AS ord,
         transliteration_id,
         sign_no,
-        edit_id::integer,
+        edit_no,
         entry_no,
         split_part(action, ' ', 1) AS action,
         val
     FROM 
         @extschema:cuneiform_log_tables@.edit_log 
-        JOIN @extschema:cuneiform_log_tables@.edits USING (edit_id)
+        JOIN @extschema:cuneiform_log_tables@.edits USING (transliteration_id, edit_no)
         JOIN @extschema:cuneiform_corpus@.corpus USING (transliteration_id)
     WHERE
         target = 'corpus'
@@ -28,7 +28,7 @@ WITH corpus_edits AS (
 SELECT
     transliteration_id,
     sign_no,
-    log_agg(edit_id, action, entry_no, val ORDER BY ord) AS edit_ids
+    log_agg(edit_no, action, entry_no, val ORDER BY ord) AS edit_nos
 FROM
     corpus_edits
 GROUP BY
@@ -37,7 +37,8 @@ GROUP BY
 
 
 CREATE OR REPLACE PROCEDURE undo (
-    v_edit_id integer, 
+    v_transliteration_id integer,
+    v_edit_no integer, 
     v_schema text
     )
     LANGUAGE PLPGSQL
@@ -53,9 +54,9 @@ FOR v_query IN
         @extschema:cuneiform_log@.edit_log_undo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val_old)
     FROM 
         @extschema:cuneiform_log_tables@.edit_log 
-        JOIN @extschema:cuneiform_log_tables@.edits USING (edit_id)
     WHERE 
-        edit_id = v_edit_id
+        transliteration_id = v_transliteration_id
+        AND edit_no = v_edit_no
     ORDER BY log_no DESC 
     LOOP
     RAISE INFO USING MESSAGE = v_query;
@@ -68,7 +69,7 @@ $BODY$;
 
 CREATE OR REPLACE PROCEDURE revert_to (
     v_transliteration_id integer, 
-    v_timestamp timestamp, 
+    v_timestamp timestamp with time zone, 
     v_schema text
     )
     LANGUAGE PLPGSQL
@@ -85,11 +86,11 @@ FOR v_query IN
         @extschema:cuneiform_log@.edit_log_undo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val_old) 
     FROM 
         @extschema:cuneiform_log_tables@.edit_log 
-        JOIN @extschema:cuneiform_log_tables@.edits USING (edit_id)
+        JOIN @extschema:cuneiform_log_tables@.edits USING (transliteration_id, edit_no)
     WHERE 
         transliteration_id = v_transliteration_id 
         AND timestamp > v_timestamp
-    ORDER BY timestamp DESC, log_no DESC 
+    ORDER BY edit_no DESC, log_no DESC 
     LOOP
     RAISE INFO USING MESSAGE = v_query;
     DISCARD PLANS;
@@ -100,7 +101,8 @@ $BODY$;
 
 
 CREATE OR REPLACE PROCEDURE redo (
-    v_edit_id integer, 
+    v_transliteration_id integer,
+    v_edit_no integer, 
     v_schema text
     )
     LANGUAGE PLPGSQL
@@ -116,9 +118,9 @@ FOR v_query IN
         @extschema:cuneiform_log@.edit_log_redo_query(transliteration_id, v_schema, entry_no, key_col, target, action, val) 
     FROM 
         @extschema:cuneiform_log_tables@.edit_log 
-        JOIN @extschema:cuneiform_log_tables@.edits USING (edit_id)
     WHERE 
-        edit_id = v_edit_id
+        transliteration_id = v_transliteration_id
+        AND edit_no = v_edit_no
     ORDER BY log_no
     LOOP
     RAISE INFO USING MESSAGE = v_query;
@@ -131,7 +133,7 @@ $BODY$;
 
 CREATE OR REPLACE PROCEDURE revert_corpus_to (
     v_transliteration_id integer, 
-    v_timestamp timestamp
+    v_timestamp timestamp with time zone
     )
     LANGUAGE PLPGSQL
     AS 

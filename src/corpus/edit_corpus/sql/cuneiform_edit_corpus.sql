@@ -7,19 +7,23 @@ CREATE OR REPLACE PROCEDURE edit_corpus (
     LANGUAGE PLPGSQL
 AS $BODY$
 DECLARE
-    v_edit_id       integer;
+    v_edit_no       integer;
+    v_changes       boolean;
 BEGIN
-    INSERT INTO @extschema:cuneiform_log_tables@.edits (transliteration_id, timestamp, user_id, internal) 
+    SELECT COALESCE(max(edit_no)+1, 0) INTO v_edit_no FROM @extschema:cuneiform_log_tables@.edits WHERE transliteration_id = v_transliteration_id;
+
+    INSERT INTO @extschema:cuneiform_log_tables@.edits
     SELECT 
         v_transliteration_id, 
+        v_edit_no,
         CURRENT_TIMESTAMP, 
         v_user_id,
-        v_internal
-    RETURNING edit_id INTO v_edit_id;
+        v_internal;
 
     INSERT INTO @extschema:cuneiform_log_tables@.edit_log 
     SELECT
-        v_edit_id,
+        v_transliteration_id,
+        v_edit_no,
         ordinality,
         entry_no,
         key_col,
@@ -29,6 +33,11 @@ BEGIN
         val_old
     FROM
         @extschema:cuneiform_editor@.edit(v_source_schema, '@extschema:cuneiform_corpus@', v_transliteration_id) WITH ORDINALITY;
+
+    SELECT count(*) > 0 INTO v_changes FROM @extschema:cuneiform_log_tables@.edit_log WHERE transliteration_id = v_transliteration_id AND edit_no = v_edit_no;
+    IF NOT v_changes THEN
+        DELETE FROM @extschema:cuneiform_log_tables@.edits WHERE transliteration_id = v_transliteration_id AND edit_no = v_edit_no;
+    END IF;
 END;
 $BODY$;
 

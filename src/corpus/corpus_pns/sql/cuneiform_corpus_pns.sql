@@ -519,7 +519,8 @@ DECLARE
 v_transliteration_id integer;
 v_compound_no integer;
 v_sign_meanings @extschema:cuneiform_sign_properties@.sign_meaning[];
-v_edit_id integer;
+v_edit_no integer;
+v_changes boolean;
 
 BEGIN
 
@@ -535,27 +536,36 @@ FOR v_transliteration_id, v_compound_no, v_sign_meanings IN
 LOOP
 
   BEGIN
-    INSERT INTO @extschema:cuneiform_log_tables@.edits (transliteration_id, timestamp, user_id, internal) 
-      SELECT 
-          v_transliteration_id, 
-          CURRENT_TIMESTAMP, 
-          v_user_id,
-          v_internal
-      RETURNING edit_id INTO v_edit_id;
+    SELECT COALESCE(max(edit_no)+1, 0) INTO v_edit_no FROM @extschema:cuneiform_log_tables@.edits WHERE transliteration_id = v_transliteration_id;
 
-      INSERT INTO @extschema:cuneiform_log_tables@.edit_log 
-      SELECT
-          v_edit_id,
-          ordinality,
-          entry_no,
-          key_col,
-          target,
-          action,
-          val,
-          val_old
-      FROM
-          @extschema@.adjust_compound_to_sign_meanings(v_transliteration_id, v_compound_no, v_sign_meanings) WITH ORDINALITY;
-    RAISE NOTICE 'Replaced compound % in %', v_compound_no, v_transliteration_id;
+    INSERT INTO @extschema:cuneiform_log_tables@.edits
+    SELECT 
+        v_transliteration_id, 
+        v_edit_no,
+        CURRENT_TIMESTAMP, 
+        v_user_id,
+        v_internal;
+
+    INSERT INTO @extschema:cuneiform_log_tables@.edit_log 
+    SELECT
+        v_transliteration_id,
+        v_edit_no,
+        ordinality,
+        entry_no,
+        key_col,
+        target,
+        action,
+        val,
+        val_old
+    FROM
+        @extschema@.adjust_compound_to_sign_meanings(v_transliteration_id, v_compound_no, v_sign_meanings) WITH ORDINALITY;
+
+    SELECT count(*) > 0 INTO v_changes FROM @extschema:cuneiform_log_tables@.edit_log WHERE transliteration_id = v_transliteration_id AND edit_no = v_edit_no;
+    IF NOT v_changes THEN
+        DELETE FROM @extschema:cuneiform_log_tables@.edits WHERE transliteration_id = v_transliteration_id AND edit_no = v_edit_no;
+    ELSE
+      RAISE NOTICE 'Replaced compound % in %', v_compound_no, v_transliteration_id;
+    END IF;
   EXCEPTION
     WHEN OTHERS THEN RAISE NOTICE 'Warning: Cannot replace compound % in %', v_compound_no, v_transliteration_id;
   END;
