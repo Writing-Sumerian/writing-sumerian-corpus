@@ -96,15 +96,15 @@ BEGIN ATOMIC
 END;
 
 
-CREATE OR REPLACE FUNCTION print_graphemes_code(v_graphemes text)
+CREATE OR REPLACE FUNCTION print_unknown_value_code(v_segments text)
     RETURNS text
     IMMUTABLE
     LANGUAGE SQL
 BEGIN ATOMIC
     SELECT 
         CASE
-            WHEN v_graphemes ~ '\.' THEN '|' || v_graphemes || '|'
-            ELSE v_graphemes
+            WHEN v_segments ~ '\.' THEN '|' || v_segments || '|'
+            ELSE v_segments
         END;
 END;
 
@@ -116,7 +116,7 @@ CALL @extschema:cuneiform_print_core@.create_signlist_print (
     'print_spec_code', 
     'identity', 
     'identity',
-    'print_graphemes_code'
+    'print_unknown_value_code'
 );
 
 

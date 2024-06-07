@@ -116,12 +116,12 @@ BEGIN ATOMIC
     SELECT compose_sign_html(@extschema:cuneiform_signlist@.parse_sign(v_sign));
 END;
 
-CREATE OR REPLACE FUNCTION print_graphemes_html(v_graphemes text)
+CREATE OR REPLACE FUNCTION print_unknown_value_html(v_segments text)
     RETURNS text
     IMMUTABLE
     LANGUAGE SQL
 BEGIN ATOMIC
-    SELECT '<span class=''unknown_value''>' || v_graphemes || '</span>';
+    SELECT '<span class=''unknown_value''>' || v_segments || '</span>';
 END;
 
 CREATE OR REPLACE FUNCTION print_spec_html (
@@ -148,7 +148,7 @@ CALL @extschema:cuneiform_print_core@.create_signlist_print(
     'print_spec_html', 
     'print_sign_html', 
     'print_sign_html',
-    'print_graphemes_html'
+    'print_unknown_value_html'
 );
 
 

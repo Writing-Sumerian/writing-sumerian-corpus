@@ -6,7 +6,7 @@ CREATE OR REPLACE PROCEDURE create_signlist_print (
         v_print_spec text,
         v_print_grapheme text,
         v_print_glyph text,
-        v_print_graphemes text
+        v_print_unknown_value text
     )
     LANGUAGE PLPGSQL
     AS
@@ -18,6 +18,7 @@ EXECUTE format($$
         sign_variant_id integer PRIMARY KEY REFERENCES @extschema:cuneiform_signlist@.sign_variants (sign_variant_id) DEFERRABLE INITIALLY DEFERRED,
         sign_id integer NOT NULL REFERENCES @extschema:cuneiform_signlist@.signs (sign_id) DEFERRABLE INITIALLY DEFERRED,
         variant_type sign_variant_type NOT NULL,
+        specific boolean NOT NULL,
         length integer NOT NULL,
         graphemes_print text NOT NULL,
         glyphs_print text NOT NULL
@@ -71,7 +72,9 @@ EXECUTE format($$
         sign_variant_id,
         sign_id,
         variant_type,
-        %3$s(variant_type, graphemes_print, glyphs_print) AS spec_print
+        specific,
+        %3$s(variant_type, graphemes_print, glyphs_print) AS spec_print,
+        glyphs_print
     FROM
         %1$I.sign_variants_%2$s
     $$,
@@ -89,6 +92,7 @@ EXECUTE format($$
         sign_variant_id,
         sign_id,
         sign_variants.variant_type,
+        sign_variants.specific,
         count(*) AS length,
         string_agg(%3$s(grapheme), '.' ORDER BY ord) AS graphemes_print,
         string_agg(%4$s(glyph), '.' ORDER BY ord) AS glyphs_print
@@ -128,6 +132,7 @@ EXECUTE format($$
         ON CONFLICT (sign_variant_id) DO UPDATE SET 
             sign_id = EXCLUDED.sign_id,
             variant_type = EXCLUDED.variant_type,
+            specific = EXCLUDED.specific,
             length = EXCLUDED.length,
             graphemes_print = EXCLUDED.graphemes_print,
             glyphs_print = EXCLUDED.glyphs_print;
@@ -208,7 +213,7 @@ EXECUTE format($$
 
 EXECUTE format($$
     CREATE TRIGGER sign_variants_%2$s_sign_variants_trigger
-    AFTER INSERT OR DELETE OR UPDATE OF sign_id, allograph_ids, variant_type ON @extschema:cuneiform_signlist@.sign_variants 
+    AFTER INSERT OR DELETE OR UPDATE OF sign_id, allograph_ids, variant_type, specific ON @extschema:cuneiform_signlist@.sign_variants 
     FOR EACH ROW
     EXECUTE FUNCTION %1$I.sign_variants_%2$s_sign_variants_trigger_fun()
     $$,
@@ -260,14 +265,18 @@ CREATE VIEW %1$I.signs_%2$s_view AS
     SELECT
         sign_variant_id,
         sign_id,
-        sign_print || CASE WHEN variant_type != 'default' THEN spec_print ELSE '' END AS sign_print
+        CASE 
+            WHEN variant_type = 'default' THEN sign_print
+            WHEN specific THEN %3$s(glyphs_print)
+            ELSE sign_print || spec_print
+        END AS sign_print
     FROM
         %1$I.sign_specs_%2$s
         LEFT JOIN a USING (sign_id)
     $$,
     v_schema,
     v_suffix,
-    v_print_graphemes);
+    v_print_unknown_value);
 
 EXECUTE format($$
     INSERT INTO %1$I.signs_%2$s SELECT * FROM %1$I.signs_%2$s_view
