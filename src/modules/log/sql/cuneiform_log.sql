@@ -93,6 +93,102 @@ END;
 $BODY$;
 
 
+CREATE OR REPLACE FUNCTION log_trace_entry (
+        v_entry_no integer,
+        v_action text,
+        v_id integer
+    )
+    RETURNS integer
+    LANGUAGE SQL
+    COST 100
+    IMMUTABLE 
+BEGIN ATOMIC
+SELECT
+    CASE
+        WHEN v_action = 'insert' AND v_entry_no >= v_id THEN v_entry_no+1
+        WHEN v_action = 'delete' AND v_entry_no = v_id THEN NULL
+        WHEN v_action = 'delete' AND v_entry_no > v_id THEN v_entry_no-1
+        WHEN v_action IS NULL THEN v_id     -- init
+        ELSE v_entry_no
+    END;
+END;
+
+CREATE OR REPLACE AGGREGATE log_trace_entry_agg (v_action text, v_id integer) (
+    stype = integer,
+    sfunc = log_trace_entry
+);
+
+
+CREATE OR REPLACE FUNCTION log_trace_entry_backwards (
+        v_entry_no integer,
+        v_action text,
+        v_id integer
+    )
+    RETURNS integer
+    LANGUAGE SQL
+    COST 100
+    IMMUTABLE 
+BEGIN ATOMIC
+SELECT
+    CASE
+        WHEN v_action = 'insert' AND v_entry_no >= v_id THEN v_entry_no-1
+        WHEN v_action = 'insert' AND v_entry_no = v_id THEN NULL
+        WHEN v_action = 'delete' AND v_entry_no > v_id THEN v_entry_no+1
+        ELSE v_entry_no
+    END;
+END;
+
+CREATE OR REPLACE AGGREGATE log_trace_entry_backwards_agg (v_action text, v_id integer) (
+    stype = integer,
+    sfunc = log_trace_entry_backwards
+);
+
+
+CREATE OR REPLACE FUNCTION log_affected_entries_sfunc (
+        v_entry_nos integer[],
+        v_action text,
+        v_id integer)
+    RETURNS integer[]
+    LANGUAGE SQL
+    COST 100
+    IMMUTABLE 
+BEGIN ATOMIC
+SELECT
+    array_agg(log_trace_entry(entry_no, v_action, v_id)) 
+    || 
+    CASE 
+        WHEN v_action ~ '^update' OR v_action = 'insert' OR v_action = 'shift' THEN ARRAY[v_id]::integer[]
+        ELSE ARRAY[]::integer[]
+    END
+FROM
+    unnest(v_entry_nos) AS _(entry_no);
+END;
+
+
+CREATE OR REPLACE FUNCTION log_affected_entries_finalfunc (
+        v_entry_nos integer[]
+    )
+    RETURNS integer[]
+    LANGUAGE SQL
+    COST 100
+    IMMUTABLE 
+BEGIN ATOMIC
+SELECT 
+    array_agg(DISTINCT entry_no ORDER BY entry_no)
+FROM
+    unnest(v_entry_nos) AS _(entry_no)
+WHERE
+    entry_no IS NOT NULL;
+END;
+
+
+CREATE OR REPLACE AGGREGATE log_affected_entries_agg (v_action text, v_id integer) (
+    stype = integer[],
+    sfunc = log_affected_entries_sfunc,
+    finalfunc = log_affected_entries_finalfunc
+);
+
+
 
 CREATE TYPE log_agg_state_type AS (
     id integer,
@@ -116,8 +212,7 @@ SELECT
         WHEN v_action = 'insert' AND (v_state).id > v_id THEN ROW((v_state).id-1, (v_state).edit_nos)::log_agg_state_type
         WHEN v_action = 'insert' AND (v_state).id = v_id THEN ROW(null, (v_state).edit_nos || v_edit_no)::log_agg_state_type
         WHEN v_action = 'delete' AND (v_state).id >= v_id THEN ROW((v_state).id+1, (v_state).edit_nos)::log_agg_state_type
-        WHEN v_action = 'shift' AND (v_state).id >= v_id THEN ROW((v_state).id+v_value::integer, (v_state).edit_nos)::log_agg_state_type
-        WHEN v_action = 'update' AND (v_state).id = v_id THEN ROW((v_state).id, (v_state).edit_nos || v_edit_no)::log_agg_state_type
+        WHEN v_action ~ '^update' AND (v_state).id = v_id THEN ROW((v_state).id, (v_state).edit_nos || v_edit_no)::log_agg_state_type
         WHEN v_action IS NULL THEN ROW(v_id, ARRAY[]::integer[])::log_agg_state_type -- init
         ELSE v_state
     END;

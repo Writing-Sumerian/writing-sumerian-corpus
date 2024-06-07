@@ -2,5 +2,5 @@ comment = 'Log functions for Cuneiform Corpus'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_log_corpus'
-requires = 'cuneiform_corpus, cuneiform_log, cuneiform_log_tables'
-no_relocate = 'cuneiform_corpus, cuneiform_log, cuneiform_log_tables'
+requires = 'cuneiform_create_corpus, cuneiform_serialize, cuneiform_actions, cuneiform_corpus, cuneiform_log, cuneiform_log_tables'
+no_relocate = 'cuneiform_create_corpus, cuneiform_serialize, cuneiform_actions, cuneiform_corpus, cuneiform_log, cuneiform_log_tables'
