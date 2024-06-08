@@ -73,7 +73,7 @@ SELECT * FROM (
     pn_id,
     pn_variant_no,
     NULL AS sign_no,
-    @extschema:cuneiform_search@.cun_position(1, 0, TRUE) AS position,
+    @extschema:cuneiform_search@.cun_position(0, 0, TRUE) AS position,
     -1 AS word_no,
     -1 AS compound_no,
     -1 AS line_no,
