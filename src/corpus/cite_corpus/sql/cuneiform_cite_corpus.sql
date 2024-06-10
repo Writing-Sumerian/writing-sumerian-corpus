@@ -44,7 +44,7 @@ SELECT
     text_id,
     citation || 
         CASE WHEN count(*) OVER (PARTITION BY ensemble_id) > 1
-            THEN COALESCE('('||type||')', '')
+            THEN COALESCE(' ('||type||')', '')
             ELSE ''
         END AS extended_citation
 FROM
