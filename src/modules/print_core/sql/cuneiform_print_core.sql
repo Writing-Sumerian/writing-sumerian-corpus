@@ -499,3 +499,31 @@ EXECUTE format($$
 
 END;
 $BODY$;
+
+
+CREATE OR REPLACE FUNCTION extract_number_specs (
+    v_sign text
+  )
+  RETURNS TABLE(part text, spec text)
+  LANGUAGE PLPYTHON3U
+  IMMUTABLE
+  STRICT
+  ROWS 2
+AS $BODY$
+    j = 0
+    k = 0
+    level = 0
+    for i, c in enumerate(v_sign):
+        if c == '(':
+            if not level:
+                j = i+1
+            level += 1
+        elif c == ')':
+            level -= 1
+            if not level:
+                yield v_sign[k:j-1], v_sign[j:i]
+                j = i+1
+                k = j
+    if k < len(v_sign):
+        yield v_sign[k:], None
+$BODY$;

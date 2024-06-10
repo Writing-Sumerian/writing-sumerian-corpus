@@ -152,7 +152,24 @@ CALL @extschema:cuneiform_print_core@.create_signlist_print(
 );
 
 
-CREATE OR REPLACE FUNCTION print_sign_meanings (v_sign_meanings @extschema:cuneiform_sign_properties@.sign_meaning[])
+CREATE OR REPLACE FUNCTION print_number_html(v_number text)
+  RETURNS text
+  STABLE
+  COST 1000
+  LANGUAGE SQL
+BEGIN ATOMIC
+    SELECT 
+        string_agg(
+            regexp_replace(part, '[!?*]+', '<span class=''critics''>\1</span>', 'g') 
+                || COALESCE('<span class=''signspec''>' || print_html.print_sign_html(spec) || '</span>', ''), 
+            '' 
+            ORDER BY ordinality
+        ) 
+    FROM @extschema:cuneiform_print_core@.extract_number_specs(v_number) WITH ORDINALITY;
+END;
+
+
+CREATE OR REPLACE FUNCTION print_sign_meanings_html (v_sign_meanings @extschema:cuneiform_sign_properties@.sign_meaning[])
   RETURNS text
   STABLE
   COST 1000

@@ -1,7 +1,13 @@
 CREATE OR REPLACE VIEW corpus_html AS
 SELECT
     transliteration_id,
-    COALESCE(character_print, custom_value) AS value,
+    COALESCE(
+        character_print, 
+        CASE
+            WHEN type = 'number' THEN @extschema:cuneiform_print_html@.print_number_html(custom_value)
+            WHEN type != 'punctuation' THEN @extschema:cuneiform_print_html@.print_sign_html(custom_value)
+        END
+    ) AS value,
     sign_no, 
     word_no, 
     compound_no, 
