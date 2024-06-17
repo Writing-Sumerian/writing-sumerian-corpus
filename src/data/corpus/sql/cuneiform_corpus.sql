@@ -173,20 +173,42 @@ $BODY$
 
  BEGIN
 
- SET CONSTRAINTS ALL DEFERRED;
-
+ TRUNCATE @extschema@.compositions CASCADE;
  EXECUTE format('COPY @extschema@.compositions FROM %L CSV NULL ''\N''', v_path || 'compositions.csv');
+ COMMIT;
+ TRUNCATE @extschema@.corpora CASCADE;
  EXECUTE format('COPY @extschema@.corpora FROM %L CSV NULL ''\N''', v_path || 'corpora.csv');
+ COMMIT;
+ TRUNCATE @extschema@.ensembles CASCADE;
  EXECUTE format('COPY @extschema@.ensembles FROM %L CSV NULL ''\N''', v_path || 'ensembles.csv');
+ COMMIT;
+ TRUNCATE @extschema@.texts CASCADE;
  EXECUTE format('COPY @extschema@.texts FROM %L CSV NULL ''\N''', v_path || 'texts.csv');
- EXECUTE format('COPY @extschema@.transliterations FROM %L CSV NULL ''\N''', v_path || 'transliterations.csv');         
+ COMMIT;
+ TRUNCATE @extschema@.transliterations CASCADE;
+ EXECUTE format('COPY @extschema@.transliterations FROM %L CSV NULL ''\N''', v_path || 'transliterations.csv');      
+ COMMIT;
+ TRUNCATE @extschema@.surfaces CASCADE;   
  EXECUTE format('COPY @extschema@.surfaces FROM %L CSV NULL ''\N''', v_path || 'surfaces.csv');
+ COMMIT;
+ TRUNCATE @extschema@.blocks CASCADE;
  EXECUTE format('COPY @extschema@.blocks FROM %L CSV NULL ''\N''', v_path || 'blocks.csv');
+ COMMIT;
+ TRUNCATE @extschema@.lines CASCADE;
  EXECUTE format('COPY @extschema@.lines FROM %L CSV NULL ''\N''', v_path || 'lines.csv');
+ COMMIT;
+ TRUNCATE @extschema@.sections CASCADE;
  EXECUTE format('COPY @extschema@.sections FROM %L CSV NULL ''\N''', v_path || 'sections.csv');
+ COMMIT;
+ TRUNCATE @extschema@.compounds CASCADE;
  EXECUTE format('COPY @extschema@.compounds FROM %L CSV NULL ''\N''', v_path || 'compounds.csv');
+ COMMIT;
+ TRUNCATE @extschema@.words CASCADE;
  EXECUTE format('COPY @extschema@.words FROM %L CSV NULL ''\N''', v_path || 'words.csv');
+ COMMIT;
+ TRUNCATE @extschema@.corpus CASCADE;
  EXECUTE format('COPY @extschema@.corpus FROM %L CSV NULL ''\N''', v_path || 'corpus.csv');
+ COMMIT;
 
  PERFORM setval(pg_get_serial_sequence('@extschema@.compositions', 'composition_id'), max(composition_id)) FROM @extschema@.compositions;
  PERFORM setval(pg_get_serial_sequence('@extschema@.corpora', 'corpus_id'), max(corpus_id)) FROM @extschema@.corpora;
