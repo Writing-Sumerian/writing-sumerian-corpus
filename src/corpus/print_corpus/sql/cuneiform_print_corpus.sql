@@ -5,7 +5,7 @@ SELECT
         character_print, 
         CASE
             WHEN type = 'number' THEN @extschema:cuneiform_print_html@.print_number_html(custom_value)
-            WHEN type != 'punctuation' THEN @extschema:cuneiform_print_html@.print_sign_html(custom_value)
+            WHEN type != 'punctuation' and type != 'description' THEN @extschema:cuneiform_print_html@.print_sign_html(custom_value)
         END
     ) AS value,
     sign_no, 
