@@ -154,6 +154,8 @@ BEGIN
         OR ((OLD).provenience_id != (NEW).provenience_id AND (provenience_id = (OLD).provenience_id OR provenience_id = (NEW).provenience_id))
         OR ((OLD).genre_id != (NEW).genre_id AND (genre_id = (OLD).genre_id OR genre_id = (NEW).genre_id))
         OR ((OLD).object_id != (NEW).object_id AND (object_id = (OLD).object_id OR object_id = (NEW).object_id));
+
+    RETURN NULL;
 END;
 $BODY$;
 
