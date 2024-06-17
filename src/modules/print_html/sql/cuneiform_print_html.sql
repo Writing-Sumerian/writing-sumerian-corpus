@@ -177,7 +177,7 @@ CREATE OR REPLACE FUNCTION print_sign_meanings_html (v_sign_meanings @extschema:
 BEGIN ATOMIC
     SELECT
         (cun_agg_html (character_print, ordinality::integer, word_no, 0, NULL, 0, (CASE WHEN unnest.value_id IS NULL THEN 'sign' ELSE 'value' END)::@extschema:cuneiform_sign_properties@.sign_type, indicator_type, phonographic, stem, 'intact'::@extschema:cuneiform_sign_properties@.sign_condition, NULL, 
-            FALSE, FALSE, FALSE, NULL, NULL, FALSE, NULL, NULL, NULL, FALSE, VARIADIC ARRAY[]::integer[] ORDER BY ordinality))[1]
+            FALSE, FALSE, FALSE, NULL, NULL, capitalized, NULL, NULL, NULL, FALSE, VARIADIC ARRAY[]::integer[] ORDER BY ordinality))[1]
     FROM
         unnest(v_sign_meanings) WITH ORDINALITY
         LEFT JOIN @extschema:cuneiform_signlist@.sign_variants USING (sign_id)
