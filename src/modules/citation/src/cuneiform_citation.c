@@ -13,14 +13,14 @@
 int32 dash_size = strlen("–");
 int32 dot_size = strlen("; ");
 
-char* cun_copy_n(char* s1, const char* s2, size_t n)
+static char* cun_copy_n(char* s1, const char* s2, size_t n)
 {
     while(n-- != 0)
         *s1++ = *s2++;
     return s1;
 }
 
-char* cun_copy(char* s1, const char* s2)
+static char* cun_copy(char* s1, const char* s2)
 {
     while(*s2 != '\0')
         *s1++ = *s2++;
@@ -28,11 +28,14 @@ char* cun_copy(char* s1, const char* s2)
 }
 
 
-text* copy_text(const text* b, MemoryContext memcontext)
+static text* copy_text(const text* b, MemoryContext memcontext)
 {
+    text* a;
+
     if(!b)
         return NULL;
-    text* a = (text*) MemoryContextAllocZero(memcontext, VARSIZE_ANY_EXHDR(b)+VARHDRSZ);
+
+    a = (text*) MemoryContextAllocZero(memcontext, VARSIZE_ANY_EXHDR(b)+VARHDRSZ);
     SET_VARSIZE(a, VARSIZE_ANY_EXHDR(b)+VARHDRSZ);
     memcpy((void*)VARDATA(a), (void*)VARDATA_ANY(b), VARSIZE_ANY_EXHDR(b));
     return a;
@@ -61,18 +64,20 @@ typedef struct State
 } State;
 
 
-text* assamble_range(const State* state, text* string)
+static text* assamble_range(const State* state, text* string)
 {
     const int32 string_size = VARSIZE_ANY_EXHDR(string);
     int32 size = string_size;
-
-    if(string_size)
-        size += dot_size;
 
     const int changes 
         = 4 * (int)(state->surface_no != state->surface_no_start) 
         + 2 * (int)(state->block_no != state->block_no_start)
         + (int)(state->line_no != state->line_no_start);
+
+    char* s;
+
+    if(string_size)
+        size += dot_size;
 
     if(changes > 3)
         size += VARSIZE_ANY_EXHDR(state->surface_start) + VARSIZE_ANY_EXHDR(state->surface) + 2;
@@ -88,7 +93,7 @@ text* assamble_range(const State* state, text* string)
 
      
     string = (text*)repalloc(string, string_size + VARHDRSZ +1000);
-    char* s = VARDATA(string)+string_size;
+    s = VARDATA(string)+string_size;
 
     
     if(string_size)
@@ -134,6 +139,13 @@ Datum cuneiform_citation_agg_sfunc(PG_FUNCTION_ARGS)
     MemoryContext aggcontext;
     State* state;
 
+    const text* surface = PG_ARGISNULL(1) ? NULL : PG_GETARG_TEXT_PP(1);
+    const int32 surface_no = PG_GETARG_INT32(2);
+    const text* block = PG_ARGISNULL(3) ? NULL : PG_GETARG_TEXT_PP(3);
+    const int32 block_no = PG_GETARG_INT32(4);
+    const text* line = PG_ARGISNULL(5) ? NULL : PG_GETARG_TEXT_PP(5);
+    const int32 line_no = PG_GETARG_INT32(6);
+
     if (!AggCheckCallContext(fcinfo, &aggcontext))
     {
         /* cannot be called directly because of internal-type argument */
@@ -156,13 +168,6 @@ Datum cuneiform_citation_agg_sfunc(PG_FUNCTION_ARGS)
     }
     else
         state = (State*) PG_GETARG_POINTER(0);
-
-    const text* surface = PG_ARGISNULL(1) ? NULL : PG_GETARG_TEXT_PP(1);
-    const int32 surface_no = PG_GETARG_INT32(2);
-    const text* block = PG_ARGISNULL(3) ? NULL : PG_GETARG_TEXT_PP(3);
-    const int32 block_no = PG_GETARG_INT32(4);
-    const text* line = PG_ARGISNULL(5) ? NULL : PG_GETARG_TEXT_PP(5);
-    const int32 line_no = PG_GETARG_INT32(6);
 
     if(line_no != state->line_no+1)
     {
@@ -211,19 +216,22 @@ Datum cuneiform_citation_agg_sfunc(PG_FUNCTION_ARGS)
 Datum cuneiform_citation_agg_finalfunc(PG_FUNCTION_ARGS)
 {
     MemoryContext aggcontext;
+    text* string;
+    const State* state;
+
     if (!AggCheckCallContext(fcinfo, &aggcontext))
     {
         /* cannot be called directly because of internal-type argument */
         elog(ERROR, "array_agg_transfn called in non-aggregate context");
     }
 
-    const State* state = PG_ARGISNULL(0) ? NULL : (State*) PG_GETARG_POINTER(0);
+    state = PG_ARGISNULL(0) ? NULL : (State*) PG_GETARG_POINTER(0);
     if(state == NULL)
         PG_RETURN_NULL();
 
     // the finalfunc may not alter state, therefore we need to copy everything
 
-    text* string = copy_text(state->string, aggcontext);
+    string = copy_text(state->string, aggcontext);
     string = assamble_range(state, string);
 
     PG_RETURN_TEXT_P(string);
