@@ -5,7 +5,9 @@ CREATE TABLE corpora (
     corpus_id integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     name_short text NOT NULL UNIQUE,
     name_long text NOT NULL,
-    core boolean NOT NULL
+    core boolean NOT NULL,
+    date date,
+    reference text
 );
 
 
@@ -75,7 +77,8 @@ CREATE TABLE texts (
 CREATE TABLE transliterations (
     transliteration_id integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     text_id integer NOT NULL REFERENCES texts (text_id) DEFERRABLE INITIALLY IMMEDIATE,
-    corpus_id integer NOT NULL REFERENCES corpora (corpus_id) DEFERRABLE INITIALLY IMMEDIATE
+    corpus_id integer NOT NULL REFERENCES corpora (corpus_id) DEFERRABLE INITIALLY IMMEDIATE,
+    reference text
 );
 
 
