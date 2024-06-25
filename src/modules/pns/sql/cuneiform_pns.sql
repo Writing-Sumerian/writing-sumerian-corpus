@@ -17,14 +17,36 @@ CREATE VIEW pns_serialized AS (
 );
 
 
-CREATE OR REPLACE VIEW pns_search AS (
+CREATE TABLE pns_search (
+  pn_id integer NOT NULL,
+  pn_variant_no integer NOT NULL,
+  sign_no integer,
+  position @extschema:cuneiform_search@.cun_position,
+  word_no integer,
+  compound_no integer,
+  line_no integer,
+  value_id integer,
+  sign_variant_id integer,
+  grapheme_id integer,
+  glyph_id integer,
+  type @extschema:cuneiform_sign_properties@.sign_type,
+  indicator_type @extschema:cuneiform_sign_properties@.indicator_type,
+  phonographic boolean
+);
+
+CREATE INDEX ON pns_search (pn_id, pn_variant_no);
+CREATE INDEX ON pns_search (value_id) WHERE value_id IS NOT NULL;
+CREATE INDEX ON pns_search (sign_variant_id);
+
+
+CREATE OR REPLACE VIEW pns_search_view AS (
 SELECT * FROM (
   SELECT 
     pn_id,
     pn_variant_no,
-    sign_no,
+    ordinality-1,
     @extschema:cuneiform_search@.cun_position(
-      greatest(sign_no + 1, 0),
+      greatest(ordinality, 0),
       a.pos::integer - 1, 
       row_number() OVER (PARTITION BY pn_id, pn_variant_no ORDER BY pos DESC) = 1
       ) AS position,
@@ -39,8 +61,9 @@ SELECT * FROM (
     indicator_type,
     phonographic
   FROM 
-    @extschema:cuneiform_pn_tables@.pn_variants_unnest
-    JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (sign_id)
+    @extschema:cuneiform_pn_tables@.pn_variants
+    LEFT JOIN LATERAL UNNEST(sign_meanings) WITH ORDINALITY ON TRUE
+    LEFT JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (sign_id)
     LEFT JOIN LATERAL unnest(grapheme_ids, glyph_ids) WITH ORDINALITY a(grapheme_id, glyph_id, pos) ON TRUE
   WHERE
     variant_type = 'default'
@@ -48,9 +71,9 @@ SELECT * FROM (
   SELECT
     pn_id,
     pn_variant_no,
-    sign_no,
+    ordinality-1,
     @extschema:cuneiform_search@.cun_position(
-      greatest(sign_no + 1, 0),
+      greatest(ordinality, 0),
       0, 
       TRUE) AS position,
     word_no,
@@ -64,8 +87,9 @@ SELECT * FROM (
     indicator_type,
     phonographic
   FROM 
-    @extschema:cuneiform_pn_tables@.pn_variants_unnest
-    JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (sign_id)
+    @extschema:cuneiform_pn_tables@.pn_variants
+    LEFT JOIN LATERAL UNNEST(sign_meanings) WITH ORDINALITY ON TRUE
+    LEFT JOIN @extschema:cuneiform_signlist@.sign_variants_composition USING (sign_id)
   WHERE
     variant_type = 'default'
   UNION ALL
@@ -126,6 +150,27 @@ SELECT * FROM (
   FROM 
     @extschema:cuneiform_pn_tables@.pn_variants)
   a);
+
+
+CREATE OR REPLACE FUNCTION pns_search_trigger_fun () 
+  RETURNS trigger 
+  VOLATILE
+  LANGUAGE PLPGSQL
+  AS
+$BODY$
+BEGIN
+  DELETE FROM @extschema@.pns_search WHERE pn_id = (OLD).pn_id AND pn_variant_no = (OLD).pn_variant_no;
+  INSERT INTO @extschema@.pns_search SELECT * FROM @extschema@.pns_search_view WHERE pn_id = (NEW).pn_id AND pn_variant_no = (NEW).pn_variant_no;
+  RETURN NULL;
+END;
+$BODY$;
+
+CREATE TRIGGER pns_search_trigger
+  AFTER UPDATE OR INSERT OR DELETE ON @extschema:cuneiform_pn_tables@.pn_variants
+  FOR EACH ROW
+  EXECUTE FUNCTION pns_search_trigger_fun();
+
+INSERT INTO pns_search SELECT * FROM pns_search_view;
 
 
 CREATE OR REPLACE FUNCTION search_pns (
