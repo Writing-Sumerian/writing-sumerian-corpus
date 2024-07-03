@@ -34,13 +34,10 @@ _signspec       : "(" complex_sign ")"
 complex_sign    : signt ( "." signt )*
 pseudochar      : 
 
-sep             : ( _SPACE | _break )+ 
-                | ( _SPACE | _break )* ellipsis ( _SPACE | _break )*
-                | _SPACE? colon _SPACE?
-                | linebreak? ( ellipsis | colon )? wordcon linebreak?
-                | linebreak? wordcon ( ellipsis | colon ) wordcon? linebreak?
-                | ( wordbreak | linebreak )* ( ellipsis | colon )? compoundcon ( wordbreak | linebreak )*
-                | ( wordbreak | linebreak )* compoundcon ( ellipsis | colon ) compoundcon? ( wordbreak | linebreak )* 
+sep             : ( _SPACE | _break | ellipsis | colon )+ 
+                | ( linebreak | ellipsis | colon )* wordcon ( linebreak | ellipsis | colon | wordcon )*
+                | ( wordbreak | linebreak | ellipsis | colon )* compoundcon ( wordbreak | linebreak | ellipsis | colon | compoundcon )*
+
 nullsep         : _break*
                 | _break* ellipsis _break*
                 | colon
@@ -64,10 +61,10 @@ parensignt      : "(" signt ( _DOT signt )* ")"
 xcon            : X
 
 PATTERN.5       : /\/[^\/]+\//
-VALUE.3         : /[abdegĝhḫijklmnpqrsšṣtṭuwyz’][abdegĝhḫijklmnpqrsšṣtṭuwyz’]+[0-9xX]*/
+VALUE.3         : /[abdegĝhḫijklmnpqrřsšṣtṭuwyz’][abdegĝhḫijklmnpqrřsšṣtṭuwyz’]+[0-9xX]*/
                 | /[aeiou][0-9xX]*/
                 | "d"
-SIMPLESIGN.3    : /[ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’][ABDEGĜHḪIJKLMNPQRSŠṢTṬUWYZ’]+[0-9]*/
+SIMPLESIGN.3    : /[ABDEGĜHḪIJKLMNPQRŘSŠṢTṬUWYZ’][ABDEGĜHḪIJKLMNPQRŘSŠṢTṬUWYZ’]+[0-9]*/
                 | /[AEIOU][0-9]*/ 
 _SIGNX.2        : "X"
 X.2             : "x"

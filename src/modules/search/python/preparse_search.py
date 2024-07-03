@@ -185,6 +185,8 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
         # Operators
 
         def sep(self, args):
+                if ':' in args and '…' in args:
+                    plpy.error('preparse_search syntax error')
                 r = ''.join(sorted(set(args)))
                 return r or ' ', r or ' '
     

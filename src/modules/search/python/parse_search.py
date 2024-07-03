@@ -356,11 +356,11 @@ def parse_search(search_term:str, target_table:str, target_key:List[str], target
                 if TokenType.COMPOUNDCON in a.ops:
                     conditions.append(f"{a.last('compound_no')} = {b.first('compound_no')}")
                 if TokenType.WORDBREAK in a.ops:
-                    conditions.append(f"{a.last('word_no')} < {b.first('word_no')}")
+                    conditions.append(f"{a.last('word_no')} != {b.first('word_no')}")
                 if TokenType.COMPOUNDBREAK in a.ops:
-                    conditions.append(f"{a.last('compound_no')} < {b.first('compound_no')}")
+                    conditions.append(f"{a.last('compound_no')} != {b.first('compound_no')}")
                 if TokenType.LINEBREAK in a.ops:
-                    conditions.append(f"{a.last('line_no')} < {b.first('line_no')}")
+                    conditions.append(f"{a.last('line_no')} != {b.first('line_no')}")
 
             for table in table.tables:
                 conditions += Translator.join(table)
