@@ -1,5 +1,0 @@
-comment = 'Parse transliterations for the Cuneiform Corpus'
-default_version = '0.0.1'
-relocatable = false
-module_pathname = '$libdir/cuneiform_parse_corpus'
-requires = 'cuneiform_parser, cuneiform_corpus'
