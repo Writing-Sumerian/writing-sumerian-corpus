@@ -67,7 +67,7 @@ BEGIN
     ) ON COMMIT DROP;
     CALL @extschema:cuneiform_encoder@.create_corpus_encoder('corpus_encoder', 'corpus_parsed_unencoded', '{transliteration_id}', 'pg_temp');
 
-    CALL @extschema:cuneiform_parser@.parse(v_code, 'pg_temp', v_transliteration_id);
+    CALL @extschema:cuneiform_parser@.parse(v_code, v_transliteration_id, 'pg_temp', '@extschema:cuneiform_corpus@');
 
     SELECT string_agg(format('"%s" near %s:%s', message, line, col),  E'\n') INTO v_error FROM errors;
     IF length(v_error) > 0 THEN

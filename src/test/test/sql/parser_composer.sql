@@ -30,7 +30,7 @@ SELECT content INTO code FROM @extschema:cuneiform_serialize_corpus@.translitera
 IF code IS NULL THEN
     RETURN;
 END IF;
-CALL @extschema:cuneiform_parser@.parse(code, '@extschema:cuneiform_corpus@', v_transliteration_id_new);
+CALL @extschema:cuneiform_parser@.parse(code, v_transliteration_id_new, '@extschema:cuneiform_corpus@');
 END;
 $BODY$;
 

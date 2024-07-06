@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION test_pns_basic ()
     AS 
 $BODY$
 BEGIN
-CALL @extschema:cuneiform_parser@.parse(E'1\ti3-ni', '@extschema:cuneiform_corpus@', -1);
+CALL @extschema:cuneiform_parser@.parse(E'1\ti3-ni', -1, '@extschema:cuneiform_corpus@');
 INSERT INTO @extschema:cuneiform_corpus_pns@.compounds_pns VALUES (-1, 0, -1, 0);
 CALL @extschema:cuneiform_pns@.edit_pn_variant('a-ni', -1, 0);
 CALL @extschema:cuneiform_corpus_pns@.adjust_pn_in_corpus(-1, -1, true);
@@ -30,7 +30,7 @@ CREATE OR REPLACE FUNCTION test_replace_composites ()
     AS 
 $BODY$
 BEGIN
-CALL @extschema:cuneiform_parser@.parse(E'1\tensi2-a-diri', '@extschema:cuneiform_corpus@', -1);
+CALL @extschema:cuneiform_parser@.parse(E'1\tensi2-a-diri', -1, '@extschema:cuneiform_corpus@');
 INSERT INTO @extschema:cuneiform_corpus_pns@.compounds_pns VALUES (-1, 0, -1, 0);
 CALL @extschema:cuneiform_pns@.edit_pn_variant('PA.TE-diri-si-A', -1, 0);
 CALL @extschema:cuneiform_corpus_pns@.adjust_pn_in_corpus(-1, -1, true);
@@ -46,7 +46,7 @@ CREATE OR REPLACE FUNCTION test_replace_inversion ()
     AS 
 $BODY$
 BEGIN
-CALL @extschema:cuneiform_parser@.parse(E'1\tsi:a', '@extschema:cuneiform_corpus@', -1);
+CALL @extschema:cuneiform_parser@.parse(E'1\tsi:a', -1, '@extschema:cuneiform_corpus@');
 INSERT INTO @extschema:cuneiform_corpus_pns@.compounds_pns VALUES (-1, 0, -1, 0);
 CALL @extschema:cuneiform_pns@.edit_pn_variant('diri', -1, 0);
 CALL @extschema:cuneiform_corpus_pns@.adjust_pn_in_corpus(-1, -1, true);
@@ -64,7 +64,7 @@ CREATE OR REPLACE FUNCTION test_replace_ligature ()
     AS 
 $BODY$
 BEGIN
-CALL @extschema:cuneiform_parser@.parse(E'1\tsi+a', '@extschema:cuneiform_corpus@', -1);
+CALL @extschema:cuneiform_parser@.parse(E'1\tsi+a', -1, '@extschema:cuneiform_corpus@');
 INSERT INTO @extschema:cuneiform_corpus_pns@.compounds_pns VALUES (-1, 0, -1, 0);
 CALL @extschema:cuneiform_pns@.edit_pn_variant('diri', -1, 0);
 CALL @extschema:cuneiform_corpus_pns@.adjust_pn_in_corpus(-1, -1, true);
@@ -82,7 +82,7 @@ CREATE OR REPLACE FUNCTION test_replace_word ()
     AS 
 $BODY$
 BEGIN
-CALL @extschema:cuneiform_parser@.parse(E'1\te-si--&a', '@extschema:cuneiform_corpus@', -1);
+CALL @extschema:cuneiform_parser@.parse(E'1\te-si--&a', -1, '@extschema:cuneiform_corpus@');
 INSERT INTO @extschema:cuneiform_corpus_pns@.compounds_pns VALUES (-1, 0, -1, 0);
 CALL @extschema:cuneiform_pns@.edit_pn_variant('e-diri', -1, 0);
 CALL @extschema:cuneiform_corpus_pns@.adjust_pn_in_corpus(-1, -1, true);
@@ -100,7 +100,7 @@ CREATE OR REPLACE FUNCTION test_replace_conditions ()
     AS 
 $BODY$
 BEGIN
-CALL @extschema:cuneiform_parser@.parse(E'1\t⸢ensi2⸣-‹a›-«diri»', '@extschema:cuneiform_corpus@', -1);
+CALL @extschema:cuneiform_parser@.parse(E'1\t⸢ensi2⸣-‹a›-«diri»', -1, '@extschema:cuneiform_corpus@');
 INSERT INTO @extschema:cuneiform_corpus_pns@.compounds_pns VALUES (-1, 0, -1, 0);
 CALL @extschema:cuneiform_pns@.edit_pn_variant('pa-te-si-A.SI.A', -1, 0);
 CALL @extschema:cuneiform_corpus_pns@.adjust_pn_in_corpus(-1, -1, true);
@@ -121,7 +121,7 @@ CREATE OR REPLACE FUNCTION test_replace_multiword ()
     AS 
 $BODY$
 BEGIN
-CALL @extschema:cuneiform_parser@.parse(E'1\ta i3-ni a', '@extschema:cuneiform_corpus@', -1);
+CALL @extschema:cuneiform_parser@.parse(E'1\ta i3-ni a', -1, '@extschema:cuneiform_corpus@');
 INSERT INTO @extschema:cuneiform_corpus_pns@.compounds_pns VALUES (-1, 1, -1, 0);
 CALL @extschema:cuneiform_pns@.edit_pn_variant('ni-ni', -1, 0);
 CALL @extschema:cuneiform_corpus_pns@.adjust_pn_in_corpus(-1, -1, true);
@@ -136,7 +136,7 @@ CREATE OR REPLACE FUNCTION test_replace_newline ()
     AS 
 $BODY$
 BEGIN
-CALL @extschema:cuneiform_parser@.parse(E'1\ta si-/a', '@extschema:cuneiform_corpus@', -1);
+CALL @extschema:cuneiform_parser@.parse(E'1\ta si-/a', -1, '@extschema:cuneiform_corpus@');
 INSERT INTO @extschema:cuneiform_corpus_pns@.compounds_pns VALUES (-1, 1, -1, 0);
 CALL @extschema:cuneiform_pns@.edit_pn_variant('diri', -1, 0);
 CALL @extschema:cuneiform_corpus_pns@.adjust_pn_in_corpus(-1, -1, true);
@@ -151,7 +151,7 @@ CREATE OR REPLACE FUNCTION test_replace_multiline ()
     AS 
 $BODY$
 BEGIN
-CALL @extschema:cuneiform_parser@.parse(E'1\tsi-\n2\ta a', '@extschema:cuneiform_corpus@', -1);
+CALL @extschema:cuneiform_parser@.parse(E'1\tsi-\n2\ta a', -1, '@extschema:cuneiform_corpus@');
 INSERT INTO @extschema:cuneiform_corpus_pns@.compounds_pns VALUES (-1, 0, -1, 0);
 CALL @extschema:cuneiform_pns@.edit_pn_variant('diri', -1, 0);
 CALL @extschema:cuneiform_corpus_pns@.adjust_pn_in_corpus(-1, -1, true);

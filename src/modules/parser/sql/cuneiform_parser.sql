@@ -106,14 +106,17 @@ CREATE TYPE errors_parser_type AS (
 
 CREATE OR REPLACE PROCEDURE parse (
         code text, 
+        id integer,
         schema text,
-        id integer
+        compositions_schema text DEFAULT NULL
     )
     LANGUAGE PLPYTHON3U
     AS $BODY$
 
 from cuneiformparser import parseText
 import pandas as pd
+
+compositionsSchema = schema if compositions_schema is None else compositions_schema
 
 corpus_plan = plpy.prepare(
     f"""
@@ -207,7 +210,7 @@ sections_plan = plpy.prepare(
         composition_id
     FROM
         UNNEST($1) WITH ORDINALITY
-        LEFT JOIN @extschema:cuneiform_corpus@.compositions ON composition_name = composition
+        LEFT JOIN {compositionsSchema}.compositions ON composition_name = composition
     """,
     ['@extschema@.sections_parser_type[]']
 )
