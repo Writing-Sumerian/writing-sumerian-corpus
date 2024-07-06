@@ -113,7 +113,7 @@ CREATE OR REPLACE PROCEDURE parse (
     LANGUAGE PLPYTHON3U
     AS $BODY$
 
-from cuneiformparser import parseText
+from writingsumerianparser import parseText
 import pandas as pd
 
 compositionsSchema = schema if compositions_schema is None else compositions_schema
@@ -316,7 +316,7 @@ CREATE OR REPLACE FUNCTION parse_to_sign_meanings (
     AS 
 $BODY$
 
-from cuneiformparser import parse
+from writingsumerianparser import parse
 
 plan = plpy.prepare(
         f"""

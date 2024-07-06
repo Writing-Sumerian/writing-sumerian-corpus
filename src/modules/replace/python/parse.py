@@ -5,7 +5,7 @@ class language:
 
 @sql_properties(procedure=True)
 def parse_replacement(code: str, id: InOut[int]):
-    from cuneiformparser import parse
+    from writingsumerianparser import parse
     import pandas as pd
 
     id = plpy.execute("SELECT nextval('@extschema@.replace_id_seq') AS id")[0]['id']
