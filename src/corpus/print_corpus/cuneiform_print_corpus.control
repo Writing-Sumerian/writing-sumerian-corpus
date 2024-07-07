@@ -1,5 +1,5 @@
-comment = 'Compose abstract cuneiform into human readable text'
-default_version = '0.0.2'
+comment = 'Support for converting passages of a cuneiform corpus into human readable text with HTML markup'
+default_version = '0.0.1'
 relocatable = true
 module_pathname = '$libdir/cuneiform_print_corpus'
 requires = 'cuneiform_corpus, cuneiform_print_html'

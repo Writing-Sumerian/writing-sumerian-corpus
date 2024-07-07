@@ -1,4 +1,4 @@
-comment = 'Search Cuneiform Database'
+comment = 'Search cuneiform passages'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_search'

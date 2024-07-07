@@ -1,4 +1,4 @@
-comment = 'Context information for cuneiform text'
+comment = 'Context information for cuneiform texts'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_context'

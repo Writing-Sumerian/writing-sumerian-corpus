@@ -1,4 +1,4 @@
-comment = 'Edit data in Cuneiform Corpus'
+comment = 'Edit transliterations in a cuneiform corpus'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_edit_corpus'

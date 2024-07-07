@@ -1,4 +1,4 @@
-comment = 'Proper nouns for Cuneiform Database'
+comment = 'Support for searching and manipulating cuneiform proper nouns'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_pns'

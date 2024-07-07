@@ -1,4 +1,4 @@
-comment = 'Log for Cuneiform Database'
+comment = 'Support for viewing and undoing changes in cuneiform transliterations'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_log'

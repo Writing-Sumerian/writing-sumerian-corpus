@@ -1,4 +1,4 @@
-comment = 'Create core data structures for a cuneiform corpus'
+comment = 'Define and create core data structures for a cuneiform corpus'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_create_corpus'

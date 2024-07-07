@@ -1,5 +1,5 @@
-comment = 'Compose abstract cuneiform into human readable text'
-default_version = '0.0.2'
+comment = 'Support for serializing passages of a cuneiform corpus into human readable code'
+default_version = '0.0.1'
 relocatable = true
 module_pathname = '$libdir/cuneiform_serialize_corpus'
 requires = 'cuneiform_corpus, cuneiform_serialize'

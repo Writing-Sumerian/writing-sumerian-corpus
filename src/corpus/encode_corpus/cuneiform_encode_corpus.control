@@ -1,4 +1,4 @@
-comment = 'Encode a cuneiform corpus'
+comment = 'Support for encoding and decoding values and sign variants in a cuneiform corpus'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_encode_corpus'

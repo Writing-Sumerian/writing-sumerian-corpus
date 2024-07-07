@@ -1,5 +1,5 @@
-comment = 'Compose abstract cuneiform into human readable text'
-default_version = '0.0.2'
+comment = 'Serialize cuneiform passages into human-readable code'
+default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_serialize'
 requires = 'cuneiform_sign_properties, cuneiform_signlist, cuneiform_print_core'

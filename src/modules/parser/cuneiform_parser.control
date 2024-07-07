@@ -1,4 +1,4 @@
-comment = 'Parse transliterations for the Cuneiform Database'
+comment = 'Parse human-readable cuneiform code'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_parser'

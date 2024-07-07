@@ -1,5 +1,5 @@
-comment = 'Compose abstract cuneiform into human readable text'
-default_version = '0.0.2'
+comment = 'Support functions to build converters to compose cuneiform passages into human-readable text'
+default_version = '0.0.1'
 relocatable = true
 module_pathname = '$libdir/cuneiform_print_core'
 requires = 'cuneiform_sign_properties, cuneiform_signlist'

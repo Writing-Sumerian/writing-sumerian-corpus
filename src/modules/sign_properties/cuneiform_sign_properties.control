@@ -1,4 +1,4 @@
-comment = 'Data types for cuneiform sign properties'
+comment = 'Basic data types for cuneiform signs'
 default_version = '0.0.1'
 relocatable = true
 module_pathname = '$libdir/cuneiform_sign_properties'

@@ -1,4 +1,4 @@
-comment = 'Replace Functions for Cuneiform Corpus'
+comment = 'Search and replace passages in a cuneiform corpus'
 default_version = '0.0.1'
 relocatable = true
 module_pathname = '$libdir/cuneiform_replace_corpus'

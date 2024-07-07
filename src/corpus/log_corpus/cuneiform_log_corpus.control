@@ -1,4 +1,4 @@
-comment = 'Log functions for Cuneiform Corpus'
+comment = 'Support for viewing and undoing changes in a cuneiform corpus'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_log_corpus'

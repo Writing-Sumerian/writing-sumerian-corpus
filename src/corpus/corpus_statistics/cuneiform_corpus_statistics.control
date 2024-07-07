@@ -1,4 +1,4 @@
-comment = 'Collect statistics of Cuneiform Corpus'
+comment = 'Collect statistics in a cuneiform corpus'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_corpus_statistics'

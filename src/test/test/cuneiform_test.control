@@ -1,5 +1,6 @@
-comment = 'Cuneiform tests'
+comment = 'Test basic cuneiform corpus functionality'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_test'
 requires = 'pgtap, cuneiform_actions, cuneiform_log, cuneiform_encoder, cuneiform_parser, cuneiform_context, cuneiform_corpus, cuneiform_serialize_corpus, cuneiform_log_corpus, cuneiform_edit_corpus, cuneiform_replace_corpus'
+no_relocate = 'pgtap, cuneiform_actions, cuneiform_log, cuneiform_encoder, cuneiform_parser, cuneiform_context, cuneiform_corpus, cuneiform_serialize_corpus, cuneiform_log_corpus, cuneiform_edit_corpus, cuneiform_replace_corpus'

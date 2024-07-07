@@ -1,4 +1,4 @@
-comment = 'Replace Functions for Cuneiform Database'
+comment = 'Replace cuneiform passages while preserving specific information'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_replace'

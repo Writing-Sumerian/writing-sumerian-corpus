@@ -1,4 +1,4 @@
-comment = 'Encode cuneiform signs and values'
+comment = 'Support for encoding cuneiform values and sign variants'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_encoder'

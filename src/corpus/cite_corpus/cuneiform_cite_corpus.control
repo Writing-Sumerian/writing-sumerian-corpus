@@ -1,4 +1,4 @@
-comment = 'Cuneiform citation'
+comment = 'Support for citing passages in a cuneiform corpus'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_cite_corpus'

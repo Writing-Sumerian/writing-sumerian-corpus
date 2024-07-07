@@ -1,4 +1,4 @@
-comment = 'Cuneiform citation'
+comment = 'Support functions for citing cuneiform passages'
 default_version = '0.0.1'
 relocatable = true
 module_pathname = '$libdir/cuneiform_citation'

@@ -1,4 +1,4 @@
-comment = 'Proper nouns tables for Cuneiform Database'
+comment = 'Tables for cuneiform proper noun data'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_pn_tables'

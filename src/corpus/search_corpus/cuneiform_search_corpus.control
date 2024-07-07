@@ -1,4 +1,4 @@
-comment = 'Search Functions for Cuneiform Corpus'
+comment = 'Search passages in a cuneiform corpus'
 default_version = '0.0.1'
 relocatable = false
 module_pathname = '$libdir/cuneiform_search_corpus'
