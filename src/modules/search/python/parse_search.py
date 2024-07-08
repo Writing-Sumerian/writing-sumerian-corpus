@@ -97,7 +97,8 @@ def parse_search(search_term:str, target_table:str, target_key:List[str], target
             return [Char(self.id, f'c{self.id}.glyph_id IS NULL', True)]
 
         @v_args(inline=True)
-        def indicator(self, alignment, indic_type, spec):
+        def indicator(self, alignment, indic_type, *specs):
+            spec = ' AND '.join(specs)
             if alignment == '>':
                 spec += " AND {table}.indicator_type = 'right'"
             elif alignment == '<':

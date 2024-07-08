@@ -107,11 +107,11 @@ def preparse_search(search_term:str, code:Out[str], wildcards:Out[List[str]], wi
 
         def det(self, args):
             s, w = [''.join(x) for x in zip(*args)]
-            return re.sub(r'([vsgcxXnp])', r'D\1', s), f'{{{w}}}'
+            return re.sub(r'(?<![0-9])([vsgcxXnp])', r'D\1', s), f'{{{w}}}'
 
         def pc(self, args):
             s, w = [''.join(x) for x in zip(*args)]
-            return re.sub(r'([vsgcxXnp])', r'P\1', s), f'<{w}>'
+            return re.sub(r'(?<![0-9])([vsgcxXnp])', r'P\1', s), f'<{w}>'
 
         @v_args(meta=True)
         def value(self, meta, args):
