@@ -22,7 +22,6 @@ all:
 	make -C corpus/serialize_corpus
 	make -C corpus/print_corpus
 	make -C corpus/encode_corpus
-	make -C corpus/parse_corpus
 	make -C corpus/log_corpus
 	make -C corpus/edit_corpus
 	make -C corpus/replace_corpus
@@ -57,7 +56,6 @@ install:
 	make -C corpus/serialize_corpus install
 	make -C corpus/print_corpus install
 	make -C corpus/encode_corpus install
-	make -C corpus/parse_corpus install
 	make -C corpus/log_corpus install
 	make -C corpus/edit_corpus install
 	make -C corpus/replace_corpus install
